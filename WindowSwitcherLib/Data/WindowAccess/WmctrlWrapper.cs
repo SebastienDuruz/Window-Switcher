@@ -19,4 +19,23 @@ public static class WmctrlWrapper
 
         return output;
     }
+
+    public static bool IsWmctrlInstalled()
+    {
+        Process process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "which",
+                Arguments = "wmctrl",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            }
+        };
+        process.Start();
+        string output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        return !string.IsNullOrEmpty(output);
+    }
 }
