@@ -5,9 +5,11 @@ namespace WindowSwitcherLib.WindowAccess;
 
 public class LinuxX11WindowAccessor : IWindowAccessor
 {
+    private WmctrlWrapper WmctrlWrapper { get; set; } = new();
+
     public List<Window> GetWindows()
     {
-        string wmctrlOutput = WmctrlWrapper.ExecuteWmctrl(" -l");
+        string wmctrlOutput = this.WmctrlWrapper.Execute(" -l");
         
         List<Window> windows = new List<Window>();
         string[] lines = wmctrlOutput.Split('\n');
@@ -20,7 +22,7 @@ public class LinuxX11WindowAccessor : IWindowAccessor
 
     public void RaiseWindow(string windowPID)
     {
-        WmctrlWrapper.ExecuteWmctrl($" -i -a \"{windowPID}\"");
+        this.WmctrlWrapper.Execute($" -i -a \"{windowPID}\"");
     }
 
     private string ExtractWindowTitle(string windowInfo)

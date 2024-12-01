@@ -2,10 +2,13 @@ using System.Diagnostics;
 
 namespace WindowSwitcherLib.WindowAccess;
 
-public static class WmctrlWrapper
+public class WmctrlWrapper : ICommandWrapper
 {
-    public static string ExecuteWmctrl(string args)
+    public string Execute(string args)
     {
+        if(!IsWmctrlInstalled()) 
+            throw new ApplicationException("Wmctrl is not installed.");
+        
         using Process process = new Process();
         process.StartInfo.FileName = "wmctrl";
         process.StartInfo.Arguments = args;
@@ -20,7 +23,7 @@ public static class WmctrlWrapper
         return output;
     }
 
-    public static bool IsWmctrlInstalled()
+    private bool IsWmctrlInstalled()
     {
         Process process = new Process
         {
@@ -36,6 +39,7 @@ public static class WmctrlWrapper
         process.Start();
         string output = process.StandardOutput.ReadToEnd();
         process.WaitForExit();
+        
         return !string.IsNullOrEmpty(output);
     }
 }
