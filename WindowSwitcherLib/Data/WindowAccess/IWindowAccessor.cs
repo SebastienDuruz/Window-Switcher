@@ -14,5 +14,11 @@ public interface IWindowAccessor
     /// Raise the window to the front
     /// </summary>
     /// <param name="windowPID">The PID of the window to raise</param>
-    public void RaiseWindow(string windowPID);
+    public void RaiseWindow(Window window);
+    
+    /// <summary>
+    /// Take a screenshot of a window
+    /// </summary>
+    /// <param name="window">The window to screenshot</param>
+    public void TakeScreenshot(Window window);
 }

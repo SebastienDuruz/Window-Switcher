@@ -4,11 +4,11 @@ namespace WindowSwitcherLib.WindowAccess;
 
 public class ImportWrapper : ICommandWrapper
 {
-    public string Execute(string args)
+    public string Execute(string client)
     {
         using Process process = new Process();
-        process.StartInfo.FileName = "wmctrl";
-        process.StartInfo.Arguments = args;
+        process.StartInfo.FileName = "import";
+        process.StartInfo.Arguments = $"-window \"{client}\" -quality 25 /home/smour/screenshot.jpg";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.CreateNoWindow = true;
