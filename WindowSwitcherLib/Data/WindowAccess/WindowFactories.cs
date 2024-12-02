@@ -7,11 +7,11 @@ public class WindowFactories
 {
     public static IWindowAccessor GetAccessor()
     {
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            throw new PlatformNotSupportedException("Window access is not supported on this platform");
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return new WindowsWindowAccessor();
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new LinuxX11WindowAccessor();
-        else if(RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             throw new PlatformNotSupportedException("Mac access is not supported on this platform");
         else
             throw new PlatformNotSupportedException("Unknown platform");

@@ -5,6 +5,11 @@ namespace WindowSwitcherLib.WindowAccess;
 public interface IWindowAccessor
 {
     /// <summary>
+    /// The Folder that contains the screenshots
+    /// </summary>
+    public string ScreenshotFolderPath { get; }
+    
+    /// <summary>
     /// Get the list of Window currently opened
     /// </summary>
     /// <returns></returns>

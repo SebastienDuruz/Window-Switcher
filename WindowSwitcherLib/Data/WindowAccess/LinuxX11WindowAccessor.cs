@@ -8,6 +8,8 @@ public class LinuxX11WindowAccessor : IWindowAccessor
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
 
+    public string ScreenshotFolderPath { get; } = Path.Combine(Environment.SpecialFolder.ApplicationData.ToString(), "WindowSwitcher");
+
     public List<Window> GetWindows()
     {
         string wmctrlOutput = this.WmctrlWrapper.Execute(" -l");
