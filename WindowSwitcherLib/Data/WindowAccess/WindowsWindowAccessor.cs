@@ -7,7 +7,7 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.WindowAccess;
 
-public class WindowsWindowAccessor : IWindowAccessor
+public class WindowsWindowAccessor : WindowAccessor
 {
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -25,9 +25,7 @@ public class WindowsWindowAccessor : IWindowAccessor
         public int Bottom;
     }
 
-    public string ScreenshotFolderPath { get; } = Path.Combine(Environment.SpecialFolder.ApplicationData.ToString(), "WindowSwitcher");
-
-    public List<Window> GetWindows()
+    public override List<Window> GetWindows()
     {
         List<Window> windows = new List<Window>();
         
@@ -41,12 +39,12 @@ public class WindowsWindowAccessor : IWindowAccessor
         return windows;
     }
 
-    public void RaiseWindow(Window window)
+    public override void RaiseWindow(Window window)
     {
         SetForegroundWindow(IntPtr.Parse(window.WindowId));
     }
 
-    public void TakeScreenshot(Window window)
+    public override void TakeScreenshot(Window window)
     {
         RECT rect;
         GetWindowRect(IntPtr.Parse(window.WindowId), out rect);
@@ -60,7 +58,7 @@ public class WindowsWindowAccessor : IWindowAccessor
             {
                 g.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height));
             }
-            bitmap.Save(Path.Combine(this.ScreenshotFolderPath, $"screenshot_{window.WindowId}"), ImageFormat.Jpeg);
+            bitmap.Save(Path.Combine(ApplicationDataAccessor.ScreenshotFolder, $"screenshot_{window.WindowId}.jpeg"), ImageFormat.Jpeg);
         }
     }
 }

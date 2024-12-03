@@ -5,15 +5,15 @@ namespace WindowSwitcherLib.WindowAccess;
 
 public class WindowFactories
 {
-    public static IWindowAccessor GetAccessor()
+    public static WindowAccessor GetAccessor()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return new WindowsWindowAccessor();
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new LinuxX11WindowAccessor();
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             throw new PlatformNotSupportedException("Mac access is not supported on this platform");
-        else
-            throw new PlatformNotSupportedException("Unknown platform");
+        
+        throw new PlatformNotSupportedException("Unknown platform");
     }
 }

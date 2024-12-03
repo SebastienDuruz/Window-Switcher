@@ -3,14 +3,12 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.WindowAccess;
 
-public class LinuxX11WindowAccessor : IWindowAccessor
+public class LinuxX11WindowAccessor : WindowAccessor
 {
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
-
-    public string ScreenshotFolderPath { get; } = Path.Combine(Environment.SpecialFolder.ApplicationData.ToString(), "WindowSwitcher");
-
-    public List<Window> GetWindows()
+    
+    public override List<Window> GetWindows()
     {
         string wmctrlOutput = this.WmctrlWrapper.Execute(" -l");
         
@@ -23,12 +21,12 @@ public class LinuxX11WindowAccessor : IWindowAccessor
         return windows;
     }
 
-    public void RaiseWindow(Window window)
+    public override void RaiseWindow(Window window)
     {
         this.WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
     }
 
-    public void TakeScreenshot(Window window)
+    public override void TakeScreenshot(Window window)
     {
         this.ImportWrapper.Execute(window.WindowTitle);
     }

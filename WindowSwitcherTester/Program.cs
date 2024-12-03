@@ -1,7 +1,7 @@
 ﻿using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
-IWindowAccessor accessor = WindowFactories.GetAccessor();
+WindowAccessor accessor = WindowFactories.GetAccessor();
 
 // Get the opened windows and raise the last one to front
 List<Window> windows = accessor.GetWindows();
