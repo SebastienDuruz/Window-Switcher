@@ -4,5 +4,6 @@ namespace WindowSwitcherLib.WindowAccess;
 
 public static class StaticData
 {
-    public static string ScreenshotFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WindowSwitcher");
+    public static string AppName { get; set; } = "WindowSwitcher";
+    public static string DataFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppName);
 }

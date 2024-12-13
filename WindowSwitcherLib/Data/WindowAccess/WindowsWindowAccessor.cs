@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -15,50 +16,50 @@ public class WindowsWindowAccessor : WindowAccessor
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    
+    [DllImport("user32.dll")]
+    public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, int nFlags);
+    
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsWindowVisible(IntPtr hWnd);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
+    public struct RECT
     {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
+        public int left;
+        public int top;
+        public int right;
+        public int bottom;
     }
 
-    public override List<Window> GetWindows()
+    public override ObservableCollection<WindowConfig> GetWindows()
     {
-        List<Window> windows = new List<Window>();
+        ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
         
         foreach (Process process in Process.GetProcesses())
         {
-            if (process.MainWindowHandle == IntPtr.Zero)
+            if (process.MainWindowHandle == IntPtr.Zero || string.IsNullOrWhiteSpace(process.MainWindowTitle) || !IsWindowVisible(process.MainWindowHandle))
                 continue;
-            windows.Add(new Window(){WindowTitle = process.MainWindowTitle, WindowId = process.MainWindowHandle.ToString()});
+            
+            windows.Add(new WindowConfig()
+            {
+                WindowTitle = process.MainWindowTitle, 
+                WindowId = process.MainWindowHandle.ToString(), 
+                ShortWindowTitle = process.MainWindowTitle.Length > 30 ? $"{process.MainWindowTitle[..30]}..." : process.MainWindowTitle,
+            });
         }
         
         return windows;
     }
 
-    public override void RaiseWindow(Window window)
+    public override void RaiseWindow(WindowConfig window)
     {
         SetForegroundWindow(IntPtr.Parse(window.WindowId));
     }
 
-    public override void TakeScreenshot(Window window)
+    public override void TakeScreenshot(WindowConfig window)
     {
-        RECT rect;
-        GetWindowRect(IntPtr.Parse(window.WindowId), out rect);
-        
-        int width = rect.Right - rect.Left;
-        int height = rect.Bottom - rect.Top;
-
-        using (Bitmap bitmap = new Bitmap(width, height))
-        {
-            using (Graphics g = Graphics.FromImage(bitmap))
-            {
-                g.CopyFromScreen(rect.Left, rect.Top, 0, 0, new Size(width, height));
-            }
-            bitmap.Save(Path.Combine(ApplicationDataAccessor.ScreenshotFolder, $"screenshot_{window.WindowId}.jpeg"), ImageFormat.Jpeg);
-        }
+        throw new NotImplementedException();
     }
 }

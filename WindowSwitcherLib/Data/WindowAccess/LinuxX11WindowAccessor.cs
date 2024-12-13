@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.IO.Compression;
 using WindowSwitcherLib.Models;
 
@@ -8,25 +9,33 @@ public class LinuxX11WindowAccessor : WindowAccessor
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
     
-    public override List<Window> GetWindows()
+    public override ObservableCollection<WindowConfig> GetWindows()
     {
         string wmctrlOutput = this.WmctrlWrapper.Execute(" -l");
         
-        List<Window> windows = new List<Window>();
+        ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
-            if(!String.IsNullOrWhiteSpace(line))
-                windows.Add(new Window(){WindowId = line.Split(' ')[0], WindowTitle = this.ExtractWindowTitle(line)});
-        
+            if (!String.IsNullOrWhiteSpace(line))
+            {
+                string windowName = this.ExtractWindowTitle(line);
+                windows.Add(new WindowConfig()
+                {
+                    WindowId = line.Split(' ')[0], 
+                    WindowTitle = windowName,
+                    ShortWindowTitle = windowName.Length > 30 ? $"{windowName[..30]}..." : windowName
+                });
+            }
+                
         return windows;
     }
 
-    public override void RaiseWindow(Window window)
+    public override void RaiseWindow(WindowConfig window)
     {
         this.WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
     }
 
-    public override void TakeScreenshot(Window window)
+    public override void TakeScreenshot(WindowConfig window)
     {
         this.ImportWrapper.Execute(window.WindowTitle);
     }
