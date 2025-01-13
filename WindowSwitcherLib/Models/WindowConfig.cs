@@ -9,5 +9,4 @@ public class WindowConfig
     public int WindowHeight { get; set; } = 40;
     public int WindowLeft { get; set; } = 100;
     public int WindowTop { get; set; } = 100;
-    public bool IsSelected { get; set; } = false;
 }

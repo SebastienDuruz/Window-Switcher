@@ -19,8 +19,8 @@ public partial class MainWindow : Avalonia.Controls.Window
     private CancellationTokenSource _cts;
     
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private ObservableCollection<WindowConfig> Windows = new();
     private ObservableCollection<CheckBox> WindowsCheckBoxes { get; set; }= new();
+    private List<WindowConfig> Windows { get; set; } = new();
     private ConfigFileAccessor ConfigFile { get; set; }
     public MainWindow()
     {
@@ -41,55 +41,33 @@ public partial class MainWindow : Avalonia.Controls.Window
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(1000, cancellationToken);
+            await Task.Delay(2000, cancellationToken);
             await ExecuteAsyncMethod();
         }
     }
 
     private async Task ExecuteAsyncMethod()
     {
+        Windows.Clear();
         foreach (WindowConfig fetchedWindow in WindowAccessor.GetWindows())
-        {
-            // Find the window in the config file
-            WindowConfig? existingWindow = ConfigFile.Config.Windows
-                .FirstOrDefault(x => x.WindowTitle == fetchedWindow.WindowTitle);
-
-            if (existingWindow != null)
-            {
-                // Update the id of the window
-                existingWindow.WindowId = fetchedWindow.WindowId;
-            }
-            else
-            {
-                ConfigFile.Config.Windows.Add(fetchedWindow);
-            }
-        }
+            foreach (string prefix in ConfigFile.Config.WhitelistPrefixes)
+                if (fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()))
+                {
+                    Windows.Add(fetchedWindow);
+                    break;
+                }                
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            WindowsCheckBoxes.Clear();
-            foreach (WindowConfig window in ConfigFile.Config.Windows)
-                WindowsCheckBoxes.Add(new CheckBox()
+            WindowStackPanel.Children.Clear();
+            foreach (WindowConfig window in Windows)
+                WindowStackPanel.Children.Add(new CheckBox()
                 {
-                    IsChecked = window.IsSelected,
+                    IsChecked = false,
                     Name = window.WindowId,
                     Content = window.ShortWindowTitle
                 });
-
-            WindowStackPanel.Children.Clear();
-            foreach (CheckBox checkBox in WindowsCheckBoxes)
-            {
-                if (!WindowStackPanel.Children.Any(x => x.Name.Equals(checkBox.Name)))
-                    WindowStackPanel.Children.Add(checkBox);
-                else
-                {
-                    CheckBox box = (CheckBox)WindowStackPanel.Children.First(x => x.Name.Equals(checkBox.Name));
-                    box.Content = checkBox.Content;
-                    box.IsChecked = checkBox.IsChecked;
-                }
-            }
         });
-        
         
         GC.Collect();
     }
