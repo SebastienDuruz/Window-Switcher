@@ -24,4 +24,8 @@
     <ItemGroup>
       <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Assets\" />
+    </ItemGroup>
 </Project>

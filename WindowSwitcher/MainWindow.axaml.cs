@@ -9,20 +9,23 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.Templates;
+using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcherLib.WindowAccess;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
 namespace WindowSwitcher;
 
 public partial class MainWindow : Avalonia.Controls.Window
 {
-    private CancellationTokenSource _cts;
+    private readonly CancellationTokenSource _cts;
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
     private List<WindowConfig> Windows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes, "Prefix window");
     private PrefixesWindow BlacklistWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes, "Blacklist window");
+    private string? LastSelectedItemID { get; set; } = "";
     
     public MainWindow()
     {
@@ -41,8 +44,8 @@ public partial class MainWindow : Avalonia.Controls.Window
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await Task.Delay(2000, cancellationToken);
             await FetchWindowsAsync();
+            await Task.Delay(5000, cancellationToken);
         }
     }
 
@@ -61,12 +64,28 @@ public partial class MainWindow : Avalonia.Controls.Window
         // TODO : Show the managed windows
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            WindowStackPanel.Children.Clear();
+            WindowsListBox.Items.Clear();
             foreach (WindowConfig window in Windows)
-                WindowStackPanel.Children.Add(new ListBoxItem()
+                WindowsListBox.Items.Add(new ListBoxItem()
                 {
                     Name = window.WindowId,
                     Content = window.ShortWindowTitle,
+                    IsSelected = LastSelectedItemID == window.WindowId,
+                    ContextMenu = new ContextMenu()
+                    {
+                        Items =
+                        {
+                            new MenuItem()
+                            {
+                                Header = "Raise to front",
+                                Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.First(x => x.WindowId.StartsWith(LastSelectedItemID))))
+                            },
+                            new MenuItem() { 
+                                Header = "Add to blacklist",
+                                Command = new ContextMenuCommand(() => AddToBlacklist(window.WindowTitle.ToLower()))
+                            }
+                        }
+                    }
                 });
         });
         
@@ -100,4 +119,33 @@ public partial class MainWindow : Avalonia.Controls.Window
     {
         BlacklistWindow.Show();
     }
+
+    private void WindowsListBoxSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (e.AddedItems.Count == 0)
+            return;
+
+        ListBoxItem? selectedPrefix = e.AddedItems[0] as ListBoxItem;
+        if (selectedPrefix == null)
+            return;
+        
+        LastSelectedItemID = selectedPrefix.Name!.ToLower();
+    }
+    
+    private async void RefreshClicked(object? sender, RoutedEventArgs e)
+    {
+        await FetchWindowsAsync();
+    }
+
+    private void AddToBlacklist(string windowTitle)
+    {
+        if (BlacklistWindow.ListToEdit.All(x => x != windowTitle))
+        {
+            BlacklistWindow.ListToEdit.Add(windowTitle);
+            BlacklistWindow.AddPrefixToList(windowTitle);       
+        }
+        ConfigFileAccessor.GetInstance().WriteUserSettings();
+    }
+
+    
 }

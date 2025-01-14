@@ -19,9 +19,15 @@
                         <MenuItem Header="_File" Padding="4">
                                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
                         </MenuItem>
+                        <MenuItem Header="_Refresh" Padding="4" Click="RefreshClicked">
+                                <MenuItem.Icon>
+                                        <!-- <Image Source="Assets/refresh_icon.png" Width="16" Height="16"/> -->
+                                </MenuItem.Icon>
+                        </MenuItem>
                 </Menu>
-                <StackPanel Name="WindowStackPanel" Orientation="Vertical"  Margin="0 0" Spacing="0">
-                                        
+                <StackPanel Orientation="Vertical"  Margin="0 0" Spacing="0">
+                     <ListBox Name="WindowsListBox" SelectionChanged="WindowsListBoxSelectionChanged">
+                     </ListBox>                   
                 </StackPanel>
         </DockPanel>
 </Window>

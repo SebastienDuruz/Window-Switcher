@@ -51,7 +51,7 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
         }
     }
 
-    private void AddPrefixToList(string prefix)
+    public void AddPrefixToList(string prefix)
     {
         Dispatcher.UIThread.Invoke(() =>
         {

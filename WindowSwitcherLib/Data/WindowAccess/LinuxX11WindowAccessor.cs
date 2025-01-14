@@ -23,7 +23,7 @@ public class LinuxX11WindowAccessor : WindowAccessor
                 {
                     WindowId = line.Split(' ')[0], 
                     WindowTitle = windowName,
-                    ShortWindowTitle = windowName.Length > 30 ? $"{windowName[..30]}..." : windowName
+                    ShortWindowTitle = windowName.Length > 40 ? $"{windowName[..40]}..." : windowName
                 });
             }
                 
