@@ -4,7 +4,9 @@
     <option name="projectPerEditor">
       <map>
         <entry key="WindowSwitcher/App.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
+        <entry key="WindowSwitcher/BlacklistWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
         <entry key="WindowSwitcher/MainWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
+        <entry key="WindowSwitcher/PrefixesWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
       </map>
     </option>
   </component>
