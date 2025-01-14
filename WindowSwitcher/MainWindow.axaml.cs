@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.Templates;
 using Avalonia.Threading;
 using WindowSwitcherLib.WindowAccess;
@@ -17,17 +19,15 @@ namespace WindowSwitcher;
 public partial class MainWindow : Avalonia.Controls.Window
 {
     private CancellationTokenSource _cts;
-    
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private ObservableCollection<CheckBox> WindowsCheckBoxes { get; set; }= new();
     private List<WindowConfig> Windows { get; set; } = new();
-    private ConfigFileAccessor ConfigFile { get; set; }
+    private PrefixesWindow PrefixesWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes, "Prefix window");
+    private PrefixesWindow BlacklistWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes, "Blacklist window");
+    
     public MainWindow()
     {
         InitializeComponent();
 
-        this.ConfigFile = ConfigFileAccessor.GetInstance();
-        
         _cts = new CancellationTokenSource();
         StartBackgroundTask();
     }
@@ -42,30 +42,31 @@ public partial class MainWindow : Avalonia.Controls.Window
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(2000, cancellationToken);
-            await ExecuteAsyncMethod();
+            await FetchWindowsAsync();
         }
     }
 
-    private async Task ExecuteAsyncMethod()
+    private async Task FetchWindowsAsync()
     {
         Windows.Clear();
         foreach (WindowConfig fetchedWindow in WindowAccessor.GetWindows())
-            foreach (string prefix in ConfigFile.Config.WhitelistPrefixes)
-                if (fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()))
-                {
+            foreach(string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
+                if(fetchedWindow.WindowTitle.ToLower().StartsWith(prefix) 
+                   && !ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(
+                       x => x.StartsWith(fetchedWindow.WindowTitle.ToLower())))
                     Windows.Add(fetchedWindow);
-                    break;
-                }                
+        
+        // TODO : currently the blacklist is only used as full name blacklist, not prefix
 
+        // TODO : Show the managed windows
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             WindowStackPanel.Children.Clear();
             foreach (WindowConfig window in Windows)
-                WindowStackPanel.Children.Add(new CheckBox()
+                WindowStackPanel.Children.Add(new ListBoxItem()
                 {
-                    IsChecked = false,
                     Name = window.WindowId,
-                    Content = window.ShortWindowTitle
+                    Content = window.ShortWindowTitle,
                 });
         });
         
@@ -74,8 +75,29 @@ public partial class MainWindow : Avalonia.Controls.Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        ConfigFile.WriteUserSettings();
+        PrefixesWindow.Destroy();
+        BlacklistWindow.Destroy();
+        ConfigFileAccessor.GetInstance().WriteUserSettings();
         _cts.Cancel();
         base.OnClosing(e);
+    }
+
+    private void OpenDataFolderClick(object? sender, RoutedEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = StaticData.DataFolder,
+            UseShellExecute = true
+        });
+    }
+
+    private void OpenPrefixesWindowClick(object? sender, RoutedEventArgs e)
+    {
+        PrefixesWindow.Show();
+    }
+    
+    private void OpenBlacklistWindowClick(object? sender, RoutedEventArgs e)
+    {
+        BlacklistWindow.Show();
     }
 }

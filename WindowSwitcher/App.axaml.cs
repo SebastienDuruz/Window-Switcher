@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcher;
 
@@ -8,6 +9,7 @@ public partial class App : Application
 {
     public override void Initialize()
     {
+        ConfigFileAccessor.GetInstance().ReadUserSettings();
         AvaloniaXamlLoader.Load(this);
     }
 

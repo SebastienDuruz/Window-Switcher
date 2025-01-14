@@ -8,7 +8,7 @@ public class ConfigFileAccessor
 {
     private static ConfigFileAccessor Instance { get; set; }
     private string FilePath { get; set; }
-    public ConfigFile Config { get; set; }
+    public ConfigFile? Config { get; set; }
     
     private ConfigFileAccessor()
     {
@@ -29,13 +29,13 @@ public class ConfigFileAccessor
         return this.FilePath;
     }
 
-    public async void ReadUserSettings()
+    public void ReadUserSettings()
     {
         if (File.Exists(FilePath))
         {
             try
             {
-                this.Config = JsonConvert.DeserializeObject<ConfigFile>(await File.ReadAllTextAsync(FilePath));
+                this.Config = JsonConvert.DeserializeObject<ConfigFile>(File.ReadAllText(FilePath));
             }
             catch (Exception ex)
             {
@@ -51,8 +51,8 @@ public class ConfigFileAccessor
         }
     }
 
-    public async void WriteUserSettings()
+    public void WriteUserSettings()
     {
-        await File.WriteAllTextAsync(FilePath, JsonConvert.SerializeObject(this.Config, Formatting.Indented));
+        File.WriteAllText(FilePath, JsonConvert.SerializeObject(this.Config, Formatting.Indented));
     }
 }

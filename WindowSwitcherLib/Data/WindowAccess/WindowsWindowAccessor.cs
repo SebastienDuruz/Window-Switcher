@@ -39,7 +39,7 @@ public class WindowsWindowAccessor : WindowAccessor
         
         foreach (Process process in Process.GetProcesses())
         {
-            if (process.MainWindowHandle == IntPtr.Zero || string.IsNullOrWhiteSpace(process.MainWindowTitle) || !IsWindowVisible(process.MainWindowHandle))
+            if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
                 continue;
             
             windows.Add(new WindowConfig()
