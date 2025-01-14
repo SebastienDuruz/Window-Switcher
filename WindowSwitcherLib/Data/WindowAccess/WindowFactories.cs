@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.WindowAccess;

@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
-using System.IO.Compression;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess;
 
 public class LinuxX11WindowAccessor : WindowAccessor
 {
@@ -46,12 +46,14 @@ public class LinuxX11WindowAccessor : WindowAccessor
 
         try
         {
+            windowInfo = windowInfo.Trim().Replace("  ", " ");
             string[] splitedWindowInfo = windowInfo.Split(' ');
             windowTitle = windowInfo.Substring(splitedWindowInfo[0].Length + splitedWindowInfo[1].Length + splitedWindowInfo[2].Length + 3);
         }
         catch (Exception ex)
         {
             // TODO : Log
+            Console.WriteLine(ex.Message);
         }
         
         return windowTitle;
