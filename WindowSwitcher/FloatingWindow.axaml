@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" Width="150" Height="100"
+        Resized="FloatingWindowResized"
+        x:Class="WindowSwitcher.FloatingWindow"
+        Title="FloatingWindow"
+        Topmost="True"
+        SystemDecorations="BorderOnly">
+        <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
+                <Label FontSize="8" Name="WindowLabel">test</Label>
+        </Canvas>
+</Window>

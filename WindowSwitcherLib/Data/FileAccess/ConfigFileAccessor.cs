@@ -55,4 +55,17 @@ public class ConfigFileAccessor
     {
         File.WriteAllText(FilePath, JsonConvert.SerializeObject(this.Config, Formatting.Indented));
     }
+
+    public void SaveFloatingWindowSettings(WindowConfig windowConfig)
+    {
+        this.Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
+        this.Config.FloatingWindowsConfig.Add(windowConfig);
+        this.WriteUserSettings();
+    }
+
+    public WindowConfig? GetFloatingWindowConfig(WindowConfig windowConfig)
+    {
+        this.ReadUserSettings();
+        return this.Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle);
+    }
 }

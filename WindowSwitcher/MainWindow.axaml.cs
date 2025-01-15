@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml.Templates;
@@ -18,11 +19,12 @@ using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
 namespace WindowSwitcher;
 
-public partial class MainWindow : Avalonia.Controls.Window
+public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts;
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
     private List<WindowConfig> Windows { get; set; } = new();
+    private List<FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes, "Prefix window");
     private PrefixesWindow BlacklistWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes, "Blacklist window");
     private string? LastSelectedItemID { get; set; } = "";
@@ -66,10 +68,15 @@ public partial class MainWindow : Avalonia.Controls.Window
         {
             WindowsListBox.Items.Clear();
             foreach (WindowConfig window in Windows)
+            {
+                // ListBox Configuration panel
                 WindowsListBox.Items.Add(new ListBoxItem()
                 {
                     Name = window.WindowId,
                     Content = window.ShortWindowTitle,
+                    Height = 22,
+                    FontSize = 14,
+                    Padding = new Thickness(8, 2),
                     IsSelected = LastSelectedItemID == window.WindowId,
                     ContextMenu = new ContextMenu()
                     {
@@ -78,7 +85,7 @@ public partial class MainWindow : Avalonia.Controls.Window
                             new MenuItem()
                             {
                                 Header = "Raise to front",
-                                Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.First(x => x.WindowId.StartsWith(LastSelectedItemID))))
+                                Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x => x.WindowId.StartsWith(LastSelectedItemID))))
                             },
                             new MenuItem() { 
                                 Header = "Add to blacklist",
@@ -87,6 +94,14 @@ public partial class MainWindow : Avalonia.Controls.Window
                         }
                     }
                 });
+                
+                // Refresh floating windows
+                if(FloatingWindows.All(x => x.WindowConfig.WindowId != window.WindowId))
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
+            }
+            
+            // Delete the windows that doesn't exist anymore
+            ClearClosedFloatingWindows();
         });
         
         GC.Collect();
@@ -96,6 +111,8 @@ public partial class MainWindow : Avalonia.Controls.Window
     {
         PrefixesWindow.Destroy();
         BlacklistWindow.Destroy();
+        foreach(FloatingWindow floatingWindow in FloatingWindows)
+            floatingWindow.Close();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
         _cts.Cancel();
         base.OnClosing(e);
@@ -147,5 +164,11 @@ public partial class MainWindow : Avalonia.Controls.Window
         ConfigFileAccessor.GetInstance().WriteUserSettings();
     }
 
+    private void ClearClosedFloatingWindows()
+    {
+        List<FloatingWindow> windowsToRemove = FloatingWindows.Where(window => Windows.All(config => config.WindowId != window.WindowConfig.WindowId)).ToList();
+        windowsToRemove.ForEach(window => window.Close());
+        FloatingWindows.RemoveAll(window => windowsToRemove.Contains(window));
+    }
     
 }
