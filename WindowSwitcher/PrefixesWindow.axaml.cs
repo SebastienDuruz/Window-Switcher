@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -56,6 +57,9 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
             PrefixListBox.Items.Add(new ListBoxItem()
             {
                 Content = prefix.ToLower(),
+                Height = 22,
+                FontSize = 14,
+                Padding = new Thickness(8, 2),
             });
         });
     }

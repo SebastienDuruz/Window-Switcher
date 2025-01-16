@@ -24,8 +24,8 @@
     <ItemGroup>
       <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
     </ItemGroup>
-
     <ItemGroup>
-      <Folder Include="Assets\" />
+        <AvaloniaResource Include="Assets\WS_logo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/>
+        <AvaloniaResource Include="Assets\WS_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/>
     </ItemGroup>
 </Project>

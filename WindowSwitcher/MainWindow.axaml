@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         xmlns:windowAccess="clr-namespace:WindowSwitcherLib.WindowAccess;assembly=WindowSwitcherLib"
+        Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="400" Height="300"
         x:Class="WindowSwitcher.MainWindow"
@@ -23,8 +24,7 @@
                         <MenuItem Name="RefreshButton" Header="_Refresh" Padding="4" Click="RefreshClicked"></MenuItem>
                 </Menu>
                 <StackPanel Orientation="Vertical"  Margin="0 0" Spacing="0">
-                     <ListBox Name="WindowsListBox" SelectionChanged="WindowsListBoxSelectionChanged">
-                     </ListBox>                   
+                     <ListBox Name="WindowsListBox" SelectionChanged="WindowsListBoxSelectionChanged"></ListBox>                   
                 </StackPanel>
         </DockPanel>
 </Window>

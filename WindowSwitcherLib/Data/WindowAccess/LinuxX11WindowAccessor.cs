@@ -38,11 +38,24 @@ public class LinuxX11WindowAccessor : WindowAccessor
 
     public override Bitmap? TakeScreenshot(WindowConfig window)
     {
-        ImportWrapper.Execute(window.WindowTitle);
+        string commandOutput = ImportWrapper.Execute(window.WindowId);
 
-        // Todo : Convert the screenshot from import command
-        Bitmap bmp = new Bitmap("test");
-        return bmp;
+        if (commandOutput == "")
+        {
+            try
+            {
+                using (var stream = new MemoryStream(File.ReadAllBytes($"{StaticData.LinuxScreenshotFolder}/{window.WindowId}.jpg")))
+                {
+                    return new Bitmap(stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Todo : Log
+            }
+        }
+
+        return null;
     }
 
     private string ExtractWindowTitle(string windowInfo)

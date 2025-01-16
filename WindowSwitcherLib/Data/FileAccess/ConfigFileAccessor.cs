@@ -13,6 +13,7 @@ public class ConfigFileAccessor
     private ConfigFileAccessor()
     {
         Directory.CreateDirectory(StaticData.DataFolder);
+        Directory.CreateDirectory(StaticData.LinuxScreenshotFolder);
         FilePath = Path.Combine(StaticData.DataFolder, "config.json");
         ReadUserSettings();
     }

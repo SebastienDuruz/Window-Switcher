@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using WindowSwitcherLib.Data.FileAccess;
 
 namespace WindowSwitcherLib.WindowAccess;
 
@@ -8,9 +9,10 @@ public class ImportWrapper : ICommandWrapper
     {
         using Process process = new Process();
         process.StartInfo.FileName = "import";
-        process.StartInfo.Arguments = $"-window \"{client}\" -quality 25 /home/smour/screenshot.jpg";
+        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {StaticData.LinuxScreenshotFolder}/{client}.jpg";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
         process.StartInfo.CreateNoWindow = true;
 
         process.Start();

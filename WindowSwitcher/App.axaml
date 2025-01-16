@@ -1,9 +1,21 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="WindowSwitcher.App"
-             RequestedThemeVariant="Default">
+             RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
-
+     <TrayIcon.Icons>
+         <TrayIcons>
+             <TrayIcon Icon="/Assets/WS_logo.ico" 
+                       ToolTipText="WindowSwitcher Tray menu">
+                 <TrayIcon.Menu>
+                     <NativeMenu>
+                         <NativeMenuItem Header="Settings"></NativeMenuItem>
+                         <NativeMenuItem Header="Exit" Click="ExitMenuItemClicked"></NativeMenuItem>
+                     </NativeMenu>
+                 </TrayIcon.Menu>
+             </TrayIcon>
+         </TrayIcons>
+     </TrayIcon.Icons>
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
