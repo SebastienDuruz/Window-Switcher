@@ -6,7 +6,7 @@ public class ApplicationDataAccessor
 
     public ApplicationDataAccessor()
     {
-        this.CheckFolder();
+        CheckFolder();
     }
 
     private void CheckFolder()

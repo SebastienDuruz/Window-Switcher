@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcher;

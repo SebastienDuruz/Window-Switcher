@@ -1,20 +1,20 @@
-using System.ComponentModel;
 using Newtonsoft.Json;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.FileAccess;
 
 public class ConfigFileAccessor
 {
     private static ConfigFileAccessor Instance { get; set; }
     private string FilePath { get; set; }
-    public ConfigFile? Config { get; set; }
+    public ConfigFile Config { get; set; }
     
     private ConfigFileAccessor()
     {
         Directory.CreateDirectory(StaticData.DataFolder);
-        this.FilePath = Path.Combine(StaticData.DataFolder, "config.json");
-        this.ReadUserSettings();
+        FilePath = Path.Combine(StaticData.DataFolder, "config.json");
+        ReadUserSettings();
     }
 
     public static ConfigFileAccessor GetInstance()
@@ -26,7 +26,7 @@ public class ConfigFileAccessor
     
     public string GetFilePath()
     {
-        return this.FilePath;
+        return FilePath;
     }
 
     public void ReadUserSettings()
@@ -35,37 +35,49 @@ public class ConfigFileAccessor
         {
             try
             {
-                this.Config = JsonConvert.DeserializeObject<ConfigFile>(File.ReadAllText(FilePath));
+                Config = JsonConvert.DeserializeObject<ConfigFile>(File.ReadAllText(FilePath));
             }
             catch (Exception ex)
             {
                 // Reset the settings by recreating a file
-                this.Config = new ConfigFile();
+                Config = new ConfigFile();
                 WriteUserSettings();
             }
         }
         else
         {
-            this.Config = new ConfigFile();
+            Config = new ConfigFile();
             WriteUserSettings();
         }
     }
 
     public void WriteUserSettings()
     {
-        File.WriteAllText(FilePath, JsonConvert.SerializeObject(this.Config, Formatting.Indented));
+        File.WriteAllText(FilePath, JsonConvert.SerializeObject(Config, Formatting.Indented));
     }
 
     public void SaveFloatingWindowSettings(WindowConfig windowConfig)
     {
-        this.Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
-        this.Config.FloatingWindowsConfig.Add(windowConfig);
-        this.WriteUserSettings();
+        Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
+        Config.FloatingWindowsConfig.Add(windowConfig);
+        WriteUserSettings();
     }
 
-    public WindowConfig? GetFloatingWindowConfig(WindowConfig windowConfig)
+    public void SavePrefixesList(List<string> prefixes)
     {
-        this.ReadUserSettings();
-        return this.Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle);
+        Config.WhitelistPrefixes = prefixes;
+        WriteUserSettings();
+    }
+
+    public void SaveBlacklist(List<string> blacklist)
+    {
+        Config.BlacklistPrefixes = blacklist;
+        WriteUserSettings();
+    }
+
+    public WindowConfig GetFloatingWindowConfig(WindowConfig windowConfig)
+    {
+        ReadUserSettings();
+        return Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
     }
 }

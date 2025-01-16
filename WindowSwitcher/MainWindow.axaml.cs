@@ -1,19 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml.Templates;
-using Avalonia.Media;
 using Avalonia.Threading;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
@@ -21,19 +17,23 @@ namespace WindowSwitcher;
 
 public partial class MainWindow : Window
 {
-    private readonly CancellationTokenSource _cts;
+    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
     private List<WindowConfig> Windows { get; set; } = new();
     private List<FloatingWindow> FloatingWindows { get; set; } = new();
-    private PrefixesWindow PrefixesWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes, "Prefix window");
-    private PrefixesWindow BlacklistWindow { get; set; } = new(ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes, "Blacklist window");
-    private string? LastSelectedItemID { get; set; } = "";
+    private PrefixesWindow PrefixesWindow { get; set; }
+    private PrefixesWindow BlacklistWindow { get; set; }
+    private string? LastSelectedItemId { get; set; } = "";
     
     public MainWindow()
     {
         InitializeComponent();
 
-        _cts = new CancellationTokenSource();
+        Title = StaticData.AppName;
+
+        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes, StaticData.PrefixWindowType.whitelist, "Prefix window");
+        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes, StaticData.PrefixWindowType.blacklist, "Blacklist window");
+
         StartBackgroundTask();
     }
 
@@ -47,56 +47,58 @@ public partial class MainWindow : Window
         while (!cancellationToken.IsCancellationRequested)
         {
             await FetchWindowsAsync();
-            await Task.Delay(5000, cancellationToken);
+            await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
         }
     }
 
     private async Task FetchWindowsAsync()
     {
         Windows.Clear();
-        foreach (WindowConfig fetchedWindow in WindowAccessor.GetWindows())
-            foreach(string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
-                if(fetchedWindow.WindowTitle.ToLower().StartsWith(prefix) 
-                   && !ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(
-                       x => x.StartsWith(fetchedWindow.WindowTitle.ToLower())))
-                    Windows.Add(fetchedWindow);
         
-        // TODO : currently the blacklist is only used as full name blacklist, not prefix
-
-        // TODO : Show the managed windows
+        FetchWindowsWithFilters();
+        
+        // Show the managed windows on the ui
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             WindowsListBox.Items.Clear();
             foreach (WindowConfig window in Windows)
             {
-                // ListBox Configuration panel
-                WindowsListBox.Items.Add(new ListBoxItem()
+                if (WindowsListBox.Items.All(x => ((ListBoxItem)x).Name != window.WindowId))
                 {
-                    Name = window.WindowId,
-                    Content = window.ShortWindowTitle,
-                    Height = 22,
-                    FontSize = 14,
-                    Padding = new Thickness(8, 2),
-                    IsSelected = LastSelectedItemID == window.WindowId,
-                    ContextMenu = new ContextMenu()
+                    // ListBox Configuration panel
+                    WindowsListBox.Items.Add(new ListBoxItem()
                     {
-                        Items =
+                        Name = window.WindowId,
+                        Content = window.ShortWindowTitle,
+                        Height = 22,
+                        FontSize = 14,
+                        Padding = new Thickness(8, 2),
+                        IsSelected = LastSelectedItemId == window.WindowId,
+                        ContextMenu = new ContextMenu()
                         {
-                            new MenuItem()
+                            Items =
                             {
-                                Header = "Raise to front",
-                                Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x => x.WindowId.StartsWith(LastSelectedItemID))))
-                            },
-                            new MenuItem() { 
-                                Header = "Add to blacklist",
-                                Command = new ContextMenuCommand(() => AddToBlacklist(window.WindowTitle.ToLower()))
+                                new MenuItem()
+                                {
+                                    Header = "Raise to front",
+                                    Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x => x.WindowId.StartsWith(LastSelectedItemId))))
+                                },
+                                new MenuItem() { 
+                                    Header = "Add to blacklist",
+                                    Command = new ContextMenuCommand(async () => await AddToBlacklist(window.WindowTitle))
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
+                else
+                {
+                    ((ListBoxItem)WindowsListBox.Items.First(x => ((ListBoxItem)x).Name == window.WindowId)).Content = window.ShortWindowTitle;
+                }
+                
                 
                 // Refresh floating windows
-                if(FloatingWindows.All(x => x.WindowConfig.WindowId != window.WindowId))
+                if(FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
                     FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
             }
             
@@ -146,28 +148,59 @@ public partial class MainWindow : Window
         if (selectedPrefix == null)
             return;
         
-        LastSelectedItemID = selectedPrefix.Name!.ToLower();
+        LastSelectedItemId = selectedPrefix.Name!.ToLower();
+    }
+
+    private async Task AddToBlacklist(string windowTitle)
+    {
+        windowTitle = windowTitle.ToLower();
+        if (!BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle)))
+        {
+            BlacklistWindow.ListToEdit.Add(windowTitle);
+            BlacklistWindow.AddPrefixToList(windowTitle);
+            
+            ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
+        }
+        
+        await FetchWindowsAsync();
     }
     
     private async void RefreshClicked(object? sender, RoutedEventArgs e)
     {
+        RefreshButton.IsEnabled = false;
         await FetchWindowsAsync();
+        RefreshButton.IsEnabled = true;
     }
 
-    private void AddToBlacklist(string windowTitle)
+    private void FetchWindowsWithFilters()
     {
-        if (BlacklistWindow.ListToEdit.All(x => x != windowTitle))
+        // Apply the prefixes and remove the blacklisted clients
+        foreach (WindowConfig? fetchedWindow in WindowAccessor.GetWindows())
         {
-            BlacklistWindow.ListToEdit.Add(windowTitle);
-            BlacklistWindow.AddPrefixToList(windowTitle);       
+            foreach (string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
+            {
+                if (fetchedWindow!.WindowTitle.ToLower().StartsWith(prefix)
+                    && !ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
+                        x.StartsWith(fetchedWindow.WindowTitle.ToLower())))
+                {
+                    Windows.Add(fetchedWindow);
+                }
+            }
+                
         }
-        ConfigFileAccessor.GetInstance().WriteUserSettings();
+            
     }
 
     private void ClearClosedFloatingWindows()
     {
+        IEnumerable<object?> itemsToRemove = WindowsListBox.Items.Where(window =>
+            Windows.All(config => config.WindowId != ((ListBoxItem)window).Name));
+        
         List<FloatingWindow> windowsToRemove = FloatingWindows.Where(window => Windows.All(config => config.WindowId != window.WindowConfig.WindowId)).ToList();
         windowsToRemove.ForEach(window => window.Close());
+
+        foreach(var itemToRemove in itemsToRemove)
+            WindowsListBox.Items.Remove(itemToRemove);
         FloatingWindows.RemoveAll(window => windowsToRemove.Contains(window));
     }
     

@@ -4,11 +4,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" Width="150" Height="100"
         Resized="FloatingWindowResized"
+        PositionChanged="FloatingWindowPositionChanged"
         x:Class="WindowSwitcher.FloatingWindow"
         Title="FloatingWindow"
         Topmost="True"
         SystemDecorations="BorderOnly">
         <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
-                <Label FontSize="8" Name="WindowLabel">test</Label>
+                <Label FontSize="10" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel">window name</Label>
         </Canvas>
 </Window>

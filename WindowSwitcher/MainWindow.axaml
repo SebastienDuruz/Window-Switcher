@@ -3,10 +3,11 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
+        xmlns:windowAccess="clr-namespace:WindowSwitcherLib.WindowAccess;assembly=WindowSwitcherLib"
         mc:Ignorable="d" CanResize="False"
         Width="400" Height="300"
         x:Class="WindowSwitcher.MainWindow"
-        Topmost="False"
+        Topmost="True"
         Title="WindowSwitcher"
         ClosingBehavior="OwnerAndChildWindows"
         x:DataType="models:WindowConfig">
@@ -19,7 +20,7 @@
                         <MenuItem Header="_File" Padding="4">
                                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
                         </MenuItem>
-                        <MenuItem Header="_Refresh" Padding="4" Click="RefreshClicked"></MenuItem>
+                        <MenuItem Name="RefreshButton" Header="_Refresh" Padding="4" Click="RefreshClicked"></MenuItem>
                 </Menu>
                 <StackPanel Orientation="Vertical"  Margin="0 0" Spacing="0">
                      <ListBox Name="WindowsListBox" SelectionChanged="WindowsListBoxSelectionChanged">
