@@ -24,5 +24,5 @@ public abstract class WindowAccessor
     /// Take a screenshot of a window
     /// </summary>
     /// <param name="window">The window to screenshot</param>
-    public abstract Bitmap? TakeScreenshot(WindowConfig window);
+    public abstract Bitmap? TakeScreenshot(WindowConfig? window);
 }

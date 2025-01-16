@@ -76,7 +76,7 @@ public class WindowsWindowAccessor : WindowAccessor
         }
     }
 
-    public override Bitmap? TakeScreenshot(WindowConfig window)
+    public override Bitmap? TakeScreenshot(WindowConfig? window)
     {
         IntPtr hwnd = IntPtr.Parse(window.WindowId);
         System.Drawing.Bitmap bmp;

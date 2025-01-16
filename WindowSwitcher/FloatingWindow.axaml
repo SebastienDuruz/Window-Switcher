@@ -3,13 +3,21 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         Icon="/Assets/WS_logo.ico"
-        mc:Ignorable="d" Width="150" Height="100"
+        ShowInTaskbar="False"
+        mc:Ignorable="d"
         Resized="FloatingWindowResized"
         PositionChanged="FloatingWindowPositionChanged"
         x:Class="WindowSwitcher.FloatingWindow"
         Title="FloatingWindow"
         Topmost="True"
-        SystemDecorations="BorderOnly">
+        CanResize="True"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="False"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="0"
+        X11Properties.NetWmWindowType="Dialog"
+        Closing="FloatingWindowClosing"
+        SystemDecorations="Full">
         <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
                 <Label FontSize="10" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel">window name</Label>
         </Canvas>

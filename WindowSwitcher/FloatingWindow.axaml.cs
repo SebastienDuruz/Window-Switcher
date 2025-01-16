@@ -15,10 +15,10 @@ namespace WindowSwitcher;
 public partial class FloatingWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-    internal WindowConfig WindowConfig { get; set; }
+    internal WindowConfig? WindowConfig { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
         
-    public FloatingWindow(WindowConfig windowConfig, WindowAccessor windowAccessor)
+    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor)
     {
         InitializeComponent();
         
@@ -47,13 +47,19 @@ public partial class FloatingWindow : Window
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
-        if(settingsConfig != null)
+        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
+        if (settingsConfig != null)
+        {
             WindowConfig = settingsConfig;
+            
+            // Position only for existing window configurations, avoid the window to pop outside of the viewport on Linux
+            Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
+        }
+        
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
-        Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
+        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations ? SystemDecorations.Full : SystemDecorations.BorderOnly;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -95,5 +101,10 @@ public partial class FloatingWindow : Window
         WindowConfig.WindowTop = Position.Y;
         
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+    }
+
+    private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        e.Cancel = !StaticData.AppClosing;
     }
 }

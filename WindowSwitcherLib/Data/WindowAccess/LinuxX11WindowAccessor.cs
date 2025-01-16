@@ -36,7 +36,7 @@ public class LinuxX11WindowAccessor : WindowAccessor
         WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
     }
 
-    public override Bitmap? TakeScreenshot(WindowConfig window)
+    public override Bitmap? TakeScreenshot(WindowConfig? window)
     {
         string commandOutput = ImportWrapper.Execute(window.WindowId);
 

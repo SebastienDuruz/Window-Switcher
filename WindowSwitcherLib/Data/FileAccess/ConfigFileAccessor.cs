@@ -57,7 +57,7 @@ public class ConfigFileAccessor
         File.WriteAllText(FilePath, JsonConvert.SerializeObject(Config, Formatting.Indented));
     }
 
-    public void SaveFloatingWindowSettings(WindowConfig windowConfig)
+    public void SaveFloatingWindowSettings(WindowConfig? windowConfig)
     {
         Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
         Config.FloatingWindowsConfig.Add(windowConfig);
@@ -76,9 +76,30 @@ public class ConfigFileAccessor
         WriteUserSettings();
     }
 
-    public WindowConfig GetFloatingWindowConfig(WindowConfig windowConfig)
+    public WindowConfig? GetFloatingWindowConfig(WindowConfig? windowConfig)
     {
         ReadUserSettings();
-        return Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
+
+        // Check by windowTitle
+        WindowConfig? existantConfig =
+            Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle);
+        if (existantConfig != null)
+        {
+            existantConfig.WindowId = windowConfig.WindowId;
+            SaveFloatingWindowSettings(existantConfig);
+            return existantConfig;
+        }
+        
+        // Check by windowId
+        existantConfig = Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowId == windowConfig.WindowId);
+        if (existantConfig != null)
+        {
+            existantConfig.WindowTitle = windowConfig.WindowTitle;
+            existantConfig.ShortWindowTitle = windowConfig.ShortWindowTitle;
+            SaveFloatingWindowSettings(existantConfig);
+            return existantConfig;
+        }
+
+        return null;
     }
 }

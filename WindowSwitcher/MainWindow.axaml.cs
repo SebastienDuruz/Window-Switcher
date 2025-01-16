@@ -19,7 +19,7 @@ public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private List<WindowConfig> Windows { get; set; } = new();
+    private List<WindowConfig?> Windows { get; set; } = new();
     private List<FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
@@ -61,7 +61,7 @@ public partial class MainWindow : Window
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             WindowsListBox.Items.Clear();
-            foreach (WindowConfig window in Windows)
+            foreach (WindowConfig? window in Windows)
             {
                 if (WindowsListBox.Items.All(x => ((ListBoxItem)x).Name != window.WindowId))
                 {
@@ -111,6 +111,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        StaticData.AppClosing = true;
         PrefixesWindow.Destroy();
         BlacklistWindow.Destroy();
         foreach(FloatingWindow floatingWindow in FloatingWindows)
