@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
@@ -9,16 +10,16 @@ public class LinuxX11WindowAccessor : WindowAccessor
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
     
-    public override ObservableCollection<WindowConfig> GetWindows()
+    public override ObservableCollection<WindowConfig?> GetWindows()
     {
-        string wmctrlOutput = this.WmctrlWrapper.Execute(" -l");
+        string wmctrlOutput = WmctrlWrapper.Execute(" -l");
         
-        ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
+        ObservableCollection<WindowConfig?> windows = new ObservableCollection<WindowConfig?>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
             if (!String.IsNullOrWhiteSpace(line))
             {
-                string windowName = this.ExtractWindowTitle(line);
+                string windowName = ExtractWindowTitle(line);
                 windows.Add(new WindowConfig()
                 {
                     WindowId = line.Split(' ')[0], 
@@ -30,14 +31,31 @@ public class LinuxX11WindowAccessor : WindowAccessor
         return windows;
     }
 
-    public override void RaiseWindow(WindowConfig window)
+    public override void RaiseWindow(WindowConfig? window)
     {
-        this.WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
+        WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
     }
 
-    public override void TakeScreenshot(WindowConfig window)
+    public override Bitmap? TakeScreenshot(WindowConfig? window)
     {
-        this.ImportWrapper.Execute(window.WindowTitle);
+        string commandOutput = ImportWrapper.Execute(window.WindowId);
+
+        if (commandOutput == "")
+        {
+            try
+            {
+                using (var stream = new MemoryStream(File.ReadAllBytes($"{StaticData.LinuxScreenshotFolder}/{window.WindowId}.jpg")))
+                {
+                    return new Bitmap(stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Todo : Log
+            }
+        }
+
+        return null;
     }
 
     private string ExtractWindowTitle(string windowInfo)

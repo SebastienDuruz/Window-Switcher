@@ -1,12 +1,10 @@
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.CustomWindows;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.WindowAccess;
 using WindowSwitcherLib.WindowAccess.CustomWindows;
 
@@ -16,38 +14,39 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
 {
     public bool ToDestroy { get; set; } = false;
 
-    public PrefixesWindow(List<string> listToEdit, string windowTitle) : base(listToEdit)
+    public PrefixesWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType, string windowTitle) : base(listToEdit, prefixWindowType)
     {
         InitializeComponent();
-        this.Closing += OnClosing;
-        this.Title = windowTitle;
+        Closing += OnClosing;
+        Title = windowTitle;
 
-        foreach (string prefix in this.ListToEdit)
+        foreach (string prefix in ListToEdit)
             AddPrefixToList(prefix);
     }
 
     public void Destroy()
     {
-        this.ToDestroy = true;
-        this.Close();
+        ToDestroy = true;
+        Close();
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         e.Cancel = !ToDestroy;
-        this.Hide();
+        Hide();
     }
 
     private void AddPrefixClick(object? sender, RoutedEventArgs e)
     {
-        if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !this.ListToEdit.Contains(PrefixTextBox.Text.ToLower()))
+        PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
+        if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
         {
-            this.ListToEdit.Add(PrefixTextBox.Text.ToLower());
-            
+            ListToEdit.Add(PrefixTextBox.Text);
             ConfigFileAccessor.GetInstance().WriteUserSettings();
-            
-            AddPrefixToList(PrefixTextBox.Text.ToLower());
+            AddPrefixToList(PrefixTextBox.Text);
             PrefixTextBox.Text = "";
+            
+            SavePrefixList();
         }
     }
 
@@ -57,7 +56,10 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
         {
             PrefixListBox.Items.Add(new ListBoxItem()
             {
-                Content = prefix,
+                Content = prefix.ToLower(),
+                Height = 22,
+                FontSize = 14,
+                Padding = new Thickness(8, 2),
             });
         });
     }
@@ -82,7 +84,21 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
         
         DeletePrefixFromList(selectedPrefix);
         
-        this.ListToEdit.Remove(((string)selectedPrefix.Content!).ToLower());
-        ConfigFileAccessor.GetInstance().WriteUserSettings();
+        ListToEdit.Remove(((string)selectedPrefix.Content!).ToLower());
+        
+        SavePrefixList();
+    }
+
+    private void SavePrefixList()
+    {
+        switch (PrefixWindowType)
+        {
+            case StaticData.PrefixWindowType.whitelist:
+                ConfigFileAccessor.GetInstance().SavePrefixesList(ListToEdit);
+                break;
+            case StaticData.PrefixWindowType.blacklist:
+                ConfigFileAccessor.GetInstance().SaveBlacklist(ListToEdit);
+                break;
+        }
     }
 }

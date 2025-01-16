@@ -1,14 +1,16 @@
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
+using WindowSwitcherLib.WindowAccess;
 
-namespace WindowSwitcherLib.WindowAccess.CustomWindows;
+namespace WindowSwitcherLib.Data.CustomWindows;
 
 public class EditListWindow : Window
 {
     public List<string> ListToEdit { get; protected set; }
+    public StaticData.PrefixWindowType PrefixWindowType { get; set; }
     
-    public EditListWindow(List<string> listToEdit)
+    public EditListWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType)
     {
-        this.ListToEdit = listToEdit;
+        ListToEdit = listToEdit;
+        PrefixWindowType = prefixWindowType;
     }
 }

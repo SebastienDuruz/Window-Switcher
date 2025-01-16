@@ -1,5 +1,12 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
@@ -7,49 +14,97 @@ namespace WindowSwitcher;
 
 public partial class FloatingWindow : Window
 {
-    internal WindowConfig WindowConfig { get; set; }
+    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+    internal WindowConfig? WindowConfig { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
         
-    public FloatingWindow(WindowConfig windowConfig, WindowAccessor windowAccessor)
+    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor)
     {
         InitializeComponent();
         
-        this.WindowConfig = windowConfig;
-        this.WindowAccessor = windowAccessor;
+        WindowConfig = windowConfig;
+        WindowAccessor = windowAccessor;
         
-        this.SetInitialWindowSettings();
-        this.Show();
+        SetInitialWindowSettings();
+        Show();
+        
+        StartBackgroundTask();
+    }
+    
+    private void StartBackgroundTask()
+    {
+        Task.Run(async () => await RunPeriodicTask(_cts.Token));
+    }
+    
+    private async Task RunPeriodicTask(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await UpdateScreenshot();
+            await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
+        }
     }
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(this.WindowConfig);
-        if(settingsConfig != null)
-            this.WindowConfig = settingsConfig;
-        this.WindowLabel.Content = WindowConfig.ShortWindowTitle;
-        this.Width = WindowConfig.WindowWidth;
-        this.Height = WindowConfig.WindowHeight;
+        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
+        if (settingsConfig != null)
+        {
+            WindowConfig = settingsConfig;
+            
+            // Position only for existing window configurations, avoid the window to pop outside of the viewport on Linux
+            Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
+        }
+        
+        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        Width = WindowConfig.WindowWidth;
+        Height = WindowConfig.WindowHeight;
+        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations ? SystemDecorations.Full : SystemDecorations.BorderOnly;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        // if(e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
-        // else if(e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        this.BeginMoveDrag(e);
+        BeginMoveDrag(e);
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        this.WindowAccessor.RaiseWindow(this.WindowConfig);
+        WindowAccessor.RaiseWindow(WindowConfig);
     }
 
+    private Task UpdateScreenshot()
+    {
+        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig);
+        if(appScreenshot is not null)
+            Dispatcher.UIThread.Invoke(() =>
+            {
+                WindowCanvas.Background = new ImageBrush
+                {
+                    Source = appScreenshot,
+                    Stretch = Stretch.Fill,
+                };
+            });
+        return Task.CompletedTask;
+    }
+    
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        this.WindowConfig.WindowHeight = this.Height;
-        this.WindowConfig.WindowWidth = this.Width;
-        this.WindowConfig.WindowLeft = this.Position.X;
-        this.WindowConfig.WindowTop = this.Position.Y;
+        WindowConfig.WindowHeight = Height;
+        WindowConfig.WindowWidth = Width;
         
-        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(this.WindowConfig);
+        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+    }
+
+    private void FloatingWindowPositionChanged(object? sender, PixelPointEventArgs e)
+    {
+        WindowConfig.WindowLeft = Position.X;
+        WindowConfig.WindowTop = Position.Y;
+        
+        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+    }
+
+    private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        e.Cancel = !StaticData.AppClosing;
     }
 }
