@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess;
 
 public class ApplicationDataAccessor
 {

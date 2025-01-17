@@ -4,9 +4,10 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
+using static System.Drawing.Graphics;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess;
 
 public class WindowsWindowAccessor : WindowAccessor
 {
@@ -36,13 +37,25 @@ public class WindowsWindowAccessor : WindowAccessor
     [DllImport("gdi32.dll")]
     private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int width, int height, IntPtr hdcSrc, int xSrc, int ySrc, int rop);
 
-    private const int SRCCOPY = 0x00CC0020; // Copier directement la source
+    private const int SRCCOPY = 0x00CC0020;
     
     [DllImport("user32.dll")]
     private static extern IntPtr GetWindowDC(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    
+    private static readonly System.Drawing.Imaging.ImageCodecInfo JpegCodec =
+        System.Drawing.Imaging.ImageCodecInfo.GetImageDecoders()
+            .FirstOrDefault(codec => codec.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
+
+    private static readonly System.Drawing.Imaging.EncoderParameters EncoderParameters = new (1)
+    {
+        Param = new[]
+        {
+            new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, ConfigFileAccessor.GetInstance().Config.ScreenshotQuality) // Valeur par défaut
+        }
+    };
 
     public override ObservableCollection<WindowConfig?> GetWindows()
     {
@@ -87,15 +100,15 @@ public class WindowsWindowAccessor : WindowAccessor
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
 
-            IntPtr hDC = GetWindowDC(hwnd);
+            IntPtr hDc = GetWindowDC(hwnd);
             bmp = new System.Drawing.Bitmap(width, height);
-            using (Graphics g = Graphics.FromImage(bmp))
+            using (Graphics g = FromImage(bmp))
             {
-                IntPtr hDCGraphics = g.GetHdc();
-                BitBlt(hDCGraphics, 0, 0, width, height, hDC, 0, 0, SRCCOPY);
-                g.ReleaseHdc(hDCGraphics);
+                IntPtr hDcGraphics = g.GetHdc();
+                BitBlt(hDcGraphics, 0, 0, width, height, hDc, 0, 0, SRCCOPY);
+                g.ReleaseHdc(hDcGraphics);
             }
-            ReleaseDC(hwnd, hDC);
+            ReleaseDC(hwnd, hDc);
         }
         catch (Exception ex)
         {
@@ -105,26 +118,19 @@ public class WindowsWindowAccessor : WindowAccessor
         return ConvertToAvaloniaBitmap(bmp);
     }
     
-    private Avalonia.Media.Imaging.Bitmap ConvertToAvaloniaBitmap(System.Drawing.Bitmap bitmap)
+    private Bitmap ConvertToAvaloniaBitmap(System.Drawing.Bitmap bitmap)
     {
         using var memoryStream = new MemoryStream();
         SaveBitmapWithLowerQuality(bitmap, memoryStream, ConfigFileAccessor.GetInstance().Config.ScreenshotQuality);
         memoryStream.Seek(0, SeekOrigin.Begin);
-        return new Avalonia.Media.Imaging.Bitmap(memoryStream);
+        return new Bitmap(memoryStream);
     }
     
     private void SaveBitmapWithLowerQuality(System.Drawing.Bitmap bitmap, Stream outputStream, long quality)
     {
-        var encoderParameters = new System.Drawing.Imaging.EncoderParameters(1);
-        encoderParameters.Param[0] = new System.Drawing.Imaging.EncoderParameter(
-            System.Drawing.Imaging.Encoder.Quality, quality);
-
-        var jpegCodec = System.Drawing.Imaging.ImageCodecInfo.GetImageDecoders()
-            .FirstOrDefault(codec => codec.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
-
-        if (jpegCodec != null)
-        {
-            bitmap.Save(outputStream, jpegCodec, encoderParameters);
-        }
+        if (quality < 0 || quality > 100)
+            quality = 1;
+        
+        bitmap.Save(outputStream, JpegCodec, EncoderParameters);
     }
 }

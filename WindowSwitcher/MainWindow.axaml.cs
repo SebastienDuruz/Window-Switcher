@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.WindowAccess;
 using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
@@ -24,15 +25,17 @@ public partial class MainWindow : Window
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
     private string? LastSelectedItemId { get; set; } = "";
-    
+
     public MainWindow()
     {
         InitializeComponent();
 
         Title = StaticData.AppName;
 
-        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes, StaticData.PrefixWindowType.whitelist, "Prefix window");
-        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes, StaticData.PrefixWindowType.blacklist, "Blacklist window");
+        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
+            StaticData.PrefixWindowType.whitelist, "Prefix window");
+        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes,
+            StaticData.PrefixWindowType.blacklist, "Blacklist window");
 
         StartBackgroundTask();
     }
@@ -41,7 +44,7 @@ public partial class MainWindow : Window
     {
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
     }
-    
+
     private async Task RunPeriodicTask(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -55,13 +58,13 @@ public partial class MainWindow : Window
     {
         Windows.Clear();
         FetchWindowsWithFilters();
-        
+
         // Show the managed windows on the ui
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        foreach (WindowConfig window in Windows)
         {
-            foreach (WindowConfig window in Windows)
+            if (WindowsListBox.Items.All(x => ((ListBoxItem)x).Name != window.WindowId))
             {
-                if (WindowsListBox.Items.All(x => ((ListBoxItem)x).Name != window.WindowId))
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     // ListBox Configuration panel
                     WindowsListBox.Items.Add(new ListBoxItem()
@@ -79,48 +82,49 @@ public partial class MainWindow : Window
                                 new MenuItem()
                                 {
                                     Header = "Raise to front",
-                                    Command = new ContextMenuCommand(() => WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x => x.WindowId.StartsWith(LastSelectedItemId))))
+                                    Command = new ContextMenuCommand(() =>
+                                        WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x =>
+                                            x.WindowId.StartsWith(LastSelectedItemId))))
                                 },
-                                new MenuItem() { 
+                                new MenuItem()
+                                {
                                     Header = "Add to blacklist",
                                     Command = new ContextMenuCommand(async void () =>
-                                    {
-                                        try
-                                        {
-                                            await AddToBlacklist(window.WindowTitle);
-                                        }
-                                        catch (Exception e)
-                                        {
-                                            // TODO handle exception
-                                        }
-                                    })
+                                        await AddToBlacklist(window.WindowTitle))
                                 }
                             }
                         }
                     });
-                }
-                else
-                {
-                    ((ListBoxItem)WindowsListBox.Items.First(x => ((ListBoxItem)x).Name == window.WindowId)).Content = window.ShortWindowTitle;
-                }
-                
-                // Refresh floating windows
-                if(FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
+                });
             }
-            
-            // Delete the windows that doesn't exist anymore
-            ClearClosedFloatingWindows();
-        });
-        
+            else
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ((ListBoxItem)WindowsListBox.Items.First(x => ((ListBoxItem)x).Name == window.WindowId))
+                        .Content = window.ShortWindowTitle;
+                });
+            }
+
+            // Refresh floating windows
+            if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
+                });
+        }
+
+        // Delete the windows that doesn't exist anymore
+        ClearClosedFloatingWindows();
+
         GC.Collect();
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
-        PrefixesWindow.Destroy();
-        BlacklistWindow.Destroy();
+        PrefixesWindow.Close();
+        BlacklistWindow.Close();
         foreach(FloatingWindow floatingWindow in FloatingWindows)
             floatingWindow.Close();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
@@ -161,16 +165,20 @@ public partial class MainWindow : Window
 
     private async Task AddToBlacklist(string windowTitle)
     {
-        windowTitle = windowTitle.ToLower();
-        if (!BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle)))
+        if (RefreshButton.IsEnabled)
         {
-            BlacklistWindow.ListToEdit.Add(windowTitle);
-            BlacklistWindow.AddPrefixToList(windowTitle);
+            windowTitle = windowTitle.ToLower();
+            if (!BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle)))
+            {
+                BlacklistWindow.ListToEdit.Add(windowTitle);
+                BlacklistWindow.AddPrefixToList(windowTitle);
             
-            ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
-        }
+                ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
+            }
         
-        await FetchWindowsAsync();
+            await FetchWindowsAsync();
+
+        }
     }
     
     private async void RefreshClicked(object? sender, RoutedEventArgs e)
@@ -184,29 +192,23 @@ public partial class MainWindow : Window
     {
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig? fetchedWindow in WindowAccessor.GetWindows())
-        {
             foreach (string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
-            {
                 if (fetchedWindow!.WindowTitle.ToLower().StartsWith(prefix)
                     && !ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
                         x.StartsWith(fetchedWindow.WindowTitle.ToLower())))
                 {
                     Windows.Add(fetchedWindow);
-                }
-            }
-                
-        }
-            
+                } 
     }
 
     private void ClearClosedFloatingWindows()
     {
-        IEnumerable<object?> itemsToRemove = WindowsListBox.Items.Where(window =>
-            Windows.All(config => config.WindowId != ((ListBoxItem)window).Name));
+        IEnumerable<object?> itemsToRemove = WindowsListBox.Items.Where(window => Windows.All(config => config.WindowId != ((ListBoxItem)window).Name)).ToList();
+        IEnumerable<FloatingWindow> windowsToRemove = FloatingWindows.Where(x => Windows.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
 
-        IEnumerable<FloatingWindow> windowsToRemove =
-            FloatingWindows.Where(x => Windows.All(c => c.WindowId != x.WindowConfig.WindowId));
-
+        foreach(var itemToRemove in itemsToRemove)
+            WindowsListBox.Items.Remove(itemToRemove);
+        
         foreach (FloatingWindow window in windowsToRemove)
         {
             // TODO : Find a more elegant solution for closing the floating window
@@ -215,9 +217,5 @@ public partial class MainWindow : Window
             StaticData.AppClosing = false;
             FloatingWindows.Remove(window);            
         }
-
-        foreach(var itemToRemove in itemsToRemove)
-            WindowsListBox.Items.Remove(itemToRemove);
     }
-    
 }

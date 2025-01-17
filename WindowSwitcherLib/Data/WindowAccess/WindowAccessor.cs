@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess;
 
 public abstract class WindowAccessor
 {

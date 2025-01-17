@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
@@ -14,7 +15,7 @@ namespace WindowSwitcher;
 
 public partial class FloatingWindow : Window
 {
-    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+    private readonly CancellationTokenSource _cts = new ();
     internal WindowConfig? WindowConfig { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
         
@@ -52,7 +53,7 @@ public partial class FloatingWindow : Window
         {
             WindowConfig = settingsConfig;
             
-            // Position only for existing window configurations, avoid the window to pop outside of the viewport on Linux
+            // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
         

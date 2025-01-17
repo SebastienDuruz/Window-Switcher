@@ -11,11 +11,6 @@
         Title="FloatingWindow"
         Topmost="True"
         CanResize="True"
-        WindowStartupLocation="CenterScreen"
-        ExtendClientAreaToDecorationsHint="False"
-        ExtendClientAreaChromeHints="NoChrome"
-        ExtendClientAreaTitleBarHeightHint="0"
-        X11Properties.NetWmWindowType="Dialog"
         Closing="FloatingWindowClosing"
         SystemDecorations="Full">
         <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">

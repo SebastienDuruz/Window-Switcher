@@ -10,10 +10,8 @@ using WindowSwitcherLib.WindowAccess.CustomWindows;
 
 namespace WindowSwitcher;
 
-public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
+public partial class PrefixesWindow : EditListWindow
 {
-    public bool ToDestroy { get; set; } = false;
-
     public PrefixesWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType, string windowTitle) : base(listToEdit, prefixWindowType)
     {
         InitializeComponent();
@@ -24,15 +22,9 @@ public partial class PrefixesWindow : EditListWindow, IDestroyableWindow
             AddPrefixToList(prefix);
     }
 
-    public void Destroy()
-    {
-        ToDestroy = true;
-        Close();
-    }
-
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = !ToDestroy;
+        e.Cancel = !StaticData.AppClosing;
         Hide();
     }
 
