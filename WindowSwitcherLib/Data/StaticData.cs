@@ -16,5 +16,5 @@ public static class StaticData
     public static bool AppClosing { get; set; } = false;
     public static string AppName { get; set; } = "WindowSwitcher";
     public static string DataFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppName);
-    public static string LinuxScreenshotFolder { get; set; } = Path.Combine(DataFolder, "LinuxScreenshot");
+    public static string LinuxScreenshotFolder { get; set; } = Path.Combine(DataFolder, "Screenshots");
 }

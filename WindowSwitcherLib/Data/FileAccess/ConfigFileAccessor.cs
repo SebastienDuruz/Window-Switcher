@@ -91,14 +91,14 @@ public class ConfigFileAccessor
         }
         
         // Check by windowId
-        existantConfig = Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowId == windowConfig.WindowId);
-        if (existantConfig != null)
-        {
-            existantConfig.WindowTitle = windowConfig.WindowTitle;
-            existantConfig.ShortWindowTitle = windowConfig.ShortWindowTitle;
-            SaveFloatingWindowSettings(existantConfig);
-            return existantConfig;
-        }
+        // existantConfig = Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowId == windowConfig.WindowId);
+        // if (existantConfig != null)
+        // {
+        //     existantConfig.WindowTitle = windowConfig.WindowTitle;
+        //     existantConfig.ShortWindowTitle = windowConfig.ShortWindowTitle;
+        //     SaveFloatingWindowSettings(existantConfig);
+        //     return existantConfig;
+        // }
 
         return null;
     }

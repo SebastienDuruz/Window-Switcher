@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using Avalonia.Controls;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
 using static System.Drawing.Graphics;
@@ -58,25 +59,28 @@ public class WindowsWindowAccessor : WindowAccessor
             new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, ConfigFileAccessor.GetInstance().Config.ScreenshotQuality) // Valeur par défaut
         }
     };
+    
+    private ObservableCollection<WindowConfig?> Windows { get; set; } = new();
 
     public override ObservableCollection<WindowConfig?> GetWindows()
     {
-        ObservableCollection<WindowConfig?> windows = new ObservableCollection<WindowConfig?>();
-        
         foreach (Process process in Process.GetProcesses())
         {
             if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
                 continue;
+
+            if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
+                Windows.Remove(Windows.FirstOrDefault(x => x.WindowTitle == process.MainWindowTitle));
             
-            windows.Add(new WindowConfig()
+            Windows.Add(new WindowConfig()
             {
                 WindowTitle = process.MainWindowTitle, 
                 WindowId = process.MainWindowHandle.ToString(), 
                 ShortWindowTitle = process.MainWindowTitle.Length > 40 ? $"{process.MainWindowTitle[..40]}..." : process.MainWindowTitle,
-            });
+            });    
         }
         
-        return windows;
+        return Windows;
     }
 
     public override void RaiseWindow(WindowConfig? window)
@@ -116,13 +120,8 @@ public class WindowsWindowAccessor : WindowAccessor
             return null;
         }
         
-        return ConvertToAvaloniaBitmap(Bmp);
-    }
-    
-    private Bitmap ConvertToAvaloniaBitmap(System.Drawing.Bitmap bitmap)
-    {
         using var memoryStream = new MemoryStream();
-        bitmap.Save(memoryStream, JpegCodec, EncoderParameters);
+        Bmp.Save(memoryStream, JpegCodec, EncoderParameters);
         memoryStream.Seek(0, SeekOrigin.Begin);
         return new Bitmap(memoryStream);
     }
