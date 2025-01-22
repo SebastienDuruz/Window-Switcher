@@ -24,6 +24,8 @@ public class WindowsWindowAccessor : WindowAccessor
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     static extern bool IsWindowVisible(IntPtr hWnd);
+    
+    private System.Drawing.Bitmap Bmp { get; set; }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
@@ -92,7 +94,6 @@ public class WindowsWindowAccessor : WindowAccessor
     public override Bitmap? TakeScreenshot(WindowConfig? window)
     {
         IntPtr hwnd = IntPtr.Parse(window.WindowId);
-        System.Drawing.Bitmap bmp;
 
         try
         {
@@ -101,8 +102,8 @@ public class WindowsWindowAccessor : WindowAccessor
             int height = rect.bottom - rect.top;
 
             IntPtr hDc = GetWindowDC(hwnd);
-            bmp = new System.Drawing.Bitmap(width, height);
-            using (Graphics g = FromImage(bmp))
+            Bmp = new System.Drawing.Bitmap(width, height);
+            using (Graphics g = FromImage(Bmp))
             {
                 IntPtr hDcGraphics = g.GetHdc();
                 BitBlt(hDcGraphics, 0, 0, width, height, hDc, 0, 0, SRCCOPY);
@@ -115,22 +116,14 @@ public class WindowsWindowAccessor : WindowAccessor
             return null;
         }
         
-        return ConvertToAvaloniaBitmap(bmp);
+        return ConvertToAvaloniaBitmap(Bmp);
     }
     
     private Bitmap ConvertToAvaloniaBitmap(System.Drawing.Bitmap bitmap)
     {
         using var memoryStream = new MemoryStream();
-        SaveBitmapWithLowerQuality(bitmap, memoryStream, ConfigFileAccessor.GetInstance().Config.ScreenshotQuality);
+        bitmap.Save(memoryStream, JpegCodec, EncoderParameters);
         memoryStream.Seek(0, SeekOrigin.Begin);
         return new Bitmap(memoryStream);
-    }
-    
-    private void SaveBitmapWithLowerQuality(System.Drawing.Bitmap bitmap, Stream outputStream, long quality)
-    {
-        if (quality < 0 || quality > 100)
-            quality = 1;
-        
-        bitmap.Save(outputStream, JpegCodec, EncoderParameters);
     }
 }
