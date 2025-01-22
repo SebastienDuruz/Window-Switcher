@@ -6,7 +6,7 @@
         ShowInTaskbar="False"
         mc:Ignorable="d"
         Resized="FloatingWindowResized"
-        PositionChanged="FloatingWindowPositionChanged"
+        PointerReleased="PointerReleased"
         x:Class="WindowSwitcher.FloatingWindow"
         Title="FloatingWindow"
         Topmost="True"

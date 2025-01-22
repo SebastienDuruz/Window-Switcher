@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -92,20 +93,18 @@ public partial class FloatingWindow : Window
     {
         WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
-        
-        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
-    }
-
-    private void FloatingWindowPositionChanged(object? sender, PixelPointEventArgs e)
-    {
-        WindowConfig.WindowLeft = Position.X;
-        WindowConfig.WindowTop = Position.Y;
-        
-        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
     }
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         e.Cancel = !StaticData.AppClosing;
+        
+        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+    }
+
+    private void PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        WindowConfig.WindowLeft = Position.X;
+        WindowConfig.WindowTop = Position.Y;
     }
 }
