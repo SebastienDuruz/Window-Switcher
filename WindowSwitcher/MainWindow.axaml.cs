@@ -56,7 +56,6 @@ public partial class MainWindow : Window
 
     private async Task FetchWindowsAsync()
     {
-        Windows.Clear();
         FetchWindowsWithFilters();
 
         // Show the managed windows on the ui
@@ -190,6 +189,8 @@ public partial class MainWindow : Window
 
     private void FetchWindowsWithFilters()
     {
+        Windows.Clear();
+        
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig? fetchedWindow in WindowAccessor.GetWindows())
             foreach (string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
