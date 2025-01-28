@@ -71,12 +71,12 @@ public partial class FloatingWindow : Window
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowAccessor.RaiseWindow(WindowConfig);
+        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
     }
 
     private Task UpdateScreenshot()
     {
-        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig);
+        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
         if(appScreenshot is not null)
             Dispatcher.UIThread.Invoke(() =>
             {

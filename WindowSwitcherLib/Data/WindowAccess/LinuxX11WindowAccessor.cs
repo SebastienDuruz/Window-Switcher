@@ -31,20 +31,20 @@ public class LinuxX11WindowAccessor : WindowAccessor
         return windows;
     }
 
-    public override void RaiseWindow(WindowConfig? window)
+    public override void RaiseWindow(string windowId)
     {
-        WmctrlWrapper.Execute($" -i -a \"{window.WindowId}\"");
+        WmctrlWrapper.Execute($" -i -a \"{windowId}\"");
     }
 
-    public override Bitmap? TakeScreenshot(WindowConfig? window)
+    public override Bitmap? TakeScreenshot(string windowId)
     {
-        string commandOutput = ImportWrapper.Execute(window.WindowId);
+        string commandOutput = ImportWrapper.Execute(windowId);
 
         if (commandOutput == "")
         {
             try
             {
-                using (var stream = new MemoryStream(File.ReadAllBytes($"{StaticData.LinuxScreenshotFolder}/{window.WindowId}.jpg")))
+                using (var stream = new MemoryStream(File.ReadAllBytes($"{StaticData.LinuxScreenshotFolder}/{windowId}.jpg")))
                 {
                     return new Bitmap(stream);
                 }
