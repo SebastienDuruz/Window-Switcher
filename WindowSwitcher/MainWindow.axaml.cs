@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -20,7 +21,7 @@ public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private List<WindowConfig> Windows { get; set; } = new();
+    private ObservableCollection<WindowConfig> Windows { get; set; } = new();
     private List<FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
@@ -72,7 +73,7 @@ public partial class MainWindow : Window
                         Content = window.ShortWindowTitle,
                         Height = 22,
                         FontSize = 14,
-                        Padding = new Thickness(8, 2),
+                        Padding = StaticData.WindowListThickness,
                         IsSelected = LastSelectedItemId == window.WindowId,
                         ContextMenu = new ContextMenu()
                         {
@@ -204,7 +205,7 @@ public partial class MainWindow : Window
 
     private void ClearClosedFloatingWindows()
     {
-        IEnumerable<object?> itemsToRemove = WindowsListBox.Items.Where(window => Windows.All(config => config.WindowId != ((ListBoxItem)window).Name)).ToList();
+        IEnumerable<object> itemsToRemove = WindowsListBox.Items.Where(window => Windows.All(config => config.WindowId != ((ListBoxItem)window).Name)).ToList();
         IEnumerable<FloatingWindow> windowsToRemove = FloatingWindows.Where(x => Windows.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
 
         foreach(var itemToRemove in itemsToRemove)
@@ -216,7 +217,7 @@ public partial class MainWindow : Window
             StaticData.AppClosing = true;
             window.Close();
             StaticData.AppClosing = false;
-            FloatingWindows.Remove(window);            
+            FloatingWindows.Remove(window);
         }
     }
 }

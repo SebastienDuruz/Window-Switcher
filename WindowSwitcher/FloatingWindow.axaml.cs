@@ -97,8 +97,8 @@ public partial class FloatingWindow : Window
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        e.Cancel = !StaticData.AppClosing;
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+        e.Cancel = !StaticData.AppClosing;
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)

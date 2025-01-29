@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess;
 using static System.Drawing.Graphics;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
@@ -67,6 +68,8 @@ public class WindowsWindowAccessor : WindowAccessor
         foreach (Process process in Process.GetProcesses())
         {
             if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
+                continue;
+            if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
                 continue;
 
             if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))

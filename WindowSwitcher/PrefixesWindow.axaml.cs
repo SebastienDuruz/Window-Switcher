@@ -51,7 +51,7 @@ public partial class PrefixesWindow : EditListWindow
                 Content = prefix.ToLower(),
                 Height = 22,
                 FontSize = 14,
-                Padding = new Thickness(8, 2),
+                Padding = StaticData.WindowListThickness
             });
         });
     }
