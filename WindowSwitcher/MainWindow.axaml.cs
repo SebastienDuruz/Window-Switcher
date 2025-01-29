@@ -84,7 +84,7 @@ public partial class MainWindow : Window
                                     Header = "Raise to front",
                                     Command = new ContextMenuCommand(() =>
                                         WindowAccessor.RaiseWindow(Windows.FirstOrDefault(x =>
-                                            x.WindowId.StartsWith(LastSelectedItemId))))
+                                            x.WindowId.StartsWith(LastSelectedItemId)).WindowId))
                                 },
                                 new MenuItem()
                                 {

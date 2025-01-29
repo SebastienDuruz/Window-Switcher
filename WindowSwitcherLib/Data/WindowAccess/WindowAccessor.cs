@@ -18,11 +18,11 @@ public abstract class WindowAccessor
     /// Raise the window to the front
     /// </summary>
     /// <param name="windowPID">The PID of the window to raise</param>
-    public abstract void RaiseWindow(WindowConfig? window);
+    public abstract void RaiseWindow(string windowId);
 
     /// <summary>
     /// Take a screenshot of a window
     /// </summary>
     /// <param name="window">The window to screenshot</param>
-    public abstract Bitmap? TakeScreenshot(WindowConfig? window);
+    public abstract Bitmap? TakeScreenshot(string windowId);
 }
