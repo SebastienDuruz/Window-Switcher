@@ -5,6 +5,7 @@
         xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         xmlns:windowAccess="clr-namespace:WindowSwitcherLib.WindowAccess;assembly=WindowSwitcherLib"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+        xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="400" Height="300"
@@ -26,25 +27,33 @@
         </Menu>
         <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
             <ListBox ItemsSource="{Binding WindowsConfigs}"
-                     SelectionChanged="WindowsListBoxSelectionChanged"
                      SelectedItem="{Binding LastSelectedItemId, Mode=TwoWay}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel>
                             <TextBlock Text="{Binding ShortWindowTitle}"
-                                       FontSize="14"
-                                       Padding="{StaticResource ListBoxItemThickness}"/>
-                            <TextBlock.ContextMenu>
-                                
-                            </TextBlock.ContextMenu>
+                                       FontSize="14" />
+                            <StackPanel.ContextMenu>
+                                <ContextMenu IsEnabled="True">
+                                    <MenuItem Header="Raise to front"
+                                              Command="{Binding WindowAccessor.RaiseWindow, RelativeSource={RelativeSource AncestorType=windowSwitcher:MainWindow}}"
+                                              CommandParameter="{Binding WindowId}" />
+                                    <MenuItem Header="Add to blacklist"
+                                              Command="{Binding AddToBlacklist, RelativeSource={RelativeSource AncestorType=windowSwitcher:MainWindow}}"
+                                              CommandParameter="{Binding WindowTitle}" />
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>
                         </StackPanel>
+                        
                     </DataTemplate>
+                    
                 </ListBox.ItemTemplate>
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
                         <Setter Property="Height" Value="22" />
                         <Setter Property="FontSize" Value="14" />
-                        <Setter Property="Name" Value="" />
+                        <Setter Property="Name" Value="{Binding WindowId, RelativeSource={RelativeSource AncestorType=models:WindowConfig}}" />
+                        <Setter Property="Padding" Value="8, 2" />
                     </Style>
                 </ListBox.Styles>
             </ListBox>

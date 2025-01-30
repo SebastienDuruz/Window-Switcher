@@ -18,7 +18,4 @@
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
-    <Application.Resources>
-        <Thickness x:Key="ListBoxItemThickness">2,2</Thickness>
-    </Application.Resources>
 </Application>

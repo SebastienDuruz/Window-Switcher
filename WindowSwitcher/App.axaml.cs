@@ -22,10 +22,7 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            MainWindow = new MainWindow()
-            {
-                DataContext = new WindowListViewModel()
-            };
+            MainWindow = new MainWindow();
             desktop.MainWindow = MainWindow;
         }
 

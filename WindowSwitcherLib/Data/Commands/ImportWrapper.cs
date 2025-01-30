@@ -9,7 +9,7 @@ public class ImportWrapper : ICommandWrapper
     {
         using Process process = new Process();
         process.StartInfo.FileName = "import";
-        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {StaticData.LinuxScreenshotFolder}/{client}.jpg";
+        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {StaticData.ScreenshotFolder}/{client}.jpg";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;

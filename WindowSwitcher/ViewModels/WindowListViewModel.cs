@@ -3,15 +3,11 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -19,7 +15,7 @@ public partial class WindowListViewModel : ObservableObject
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     public string LastSelectedItemId { get; set; } = "";
-    private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
+    private WindowAccessor WindowAccessor { get; set; }
 
     [ObservableProperty] 
     private ObservableCollection<ListBoxItem> windowsListBoxItems = new();
@@ -27,8 +23,9 @@ public partial class WindowListViewModel : ObservableObject
     [ObservableProperty]
     private ObservableCollection<WindowConfig> windowsConfigs = new();
 
-    public WindowListViewModel()
+    public WindowListViewModel(WindowAccessor windowAccessor)
     {
+        WindowAccessor = windowAccessor;
         StartBackgroundTask();
     }
 
@@ -49,54 +46,6 @@ public partial class WindowListViewModel : ObservableObject
     public async Task FetchWindowsAsync()
     {
         FetchWindowsWithFilters();
-
-        // Show the managed windows on the ui
-        // foreach (WindowConfig window in WindowsConfigs)
-        // {
-        //     if (windowsListBoxItems.All(x => x.Name != window.WindowId))
-        //     {
-        //         await Dispatcher.UIThread.InvokeAsync(() =>
-        //         {
-        //             // ListBox Configuration panel
-        //             windowsListBoxItems.Add(new ListBoxItem()
-        //             {
-        //                 Name = window.WindowId,
-        //                 Content = window.ShortWindowTitle,
-        //                 Height = 22,
-        //                 FontSize = 14,
-        //                 Padding = StaticData.WindowListThickness,
-        //                 IsSelected = LastSelectedItemId == window.WindowId,
-        //                 ContextMenu = new ContextMenu()
-        //                 {
-        //                     Items =
-        //                     {
-        //                         new MenuItem()
-        //                         {
-        //                             Header = "Raise to front",
-        //                             Command = new ContextMenuCommand(() =>
-        //                                 WindowAccessor.RaiseWindow(WindowsConfigs.FirstOrDefault(x =>
-        //                                     x.WindowId.StartsWith(LastSelectedItemId)).WindowId))
-        //                         },
-        //                         new MenuItem()
-        //                         {
-        //                             Header = "Add to blacklist",
-        //                             Command = new ContextMenuCommand(async void () =>
-        //                                 await MainWindow.AddToBlacklist(window.WindowTitle))
-        //                         }
-        //                     }
-        //                 }
-        //             });
-        //         });
-        //     }
-        //     else
-        //     {
-        //         await Dispatcher.UIThread.InvokeAsync(() =>
-        //         {
-        //             WindowsListBoxItems.First(x => ((ListBoxItem)x).Name == window.WindowId)
-        //                 .Content = window.ShortWindowTitle;
-        //         });
-        //     }
-        //}
     }
     
     private void FetchWindowsWithFilters()
@@ -114,7 +63,8 @@ public partial class WindowListViewModel : ObservableObject
                     if (WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId))
                     {
                         WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
-                        windowConfig.WindowTitle = fetchedWindow.WindowTitle;
+                        if(windowConfig.WindowTitle != fetchedWindow.WindowTitle)
+                            windowConfig.WindowTitle = fetchedWindow.WindowTitle;
                     }
                     else
                     {
@@ -124,6 +74,12 @@ public partial class WindowListViewModel : ObservableObject
                 // Remove
                 else
                 {
+                    List<WindowConfig> toRemove = WindowsConfigs.Where(existingWindow => !fetchedWindows.Any(x => x.WindowId == existingWindow.WindowId)).ToList();
+
+                    foreach (WindowConfig window in toRemove)
+                    {
+                        WindowsConfigs.Remove(window);
+                    }
                     if (WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId))
                         WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
                 }
