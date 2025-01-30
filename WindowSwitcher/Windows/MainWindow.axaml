@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
+        xmlns:windowAccess="clr-namespace:WindowSwitcherLib.WindowAccess;assembly=WindowSwitcherLib"
+        xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+        Icon="/Assets/WS_logo.ico"
+        mc:Ignorable="d" CanResize="False"
+        Width="400" Height="300"
+        x:Class="WindowSwitcher.MainWindow"
+        Topmost="True"
+        Title="WindowSwitcher"
+        ClosingBehavior="OwnerAndChildWindows"
+        x:DataType="viewModels:WindowListViewModel">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
+            <MenuItem Header="_Settings" Padding="4">
+                <MenuItem Header="_Prefixes" Click="OpenPrefixesWindowClick" />
+                <MenuItem Header="_Blacklist" Click="OpenBlacklistWindowClick" />
+            </MenuItem>
+            <MenuItem Header="_File" Padding="4">
+                <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
+            </MenuItem>
+            <MenuItem Name="RefreshButton" Header="_Refresh" Padding="4" Click="RefreshClicked"></MenuItem>
+        </Menu>
+        <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
+            <ListBox ItemsSource="{Binding WindowsConfigs}"
+                     SelectionChanged="WindowsListBoxSelectionChanged"
+                     SelectedItem="{Binding LastSelectedItemId, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel>
+                            <TextBlock Text="{Binding ShortWindowTitle}"
+                                       FontSize="14"
+                                       Padding="{StaticResource ListBoxItemThickness}"/>
+                            <TextBlock.ContextMenu>
+                                
+                            </TextBlock.ContextMenu>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Height" Value="22" />
+                        <Setter Property="FontSize" Value="14" />
+                        <Setter Property="Name" Value="" />
+                    </Style>
+                </ListBox.Styles>
+            </ListBox>
+        </StackPanel>
+    </DockPanel>
+</Window>

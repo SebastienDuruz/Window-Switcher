@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data.FileAccess;
 
 namespace WindowSwitcher;
@@ -21,7 +22,10 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            MainWindow = new MainWindow();
+            MainWindow = new MainWindow()
+            {
+                DataContext = new WindowListViewModel()
+            };
             desktop.MainWindow = MainWindow;
         }
 

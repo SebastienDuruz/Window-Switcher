@@ -73,7 +73,7 @@ public class WindowsWindowAccessor : WindowAccessor
             {
                 WindowTitle = process.MainWindowTitle, 
                 WindowId = process.MainWindowHandle.ToString(), 
-                ShortWindowTitle = process.MainWindowTitle.Length > 40 ? $"{process.MainWindowTitle[..40]}..." : process.MainWindowTitle,
+                //ShortWindowTitle = process.MainWindowTitle.Length > 40 ? $"{process.MainWindowTitle[..40]}..." : process.MainWindowTitle,
             });    
         }
         
