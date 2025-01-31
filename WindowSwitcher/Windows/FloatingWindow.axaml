@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
+        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         Icon="/Assets/WS_logo.ico"
         ShowInTaskbar="False"
         mc:Ignorable="d"
@@ -12,8 +14,12 @@
         Topmost="True"
         CanResize="True"
         Closing="FloatingWindowClosing"
-        SystemDecorations="Full">
+        SystemDecorations="Full"
+        x:DataType="windowSwitcher:MainWindow">
         <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
+                <Canvas.ContextMenu>
+                        <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
+                </Canvas.ContextMenu>
                 <Label FontSize="10" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel">window name</Label>
         </Canvas>
 </Window>

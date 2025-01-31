@@ -5,10 +5,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
@@ -27,13 +29,13 @@ public partial class MainWindow : Window
     private PrefixesWindow BlacklistWindow { get; set; }
     private static bool RefreshButtonEnabled { get; set; } = true;
     private List<WindowConfig> WindowConfigs { get; set; } = new();
-
+    
     public MainWindow()
     {
         InitializeComponent();
 
         this.DataContext = new WindowListViewModel(WindowAccessor);
-
+        
         Title = StaticData.AppName;
 
         PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
@@ -114,7 +116,7 @@ public partial class MainWindow : Window
         ((WindowListViewModel)DataContext).LastSelectedItemId = selectedPrefix.Name!.ToLower();
     }
 
-    public Task AddToBlacklist(string windowTitle)
+    public void AddToBlacklist(string windowTitle)
     {
         if (RefreshButtonEnabled)
         {
@@ -127,8 +129,6 @@ public partial class MainWindow : Window
                 ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
             }
         }
-
-        return Task.CompletedTask;
     }
     
     private async void RefreshClicked(object? sender, RoutedEventArgs e)
@@ -146,7 +146,7 @@ public partial class MainWindow : Window
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
                 });
         }
     }

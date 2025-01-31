@@ -11,21 +11,24 @@ using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
+using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 
 namespace WindowSwitcher;
 
 public partial class FloatingWindow : Window
 {
     private readonly CancellationTokenSource _cts = new ();
-    internal WindowConfig? WindowConfig { get; set; }
+    public WindowConfig? WindowConfig { get; set; }
+    private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
         
-    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor)
+    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor, MainWindow mainWindow)
     {
         InitializeComponent();
         
         WindowConfig = windowConfig;
         WindowAccessor = windowAccessor;
+        MainWindow = mainWindow;
         
         SetInitialWindowSettings();
         Show();
@@ -59,6 +62,11 @@ public partial class FloatingWindow : Window
         }
         
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        FloatingWindowContextMenu.Items.Add(new MenuItem()
+        {
+            Header = "Add to blacklist",
+            Command = new ContextMenuCommand(() => MainWindow.AddToBlacklist(WindowConfig.WindowTitle))
+        });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
         SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations ? SystemDecorations.Full : SystemDecorations.BorderOnly;
