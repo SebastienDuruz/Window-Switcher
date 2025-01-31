@@ -22,12 +22,11 @@ public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private ObservableCollection<WindowConfig> Windows { get; set; } = new();
     private List<FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; }
-    public PrefixesWindow BlacklistWindow { get; set; }
-    private string? LastSelectedItemId { get; set; } = "";
+    private PrefixesWindow BlacklistWindow { get; set; }
     private static bool RefreshButtonEnabled { get; set; } = true;
+    private List<WindowConfig> WindowConfigs { get; set; } = new();
 
     public MainWindow()
     {
@@ -61,33 +60,14 @@ public partial class MainWindow : Window
 
     private async Task RefreshWindowsAsync()
     {
-        try
+        await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            Collection<WindowConfig> windowConfigs = new Collection<WindowConfig>();
-            Dispatcher.UIThread.Post(() =>
-            {
-                windowConfigs = ((WindowListViewModel)DataContext).WindowsConfigs;
-            });
-            
-            // Show the managed windows on the ui
-            foreach (WindowConfig window in windowConfigs)
-            {
-                if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
-                    });
-            }
+            WindowConfigs = ((WindowListViewModel)DataContext).WindowsConfigs.ToList();
+        });
 
-            // Delete the windows that doesn't exist anymore
-            ClearClosedFloatingWindows();
-        }
-        catch (Exception ex)
-        {
-            
-        }
+        await AddFloatingWindows();
+        ClearClosedFloatingWindows();
         
-
         GC.Collect();
     }
 
@@ -158,21 +138,41 @@ public partial class MainWindow : Window
         RefreshButtonEnabled = true;
     }
 
-    private void ClearClosedFloatingWindows()
+    private async Task AddFloatingWindows()
     {
-        //IEnumerable<ListBoxItem> itemsToRemove = ((WindowListViewModel)DataContext).WindowsListBoxItems.Where(window => Windows.All(config => config.WindowId != ((ListBoxItem)window).Name)).ToList();
-        IEnumerable<FloatingWindow> windowsToRemove = FloatingWindows.Where(x => Windows.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
+        // Show the managed windows on the ui
+        foreach (WindowConfig window in WindowConfigs)
+        {
+            if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor));
+                });
+        }
+    }
 
-        // foreach(var itemToRemove in itemsToRemove)
-        //     ((WindowListViewModel)DataContext).WindowsListBoxItems.Remove(itemToRemove);
+    private async Task ClearClosedFloatingWindows()
+    {
+        IEnumerable<FloatingWindow> windowsToRemove =
+            FloatingWindows.Where(x => WindowConfigs.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
 
         foreach (FloatingWindow window in windowsToRemove)
         {
-            // TODO : Find a more elegant solution for closing the floating window
-            StaticData.AppClosing = true;
-            window.Close();
-            StaticData.AppClosing = false;
-            FloatingWindows.Remove(window);
+            try
+            {
+                // TODO : Find a more elegant solution for closing the floating window
+                StaticData.AppClosing = true;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    window.Close();
+                });
+                StaticData.AppClosing = false;
+                FloatingWindows.Remove(window);
+            }
+            catch (Exception ex)
+            {
+                
+            }
         }
     }
 }

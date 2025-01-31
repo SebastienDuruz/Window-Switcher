@@ -95,15 +95,16 @@ public partial class FloatingWindow : Window
         WindowConfig.WindowWidth = Width;
     }
 
+    private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        WindowConfig.WindowLeft = Position.X;
+        WindowConfig.WindowTop = Position.Y;
+    }
+    
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         e.Cancel = !StaticData.AppClosing;
     }
 
-    private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        WindowConfig.WindowLeft = Position.X;
-        WindowConfig.WindowTop = Position.Y;
-    }
 }

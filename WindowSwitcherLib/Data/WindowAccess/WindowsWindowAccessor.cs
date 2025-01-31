@@ -3,10 +3,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using Avalonia.Controls;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
-using static System.Drawing.Graphics;
 using static System.Drawing.Imaging.Encoder;
 using static WindowSwitcherLib.Data.FileAccess.ConfigFileAccessor;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
@@ -42,15 +40,15 @@ public class WindowsWindowAccessor : WindowAccessor
     [DllImport("user32.dll")]
     private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
     
-    private static readonly ImageCodecInfo? PngCodec =
+    private static readonly ImageCodecInfo? JpegCodec =
         ImageCodecInfo.GetImageDecoders()
-            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Png.Guid);
+            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
 
     private static readonly EncoderParameters EncoderParameters = new(1)
     {
         Param =
         [
-            new System.Drawing.Imaging.EncoderParameter(Quality,
+            new EncoderParameter(Quality,
                 GetInstance().Config.ScreenshotQuality) // Valeur par défaut
         ]
     };
@@ -73,7 +71,6 @@ public class WindowsWindowAccessor : WindowAccessor
             {
                 WindowTitle = process.MainWindowTitle, 
                 WindowId = process.MainWindowHandle.ToString(), 
-                //ShortWindowTitle = process.MainWindowTitle.Length > 40 ? $"{process.MainWindowTitle[..40]}..." : process.MainWindowTitle,
             });    
         }
         
@@ -114,11 +111,14 @@ public class WindowsWindowAccessor : WindowAccessor
                         g.ReleaseHdc(hDcGraphics);
                     }
 
-                    bitmap.Save(memoryStream, PngCodec, EncoderParameters);
+                    bitmap.Save(memoryStream, JpegCodec, EncoderParameters);
                 }
 
                 ReleaseDC(hwnd, hDc);
                 memoryStream.Seek(0, SeekOrigin.Begin);
+                
+                GC.Collect();
+                
                 return new Bitmap(memoryStream);
             }
         }
