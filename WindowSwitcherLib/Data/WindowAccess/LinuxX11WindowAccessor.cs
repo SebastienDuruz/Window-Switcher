@@ -10,11 +10,11 @@ public class LinuxX11WindowAccessor : WindowAccessor
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
     
-    public override ObservableCollection<WindowConfig?> GetWindows()
+    public override ObservableCollection<WindowConfig> GetWindows()
     {
         string wmctrlOutput = WmctrlWrapper.Execute(" -l");
         
-        ObservableCollection<WindowConfig?> windows = new ObservableCollection<WindowConfig?>();
+        ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
             if (!String.IsNullOrWhiteSpace(line))

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -38,52 +39,36 @@ public partial class WindowListViewModel : ObservableObject
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await FetchWindowsAsync();
+            FetchWindowsWithFilters();
             await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
         }
     }
-
-    public async Task FetchWindowsAsync()
-    {
-        FetchWindowsWithFilters();
-    }
     
-    private void FetchWindowsWithFilters()
+    public void FetchWindowsWithFilters()
     {
-        Collection<WindowConfig?> fetchedWindows = WindowAccessor.GetWindows();
+        ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
         
         // Apply the prefixes and remove the blacklisted clients
-        foreach (WindowConfig? fetchedWindow in fetchedWindows)
+        foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
-            foreach (string prefix in ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes)
-            {
-                // Add or update
-                if (fetchedWindow!.WindowTitle.ToLower().StartsWith(prefix) && !ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x => x.StartsWith(fetchedWindow.WindowTitle.ToLower())))
-                {
-                    if (WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId))
-                    {
-                        WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
-                        if(windowConfig.WindowTitle != fetchedWindow.WindowTitle)
-                            windowConfig.WindowTitle = fetchedWindow.WindowTitle;
-                    }
-                    else
-                    {
-                        WindowsConfigs.Add(fetchedWindow);
-                    }
-                }
-                // Remove
-                else
-                {
-                    List<WindowConfig> toRemove = WindowsConfigs.Where(existingWindow => !fetchedWindows.Any(x => x.WindowId == existingWindow.WindowId)).ToList();
-
-                    foreach (WindowConfig window in toRemove)
-                    {
-                        WindowsConfigs.Remove(window);
-                    }
-                    if (WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId))
-                        WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
-                }
-            }
+            bool isOnBlacklist =
+                ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
+                    x.StartsWith(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
+            bool isOnWhiteList =
+                ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
+                    fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()));
+            bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
+                
+            if((isOnBlacklist && isOnWindowsList) || (!isOnBlacklist && isOnWindowsList && !isOnWhiteList))
+                WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
+            else if(!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
+                WindowsConfigs.Add(fetchedWindow);
+            else if(!isOnBlacklist && isOnWindowsList && isOnWhiteList)
+                (WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId)).WindowTitle = fetchedWindow.WindowTitle;
         }
+        
+        List<WindowConfig> toRemove = WindowsConfigs.Where(x => !fetchedWindows.Any(x => x.WindowId == x.WindowId)).ToList();
+        foreach (WindowConfig window in toRemove)
+            WindowsConfigs.Remove(window);
     }
 }

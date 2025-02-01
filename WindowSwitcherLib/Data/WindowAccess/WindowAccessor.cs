@@ -12,7 +12,7 @@ public abstract class WindowAccessor
     /// Get the list of Window currently opened
     /// </summary>
     /// <returns></returns>
-    public abstract ObservableCollection<WindowConfig?> GetWindows();
+    public abstract ObservableCollection<WindowConfig> GetWindows();
 
     /// <summary>
     /// Raise the window to the front

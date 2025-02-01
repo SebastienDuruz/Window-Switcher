@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -17,37 +18,39 @@ namespace WindowSwitcher;
 
 public partial class FloatingWindow : Window
 {
-    private readonly CancellationTokenSource _cts = new ();
+    private readonly CancellationTokenSource _cts = new();
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
-        
+
     public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor, MainWindow mainWindow)
     {
         InitializeComponent();
-        
+
         WindowConfig = windowConfig;
         WindowAccessor = windowAccessor;
         MainWindow = mainWindow;
-        
+
         SetInitialWindowSettings();
         Show();
-        
+
         StartBackgroundTask();
     }
-    
+
     private void StartBackgroundTask()
     {
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
     }
-    
+
     private async Task RunPeriodicTask(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await UpdateScreenshot();
-            await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
-        }
+        if(ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                
+                await UpdateScreenshot();
+                await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
+            }
     }
 
     private void SetInitialWindowSettings()
@@ -56,11 +59,11 @@ public partial class FloatingWindow : Window
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
-            
+
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
-        
+
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
@@ -69,7 +72,9 @@ public partial class FloatingWindow : Window
         });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
-        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations ? SystemDecorations.Full : SystemDecorations.BorderOnly;
+        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
+            ? SystemDecorations.Full
+            : SystemDecorations.BorderOnly;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -85,7 +90,7 @@ public partial class FloatingWindow : Window
     private Task UpdateScreenshot()
     {
         Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
-        if(appScreenshot is not null)
+        if (appScreenshot is not null)
             Dispatcher.UIThread.Invoke(() =>
             {
                 WindowCanvas.Background = new ImageBrush
@@ -96,7 +101,7 @@ public partial class FloatingWindow : Window
             });
         return Task.CompletedTask;
     }
-    
+
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
         WindowConfig.WindowHeight = Height;
@@ -108,11 +113,10 @@ public partial class FloatingWindow : Window
         WindowConfig.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
     }
-    
+
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         e.Cancel = !StaticData.AppClosing;
     }
-
 }

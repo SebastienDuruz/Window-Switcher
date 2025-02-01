@@ -34,8 +34,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        this.DataContext = new WindowListViewModel(WindowAccessor);
-        
+        DataContext = new WindowListViewModel(WindowAccessor);
         Title = StaticData.AppName;
 
         PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
@@ -44,6 +43,12 @@ public partial class MainWindow : Window
             StaticData.PrefixWindowType.blacklist, "Blacklist window");
 
         StartBackgroundTask();
+
+        if (ConfigFileAccessor.GetInstance().Config.StartMinimized)
+            Dispatcher.UIThread.Post(() =>
+            {
+                this.WindowState = WindowState.Minimized;
+            }, DispatcherPriority.Background);
     }
 
     private void StartBackgroundTask()
@@ -68,7 +73,7 @@ public partial class MainWindow : Window
         });
 
         await AddFloatingWindows();
-        ClearClosedFloatingWindows();
+        await ClearClosedFloatingWindows();
         
         GC.Collect();
     }
@@ -131,10 +136,10 @@ public partial class MainWindow : Window
         }
     }
     
-    private async void RefreshClicked(object? sender, RoutedEventArgs e)
+    private void RefreshClicked(object? sender, RoutedEventArgs e)
     {
         RefreshButtonEnabled = false;
-        await ((WindowListViewModel)DataContext).FetchWindowsAsync();
+        (((WindowListViewModel)DataContext!)!).FetchWindowsWithFilters();
         RefreshButtonEnabled = true;
     }
 
@@ -158,21 +163,14 @@ public partial class MainWindow : Window
 
         foreach (FloatingWindow window in windowsToRemove)
         {
-            try
+            // TODO : Find a more elegant solution for closing the floating window
+            StaticData.AppClosing = true;
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // TODO : Find a more elegant solution for closing the floating window
-                StaticData.AppClosing = true;
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    window.Close();
-                });
-                StaticData.AppClosing = false;
-                FloatingWindows.Remove(window);
-            }
-            catch (Exception ex)
-            {
-                
-            }
+                window.Close();
+            });
+            StaticData.AppClosing = false;
+            FloatingWindows.Remove(window);
         }
     }
 }

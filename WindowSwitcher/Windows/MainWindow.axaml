@@ -27,7 +27,7 @@
         </Menu>
         <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
             <ListBox ItemsSource="{Binding WindowsConfigs}"
-                     SelectedItem="{Binding LastSelectedItemId, Mode=TwoWay}">
+                     SelectedItem="{Binding LastSelectedItemId, Mode=OneWay}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel>

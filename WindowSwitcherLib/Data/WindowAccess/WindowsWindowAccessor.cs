@@ -49,7 +49,7 @@ public class WindowsWindowAccessor : WindowAccessor
         Param =
         [
             new EncoderParameter(Quality,
-                GetInstance().Config.ScreenshotQuality) // Valeur par défaut
+                GetInstance().Config.ScreenshotQuality)
         ]
     };
     
@@ -64,8 +64,8 @@ public class WindowsWindowAccessor : WindowAccessor
             if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
                 continue;
 
-            if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
-                Windows.Remove(Windows.FirstOrDefault(x => x.WindowTitle == process.MainWindowTitle)!);
+            // if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
+            //     Windows.Remove(Windows.FirstOrDefault(x => x.WindowTitle == process.MainWindowTitle)!);
             
             Windows.Add(new WindowConfig()
             {
@@ -91,7 +91,7 @@ public class WindowsWindowAccessor : WindowAccessor
 
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = IntPtr.Parse(windowId);
+        IntPtr hwnd = (IntPtr)int.Parse(windowId);
 
         try
         {
@@ -100,32 +100,29 @@ public class WindowsWindowAccessor : WindowAccessor
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
 
-            using (MemoryStream memoryStream = new MemoryStream())
+            using (System.Drawing.Bitmap bitmap = new (width, height))
             {
-                using (var bitmap = new System.Drawing.Bitmap(width, height))
+                using (Graphics g = Graphics.FromImage(bitmap))
                 {
-                    using (Graphics g = Graphics.FromImage(bitmap))
-                    {
-                        IntPtr hDcGraphics = g.GetHdc();
-                        BitBlt(hDcGraphics, 0, 0, width, height, hDc, 0, 0, SRCCOPY);
-                        g.ReleaseHdc(hDcGraphics);
-                    }
-
-                    bitmap.Save(memoryStream, JpegCodec, EncoderParameters);
+                    IntPtr hDcGraphics = g.GetHdc();
+                    BitBlt(hDcGraphics, 0, 0, width, height, hDc, 0, 0, SRCCOPY);
+                    g.ReleaseHdc(hDcGraphics);
                 }
-
                 ReleaseDC(hwnd, hDc);
-                memoryStream.Seek(0, SeekOrigin.Begin);
-                
-                GC.Collect();
-                
-                return new Bitmap(memoryStream);
+                bitmap.Save($"{StaticData.ScreenshotFolder}/{windowId}.jpg", JpegCodec, EncoderParameters);
             }
+
+            return new Bitmap($"{StaticData.ScreenshotFolder}/{windowId}.jpg");
         }
         catch (Exception ex)
         {
+            // TODO : LOGS
             Console.WriteLine(ex.Message);
             return null;
+        }
+        finally
+        {
+            GC.Collect();
         }
     }
 }

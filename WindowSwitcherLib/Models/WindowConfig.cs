@@ -23,4 +23,9 @@ public class WindowConfig
     public double WindowHeight { get; set; } = 83;
     public int WindowLeft { get; set; } = 100;
     public int WindowTop { get; set; } = 100;
+
+    public WindowConfig Clone()
+    {
+        return (WindowConfig)this.MemberwiseClone();
+    }
 }
