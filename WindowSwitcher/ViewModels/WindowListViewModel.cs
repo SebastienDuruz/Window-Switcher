@@ -47,16 +47,14 @@ public partial class WindowListViewModel : ObservableObject
     public void FetchWindowsWithFilters()
     {
         ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
-        
+
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
-            bool isOnBlacklist =
-                ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
-                    x.StartsWith(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
-            bool isOnWhiteList =
-                ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
-                    fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()));
+            bool isOnBlacklist = ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
+                x.StartsWith(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
+            bool isOnWhiteList = ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
+                fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()));
             bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
                 
             if((isOnBlacklist && isOnWindowsList) || (!isOnBlacklist && isOnWindowsList && !isOnWhiteList))

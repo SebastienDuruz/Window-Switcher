@@ -18,5 +18,4 @@ public static class StaticData
     public static string AppName { get; set; } = "WindowSwitcher";
     public static string DataFolder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppName);
     public static string ScreenshotFolder { get; set; } = Path.Combine(DataFolder, "Screenshots");
-    public static Thickness WindowListThickness { get; set; } = new Thickness(8, 2);
 }

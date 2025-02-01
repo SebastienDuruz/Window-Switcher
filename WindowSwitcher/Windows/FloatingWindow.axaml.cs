@@ -37,6 +37,11 @@ public partial class FloatingWindow : Window
         StartBackgroundTask();
     }
 
+    public sealed override void Show()
+    {
+        base.Show();
+    }
+
     private void StartBackgroundTask()
     {
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
@@ -47,7 +52,6 @@ public partial class FloatingWindow : Window
         if(ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
             while (!cancellationToken.IsCancellationRequested)
             {
-                
                 await UpdateScreenshot();
                 await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
             }
@@ -89,14 +93,15 @@ public partial class FloatingWindow : Window
 
     private Task UpdateScreenshot()
     {
-        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
+        Bitmap appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
         if (appScreenshot is not null)
             Dispatcher.UIThread.Invoke(() =>
             {
-                WindowCanvas.Background = new ImageBrush
+                WindowCanvas.Background = new ImageBrush()
                 {
                     Source = appScreenshot,
                     Stretch = Stretch.Fill,
+                    Opacity = 0.8
                 };
             });
         return Task.CompletedTask;
@@ -118,5 +123,6 @@ public partial class FloatingWindow : Window
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         e.Cancel = !StaticData.AppClosing;
+        _cts.Cancel();
     }
 }

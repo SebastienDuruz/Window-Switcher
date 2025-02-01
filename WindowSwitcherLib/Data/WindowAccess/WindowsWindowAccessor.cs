@@ -13,8 +13,6 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 
 public class WindowsWindowAccessor : WindowAccessor
 {
-    private const int SRCCOPY = 0x00CC0020;
-    
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
     {
@@ -31,14 +29,8 @@ public class WindowsWindowAccessor : WindowAccessor
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     
-    [DllImport("gdi32.dll")]
-    private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int width, int height, IntPtr hdcSrc, int xSrc, int ySrc, int rop);
-
     [DllImport("user32.dll")]
-    private static extern IntPtr GetWindowDC(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
     
     private static readonly ImageCodecInfo? JpegCodec =
         ImageCodecInfo.GetImageDecoders()
@@ -48,8 +40,7 @@ public class WindowsWindowAccessor : WindowAccessor
     {
         Param =
         [
-            new EncoderParameter(Quality,
-                GetInstance().Config.ScreenshotQuality)
+            new EncoderParameter(Quality, GetInstance().Config.ScreenshotQuality)
         ]
     };
     
@@ -91,32 +82,30 @@ public class WindowsWindowAccessor : WindowAccessor
 
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = (IntPtr)int.Parse(windowId);
+        IntPtr hwnd = int.Parse(windowId);
 
         try
         {
             GetWindowRect(hwnd, out RECT rect);
-            IntPtr hDc = GetWindowDC(hwnd);
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
 
-            using (System.Drawing.Bitmap bitmap = new (width, height))
+            using (System.Drawing.Bitmap bitmap = new(width, height))
             {
                 using (Graphics g = Graphics.FromImage(bitmap))
                 {
-                    IntPtr hDcGraphics = g.GetHdc();
-                    BitBlt(hDcGraphics, 0, 0, width, height, hDc, 0, 0, SRCCOPY);
-                    g.ReleaseHdc(hDcGraphics);
+                    IntPtr hdc = g.GetHdc();
+                    PrintWindow(hwnd, hdc, 0);
+                    g.ReleaseHdc(hdc);
                 }
-                ReleaseDC(hwnd, hDc);
-                bitmap.Save($"{StaticData.ScreenshotFolder}/{windowId}.jpg", JpegCodec, EncoderParameters);
-            }
 
-            return new Bitmap($"{StaticData.ScreenshotFolder}/{windowId}.jpg");
+                string filePath = $"{StaticData.ScreenshotFolder}/{windowId}.jpg";
+                bitmap.Save(filePath, JpegCodec, EncoderParameters);
+                return new Bitmap(filePath);
+            }
         }
         catch (Exception ex)
         {
-            // TODO : LOGS
             Console.WriteLine(ex.Message);
             return null;
         }
