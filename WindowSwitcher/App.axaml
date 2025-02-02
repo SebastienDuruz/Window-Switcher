@@ -5,11 +5,10 @@
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
      <TrayIcon.Icons>
          <TrayIcons>
-             <TrayIcon Icon="/Assets/WS_logo.ico" 
+             <TrayIcon Clicked="TrayIconClicked" Icon="/Assets/WS_logo.ico" 
                        ToolTipText="WindowSwitcher Tray menu">
                  <TrayIcon.Menu>
                      <NativeMenu>
-                         <NativeMenuItem Header="Settings"></NativeMenuItem>
                          <NativeMenuItem Header="Exit" Click="ExitMenuItemClicked"></NativeMenuItem>
                      </NativeMenu>
                  </TrayIcon.Menu>

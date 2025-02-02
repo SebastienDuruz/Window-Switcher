@@ -13,7 +13,7 @@ public class ConfigFileAccessor
     private ConfigFileAccessor()
     {
         Directory.CreateDirectory(StaticData.DataFolder);
-        Directory.CreateDirectory(StaticData.LinuxScreenshotFolder);
+        Directory.CreateDirectory(StaticData.ScreenshotFolder);
         FilePath = Path.Combine(StaticData.DataFolder, "config.json");
         ReadUserSettings();
     }
@@ -57,46 +57,30 @@ public class ConfigFileAccessor
         File.WriteAllText(FilePath, JsonConvert.SerializeObject(Config, Formatting.Indented));
     }
 
-    public void SaveFloatingWindowSettings(WindowConfig? windowConfig)
+    public void SaveFloatingWindowSettings(WindowConfig windowConfig)
     {
-        Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle || x.WindowId == windowConfig.WindowId);
+        Config.FloatingWindowsConfig.RemoveAll(x => x.WindowTitle == windowConfig.WindowTitle);
         Config.FloatingWindowsConfig.Add(windowConfig);
-        WriteUserSettings();
     }
 
     public void SavePrefixesList(List<string> prefixes)
     {
         Config.WhitelistPrefixes = prefixes;
-        WriteUserSettings();
     }
 
     public void SaveBlacklist(List<string> blacklist)
     {
         Config.BlacklistPrefixes = blacklist;
-        WriteUserSettings();
     }
 
-    public WindowConfig? GetFloatingWindowConfig(WindowConfig? windowConfig)
+    public WindowConfig? GetFloatingWindowConfig(WindowConfig windowConfig)
     {
-        ReadUserSettings();
-
         // Check by windowTitle
-        WindowConfig? existantConfig =
+        WindowConfig existantConfig =
             Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle);
         if (existantConfig != null)
         {
             existantConfig.WindowId = windowConfig.WindowId;
-            SaveFloatingWindowSettings(existantConfig);
-            return existantConfig;
-        }
-        
-        // Check by windowId
-        existantConfig = Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowId == windowConfig.WindowId);
-        if (existantConfig != null)
-        {
-            existantConfig.WindowTitle = windowConfig.WindowTitle;
-            existantConfig.ShortWindowTitle = windowConfig.ShortWindowTitle;
-            SaveFloatingWindowSettings(existantConfig);
             return existantConfig;
         }
 

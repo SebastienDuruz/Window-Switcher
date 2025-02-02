@@ -8,6 +8,9 @@
         <entry key="WindowSwitcher/FloatingWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
         <entry key="WindowSwitcher/MainWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
         <entry key="WindowSwitcher/PrefixesWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
+        <entry key="WindowSwitcher/Windows/FloatingWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
+        <entry key="WindowSwitcher/Windows/MainWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
+        <entry key="WindowSwitcher/Windows/PrefixesWindow.axaml" value="WindowSwitcher/WindowSwitcher.csproj" />
       </map>
     </option>
   </component>

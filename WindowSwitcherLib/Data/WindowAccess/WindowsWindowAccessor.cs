@@ -1,29 +1,18 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess;
+using static System.Drawing.Imaging.Encoder;
+using static WindowSwitcherLib.Data.FileAccess.ConfigFileAccessor;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess;
 
 public class WindowsWindowAccessor : WindowAccessor
 {
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-    
-    [DllImport("user32.dll")]
-    public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, int nFlags);
-    
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool IsWindowVisible(IntPtr hWnd);
-
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
     {
@@ -32,43 +21,58 @@ public class WindowsWindowAccessor : WindowAccessor
         public int right;
         public int bottom;
     }
-    
-    [DllImport("gdi32.dll")]
-    private static extern bool BitBlt(IntPtr hdcDest, int xDest, int yDest, int width, int height, IntPtr hdcSrc, int xSrc, int ySrc, int rop);
-
-    private const int SRCCOPY = 0x00CC0020; // Copier directement la source
-    
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetWindowDC(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    private static extern bool ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
 
-    public override ObservableCollection<WindowConfig?> GetWindows()
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    
+    [DllImport("user32.dll")]
+    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+    
+    private static readonly ImageCodecInfo? JpegCodec =
+        ImageCodecInfo.GetImageDecoders()
+            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+
+    private static readonly EncoderParameters EncoderParameters = new(1)
     {
-        ObservableCollection<WindowConfig?> windows = new ObservableCollection<WindowConfig?>();
-        
+        Param =
+        [
+            new EncoderParameter(Quality, GetInstance().Config.ScreenshotQuality)
+        ]
+    };
+    
+    private ObservableCollection<WindowConfig> Windows { get; set; } = new();
+
+    public override ObservableCollection<WindowConfig> GetWindows()
+    {
         foreach (Process process in Process.GetProcesses())
         {
             if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
                 continue;
+            if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
+                continue;
+
+            // if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
+            //     Windows.Remove(Windows.FirstOrDefault(x => x.WindowTitle == process.MainWindowTitle)!);
             
-            windows.Add(new WindowConfig()
+            Windows.Add(new WindowConfig()
             {
                 WindowTitle = process.MainWindowTitle, 
                 WindowId = process.MainWindowHandle.ToString(), 
-                ShortWindowTitle = process.MainWindowTitle.Length > 40 ? $"{process.MainWindowTitle[..40]}..." : process.MainWindowTitle,
-            });
+            });    
         }
         
-        return windows;
+        return Windows;
     }
 
-    public override void RaiseWindow(WindowConfig? window)
+    public override void RaiseWindow(string windowId)
     {
         try
         {
-            SetForegroundWindow(IntPtr.Parse(window.WindowId));
+            SetForegroundWindow(IntPtr.Parse(windowId));
         }
         catch (Exception ex)
         {
@@ -76,10 +80,9 @@ public class WindowsWindowAccessor : WindowAccessor
         }
     }
 
-    public override Bitmap? TakeScreenshot(WindowConfig? window)
+    public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = IntPtr.Parse(window.WindowId);
-        System.Drawing.Bitmap bmp;
+        IntPtr hwnd = int.Parse(windowId);
 
         try
         {
@@ -87,44 +90,28 @@ public class WindowsWindowAccessor : WindowAccessor
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
 
-            IntPtr hDC = GetWindowDC(hwnd);
-            bmp = new System.Drawing.Bitmap(width, height);
-            using (Graphics g = Graphics.FromImage(bmp))
+            using (System.Drawing.Bitmap bitmap = new(width, height))
             {
-                IntPtr hDCGraphics = g.GetHdc();
-                BitBlt(hDCGraphics, 0, 0, width, height, hDC, 0, 0, SRCCOPY);
-                g.ReleaseHdc(hDCGraphics);
+                using (Graphics g = Graphics.FromImage(bitmap))
+                {
+                    IntPtr hdc = g.GetHdc();
+                    PrintWindow(hwnd, hdc, 0);
+                    g.ReleaseHdc(hdc);
+                }
+
+                string filePath = $"{StaticData.ScreenshotFolder}/{windowId}.jpg";
+                bitmap.Save(filePath, JpegCodec, EncoderParameters);
+                return new Bitmap(filePath);
             }
-            ReleaseDC(hwnd, hDC);
         }
         catch (Exception ex)
         {
+            Console.WriteLine(ex.Message);
             return null;
         }
-        
-        return ConvertToAvaloniaBitmap(bmp);
-    }
-    
-    private Avalonia.Media.Imaging.Bitmap ConvertToAvaloniaBitmap(System.Drawing.Bitmap bitmap)
-    {
-        using var memoryStream = new MemoryStream();
-        SaveBitmapWithLowerQuality(bitmap, memoryStream, ConfigFileAccessor.GetInstance().Config.ScreenshotQuality);
-        memoryStream.Seek(0, SeekOrigin.Begin);
-        return new Avalonia.Media.Imaging.Bitmap(memoryStream);
-    }
-    
-    private void SaveBitmapWithLowerQuality(System.Drawing.Bitmap bitmap, Stream outputStream, long quality)
-    {
-        var encoderParameters = new System.Drawing.Imaging.EncoderParameters(1);
-        encoderParameters.Param[0] = new System.Drawing.Imaging.EncoderParameter(
-            System.Drawing.Imaging.Encoder.Quality, quality);
-
-        var jpegCodec = System.Drawing.Imaging.ImageCodecInfo.GetImageDecoders()
-            .FirstOrDefault(codec => codec.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
-
-        if (jpegCodec != null)
+        finally
         {
-            bitmap.Save(outputStream, jpegCodec, encoderParameters);
+            GC.Collect();
         }
     }
 }
