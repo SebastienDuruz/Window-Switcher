@@ -109,18 +109,6 @@ public partial class MainWindow : Window
         BlacklistWindow.Show();
     }
 
-    private void WindowsListBoxSelectionChanged(object? sender, SelectionChangedEventArgs e)
-    {
-        if (e.AddedItems.Count == 0)
-            return;
-
-        ListBoxItem? selectedPrefix = e.AddedItems[0] as ListBoxItem;
-        if (selectedPrefix == null)
-            return;
-        
-        ((WindowListViewModel)DataContext).LastSelectedItemId = selectedPrefix.Name!.ToLower();
-    }
-
     public void AddToBlacklist(string windowTitle)
     {
         if (RefreshButtonEnabled)
@@ -148,7 +136,7 @@ public partial class MainWindow : Window
         // Show the managed windows on the ui
         foreach (WindowConfig window in WindowConfigs)
         {
-            if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
+            if (FloatingWindows.All(x => x.WindowConfig.WindowId != window.WindowId))
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));

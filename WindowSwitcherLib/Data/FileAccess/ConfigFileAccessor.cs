@@ -81,7 +81,6 @@ public class ConfigFileAccessor
         if (existantConfig != null)
         {
             existantConfig.WindowId = windowConfig.WindowId;
-            SaveFloatingWindowSettings(existantConfig);
             return existantConfig;
         }
 
