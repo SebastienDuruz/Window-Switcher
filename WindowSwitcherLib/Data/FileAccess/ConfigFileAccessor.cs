@@ -14,6 +14,7 @@ public class ConfigFileAccessor
     {
         Directory.CreateDirectory(StaticData.DataFolder);
         Directory.CreateDirectory(StaticData.ScreenshotFolder);
+        Directory.CreateDirectory(StaticData.LogsFolder);
         FilePath = Path.Combine(StaticData.DataFolder, "config.json");
         ReadUserSettings();
     }
@@ -80,8 +81,10 @@ public class ConfigFileAccessor
             Config.FloatingWindowsConfig.FirstOrDefault(x => x.WindowTitle == windowConfig.WindowTitle);
         if (existantConfig != null)
         {
-            existantConfig.WindowId = windowConfig.WindowId;
-            return existantConfig;
+            string windowId = windowConfig.WindowId;
+            windowConfig = existantConfig.Clone();
+            windowConfig.WindowId = windowId;
+            return windowConfig;
         }
 
         return null;

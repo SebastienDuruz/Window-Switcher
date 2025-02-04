@@ -48,11 +48,15 @@ public class WindowsWindowAccessor : WindowAccessor
 
     public override ObservableCollection<WindowConfig> GetWindows()
     {
+        Windows.Clear();
+        
         foreach (Process process in Process.GetProcesses())
         {
             if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
                 continue;
             if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
+                continue;
+            if (process.HasExited)
                 continue;
 
             // if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
@@ -106,7 +110,6 @@ public class WindowsWindowAccessor : WindowAccessor
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
             return null;
         }
         finally

@@ -71,7 +71,6 @@ public class LinuxX11WindowAccessor : WindowAccessor
         catch (Exception ex)
         {
             // TODO : Log
-            Console.WriteLine(ex.Message);
         }
         
         return windowTitle;
