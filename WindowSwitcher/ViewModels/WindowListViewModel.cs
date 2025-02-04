@@ -60,12 +60,12 @@ public partial class WindowListViewModel : ObservableObject
 
             if ((isOnBlacklist && isOnWindowsList) || (isOnWindowsList && !isOnWhiteList))
             {
-                AppLogger.Log($"[REMOVE] {fetchedWindow.WindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
             }
             else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
             {
-                AppLogger.Log($"[ADD] {fetchedWindow.WindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Add(fetchedWindow);
             }
             else if (!isOnBlacklist && isOnWindowsList && isOnWhiteList)
@@ -73,7 +73,7 @@ public partial class WindowListViewModel : ObservableObject
                 WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
                 if (windowConfig.WindowTitle != fetchedWindow.WindowTitle)
                 {
-                    AppLogger.Log($"[UPDATE] {fetchedWindow.WindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                    AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                     windowConfig.WindowTitle = fetchedWindow.WindowTitle;
                 }
             }

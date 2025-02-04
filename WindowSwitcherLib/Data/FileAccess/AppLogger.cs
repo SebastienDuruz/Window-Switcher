@@ -1,4 +1,3 @@
-using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.FileAccess;
