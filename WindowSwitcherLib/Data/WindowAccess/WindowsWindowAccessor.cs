@@ -100,7 +100,7 @@ public class WindowsWindowAccessor : WindowAccessor
                     g.ReleaseHdc(hdc);
                 }
         
-                string filePath = $"{StaticData.ScreenshotFolder}/{windowId}.jpg";
+                string filePath = $"{DataFolders.ScreenshotFolder}/{windowId}.jpg";
                 bitmap.Save(filePath, JpegCodec, EncoderParameters);
                 return new Bitmap(filePath);
             }

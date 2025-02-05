@@ -94,7 +94,7 @@ public partial class MainWindow : Window
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = StaticData.DataFolder,
+            FileName = DataFolders.DataFolder,
             UseShellExecute = true
         });
     }

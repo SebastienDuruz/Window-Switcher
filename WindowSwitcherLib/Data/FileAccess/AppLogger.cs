@@ -1,3 +1,4 @@
+using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.FileAccess;
@@ -5,7 +6,7 @@ namespace WindowSwitcherLib.Data.FileAccess;
 public static class AppLogger
 {
     public static string LogFilePath { get; set; } =
-        Path.Combine(StaticData.LogsFolder, $"{DateTime.Today.Date.ToLongDateString()}.txt");
+        Path.Combine(DataFolders.LogsFolder, $"{DateTime.Today.Date.ToLongDateString()}.txt");
     public static string LastLogMessage { get; set; } = string.Empty;
     public static async void Log(string message, StaticData.LogSeverity severity)
     {

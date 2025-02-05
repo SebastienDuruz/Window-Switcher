@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 using WindowSwitcherLib.WindowAccess;
 
@@ -12,10 +13,10 @@ public class ConfigFileAccessor
     
     private ConfigFileAccessor()
     {
-        Directory.CreateDirectory(StaticData.DataFolder);
-        Directory.CreateDirectory(StaticData.ScreenshotFolder);
-        Directory.CreateDirectory(StaticData.LogsFolder);
-        FilePath = Path.Combine(StaticData.DataFolder, "config.json");
+        Directory.CreateDirectory(DataFolders.DataFolder);
+        Directory.CreateDirectory(DataFolders.ScreenshotFolder);
+        Directory.CreateDirectory(DataFolders.LogsFolder);
+        FilePath = Path.Combine(DataFolders.DataFolder, "config.json");
         ReadUserSettings();
     }
 

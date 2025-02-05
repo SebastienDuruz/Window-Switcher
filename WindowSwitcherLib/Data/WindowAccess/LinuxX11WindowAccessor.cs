@@ -44,7 +44,7 @@ public class LinuxX11WindowAccessor : WindowAccessor
         {
             try
             {
-                using (var stream = new MemoryStream(File.ReadAllBytes($"{StaticData.ScreenshotFolder}/{windowId}.jpg")))
+                using (var stream = new MemoryStream(File.ReadAllBytes($"{DataFolders.ScreenshotFolder}/{windowId}.jpg")))
                 {
                     return new Bitmap(stream);
                 }
