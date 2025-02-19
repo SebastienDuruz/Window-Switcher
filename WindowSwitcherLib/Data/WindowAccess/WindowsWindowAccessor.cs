@@ -81,6 +81,11 @@ public class WindowsWindowAccessor : WindowAccessor
         }
     }
 
+    /// <summary>
+    /// This method does not work for DirectX applications, this is why we use DWM thumnails instead
+    /// </summary>
+    /// <param name="windowId"></param>
+    /// <returns></returns>
     public override Bitmap? TakeScreenshot(string windowId)
     {
         IntPtr hwnd = int.Parse(windowId);
