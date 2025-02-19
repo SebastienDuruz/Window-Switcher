@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -52,20 +53,33 @@ public partial class WindowListViewModel : ObservableObject
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
             bool isOnBlacklist = ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
-                x.StartsWith(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
+                x.Contains(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
             bool isOnWhiteList = ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
-                fetchedWindow.WindowTitle.ToLower().StartsWith(prefix.ToLower()));
+                fetchedWindow.WindowTitle.ToLower().Contains(prefix.ToLower()));
             bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
-                
-            if((isOnBlacklist && isOnWindowsList) || (!isOnBlacklist && isOnWindowsList && !isOnWhiteList))
+
+            if ((isOnBlacklist && isOnWindowsList) || (isOnWindowsList && !isOnWhiteList))
+            {
+                AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
-            else if(!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
+            }
+            else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
+            {
+                AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Add(fetchedWindow);
-            else if(!isOnBlacklist && isOnWindowsList && isOnWhiteList)
-                (WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId)).WindowTitle = fetchedWindow.WindowTitle;
+            }
+            else if (!isOnBlacklist && isOnWindowsList && isOnWhiteList)
+            {
+                WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
+                if (windowConfig.WindowTitle != fetchedWindow.WindowTitle)
+                {
+                    AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                    windowConfig.WindowTitle = fetchedWindow.WindowTitle;
+                }
+            }
         }
         
-        List<WindowConfig> toRemove = WindowsConfigs.Where(x => !fetchedWindows.Any(x => x.WindowId == x.WindowId)).ToList();
+        List<WindowConfig> toRemove = WindowsConfigs.Where(x => fetchedWindows.All(y => y.WindowId != x.WindowId)).ToList();
         foreach (WindowConfig window in toRemove)
             WindowsConfigs.Remove(window);
     }

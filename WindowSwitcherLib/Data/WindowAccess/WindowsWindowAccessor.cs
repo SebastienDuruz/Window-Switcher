@@ -14,7 +14,7 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 public class WindowsWindowAccessor : WindowAccessor
 {
     [StructLayout(LayoutKind.Sequential)]
-    public struct RECT
+    private struct RECT
     {
         public int left;
         public int top;
@@ -24,14 +24,14 @@ public class WindowsWindowAccessor : WindowAccessor
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    static extern bool SetForegroundWindow(IntPtr hWnd);
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
     
     [DllImport("user32.dll")]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
-    
+
     private static readonly ImageCodecInfo? JpegCodec =
         ImageCodecInfo.GetImageDecoders()
             .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
@@ -48,16 +48,17 @@ public class WindowsWindowAccessor : WindowAccessor
 
     public override ObservableCollection<WindowConfig> GetWindows()
     {
+        Windows.Clear();
+        
         foreach (Process process in Process.GetProcesses())
         {
             if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
                 continue;
             if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
                 continue;
+            if (process.HasExited)
+                continue;
 
-            // if (Windows.Any(x => x.WindowTitle == process.MainWindowTitle))
-            //     Windows.Remove(Windows.FirstOrDefault(x => x.WindowTitle == process.MainWindowTitle)!);
-            
             Windows.Add(new WindowConfig()
             {
                 WindowTitle = process.MainWindowTitle, 
@@ -80,16 +81,21 @@ public class WindowsWindowAccessor : WindowAccessor
         }
     }
 
+    /// <summary>
+    /// This method does not work for DirectX applications, this is why we use DWM thumnails instead
+    /// </summary>
+    /// <param name="windowId"></param>
+    /// <returns></returns>
     public override Bitmap? TakeScreenshot(string windowId)
     {
         IntPtr hwnd = int.Parse(windowId);
-
+        
         try
         {
             GetWindowRect(hwnd, out RECT rect);
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
-
+        
             using (System.Drawing.Bitmap bitmap = new(width, height))
             {
                 using (Graphics g = Graphics.FromImage(bitmap))
@@ -98,15 +104,14 @@ public class WindowsWindowAccessor : WindowAccessor
                     PrintWindow(hwnd, hdc, 0);
                     g.ReleaseHdc(hdc);
                 }
-
-                string filePath = $"{StaticData.ScreenshotFolder}/{windowId}.jpg";
+        
+                string filePath = $"{DataFolders.ScreenshotFolder}/{windowId}.jpg";
                 bitmap.Save(filePath, JpegCodec, EncoderParameters);
                 return new Bitmap(filePath);
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
             return null;
         }
         finally

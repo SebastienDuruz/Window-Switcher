@@ -6,8 +6,6 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 
 public abstract class WindowAccessor
 {
-    protected ApplicationDataAccessor ApplicationDataAccessor = new();
-
     /// <summary>
     /// Get the list of Window currently opened
     /// </summary>

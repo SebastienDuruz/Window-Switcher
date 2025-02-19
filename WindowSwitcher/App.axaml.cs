@@ -5,6 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcher;
 
@@ -20,6 +21,8 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        DataFolders.CheckFolders();
+        
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             MainWindow = new MainWindow();
