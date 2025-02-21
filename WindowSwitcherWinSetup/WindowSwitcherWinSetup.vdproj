@@ -15,13 +15,13 @@
     {
         "Entry"
         {
-        "MsmKey" = "8:_491724459E8A4E05BC56A8C52E69A492"
+        "MsmKey" = "8:_8344357ADCE24B3BAEB9493BF725947A"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
         {
-        "MsmKey" = "8:_8344357ADCE24B3BAEB9493BF725947A"
+        "MsmKey" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -43,13 +43,29 @@
         "PrivateKeyFile" = "8:"
         "TimeStampServer" = "8:"
         "InstallerBootstrapper" = "3:2"
+            "BootstrapperCfg:{63ACBE69-63AA-4F98-B2B6-99F9E24495F2}"
+            {
+            "Enabled" = "11:TRUE"
+            "PromptEnabled" = "11:TRUE"
+            "PrerequisitesLocation" = "2:1"
+            "Url" = "8:"
+            "ComponentsUrl" = "8:"
+                "Items"
+                {
+                    "{EDC2488A-8267-493A-A98E-7D9C3B36CDF3}:.NETFramework,Version=v4.7.2"
+                    {
+                    "Name" = "8:Microsoft .NET Framework 4.7.2 (x86 and x64)"
+                    "ProductCode" = "8:.NETFramework,Version=v4.7.2"
+                    }
+                }
+            }
         }
         "Release"
         {
         "DisplayName" = "8:Release"
         "IsDebugOnly" = "11:FALSE"
         "IsReleaseOnly" = "11:TRUE"
-        "OutputFilename" = "8:Release\\WindowSwitcherWinSetup.msi"
+        "OutputFilename" = "8:Release\\WindowSwitcher-Win-x64.msi"
         "PackageFilesAs" = "3:2"
         "PackageFileSize" = "3:-2147483648"
         "CabType" = "3:1"
@@ -59,6 +75,14 @@
         "PrivateKeyFile" = "8:"
         "TimeStampServer" = "8:"
         "InstallerBootstrapper" = "3:2"
+            "BootstrapperCfg:{63ACBE69-63AA-4F98-B2B6-99F9E24495F2}"
+            {
+            "Enabled" = "11:TRUE"
+            "PromptEnabled" = "11:TRUE"
+            "PrerequisitesLocation" = "2:1"
+            "Url" = "8:"
+            "ComponentsUrl" = "8:"
+            }
         }
     }
     "Deployable"
@@ -80,10 +104,10 @@
         }
         "File"
         {
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_491724459E8A4E05BC56A8C52E69A492"
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_8344357ADCE24B3BAEB9493BF725947A"
             {
-            "SourcePath" = "8:..\\WindowSwitcher\\bin\\Release\\net9.0\\win-x64\\publish\\WindowSwitcher.exe"
-            "TargetName" = "8:WindowSwitcher.exe"
+            "SourcePath" = "8:..\\WindowSwitcher\\Assets\\WS_logo.ico"
+            "TargetName" = "8:WS_logo.ico"
             "Tag" = "8:"
             "Folder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Condition" = "8:"
@@ -100,10 +124,10 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_8344357ADCE24B3BAEB9493BF725947A"
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_ABF25E51504D40BEA75EE58CA5E7C230"
             {
-            "SourcePath" = "8:..\\WindowSwitcher\\Assets\\WS_logo.ico"
-            "TargetName" = "8:WS_logo.ico"
+            "SourcePath" = "8:..\\WindowSwitcher\\bin\\Release\\net9.0\\win-x64\\publish\\WindowSwitcher.exe"
+            "TargetName" = "8:WindowSwitcher.exe"
             "Tag" = "8:"
             "Folder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Condition" = "8:"
@@ -176,19 +200,19 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:WindowSwitcher"
-        "ProductCode" = "8:{E0DCB7A6-2117-47CD-BB29-90BDB7596AB5}"
-        "PackageCode" = "8:{640E4E01-4CE4-4416-8EF0-0D2661665378}"
+        "ProductCode" = "8:{D9D57FAB-D64B-404D-A75F-4C7F5964ABF3}"
+        "PackageCode" = "8:{C869A2C4-56B5-4133-B6AD-E98B9E7B4A6E}"
         "UpgradeCode" = "8:{B54B61FB-4AB7-47E9-BDA7-09400E60AEDB}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:TRUE"
         "InstallAllUsers" = "11:FALSE"
-        "ProductVersion" = "8:0.1.0"
+        "ProductVersion" = "8:0.2.0"
         "Manufacturer" = "8:Sébastien Duruz"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:https://github.com/SebastienDuruz"
-        "Title" = "8:Window Switcher"
+        "Title" = "8:Window Switcher v0.2.0"
         "Subject" = "8:Application"
         "ARPCONTACT" = "8:Sébastien Duruz"
         "Keywords" = "8:"
@@ -297,7 +321,7 @@
         }
         "Shortcut"
         {
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_8AE05468F7334AB3BABB93FC8FD877F0"
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_CC1B473F2CDD4E7488241D760DA4D1C6"
             {
             "Name" = "8:WindowSwitcher"
             "Arguments" = "8:"
@@ -305,13 +329,13 @@
             "ShowCmd" = "3:1"
             "IconIndex" = "3:0"
             "Transitive" = "11:FALSE"
-            "Target" = "8:_491724459E8A4E05BC56A8C52E69A492"
-            "Folder" = "8:_9DF1FA6272B642408D5F6F5593FBE276"
+            "Target" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
+            "Folder" = "8:_EF78E43BA0FB4827ADFD2370F35FE147"
             "WorkingFolder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Icon" = "8:_8344357ADCE24B3BAEB9493BF725947A"
             "Feature" = "8:"
             }
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_C0043669632E418DB3797F8614436143"
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_FCCED077F0D243AFA15973EA599791E9"
             {
             "Name" = "8:WindowSwitcher"
             "Arguments" = "8:"
@@ -319,8 +343,8 @@
             "ShowCmd" = "3:1"
             "IconIndex" = "3:0"
             "Transitive" = "11:FALSE"
-            "Target" = "8:_491724459E8A4E05BC56A8C52E69A492"
-            "Folder" = "8:_EF78E43BA0FB4827ADFD2370F35FE147"
+            "Target" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
+            "Folder" = "8:_9DF1FA6272B642408D5F6F5593FBE276"
             "WorkingFolder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Icon" = "8:_8344357ADCE24B3BAEB9493BF725947A"
             "Feature" = "8:"

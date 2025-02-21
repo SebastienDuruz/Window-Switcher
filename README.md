@@ -30,9 +30,9 @@ This software **doesn't modify game clients**.
 ## Roadmap
 - [x] Windows support
 - [x] Basic Linux support (X11)
-- [] Advanced customization (access settings from the application)
-- [] MacOS implementation
-- [] UI enhancements
+- [ ] Advanced customization (access settings from the application)
+- [ ] MacOS implementation
+- [ ] UI enhancements
 
 ## Demo v0.1.0
 
@@ -42,8 +42,7 @@ This software **doesn't modify game clients**.
 
 | Live preview |
 |----------- |
-
-![Screenshot 3](./Demo/thumbnails.png)
+| ![Screenshot 3](./Demo/thumbnails.png) |
 
 🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
 
@@ -65,11 +64,6 @@ Make sure your system is able to use the next commands:
 4. Blacklist filter: Exclude unwanted windows.
 5. Adjust the preview size and position.
 6. Enjoy !
-
-## Technologies Used
-
-- **.NET 9.0**
-- **Avalonia**
 
 ## License
 This project is licensed under the [GPL3 License](LICENSE).
