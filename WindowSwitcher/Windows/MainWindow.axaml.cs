@@ -123,6 +123,17 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    public void AddToTempBlacklist(string windowId)
+    {
+        if (RefreshButtonEnabled)
+        {
+            if (!((WindowListViewModel)DataContext).TempWindowIdsBlacklist.Any(x => x == windowId))
+            {
+                ((WindowListViewModel)DataContext).TempWindowIdsBlacklist.Add(windowId);
+            }
+        }
+    }
     
     private void RefreshClicked(object? sender, RoutedEventArgs e)
     {
