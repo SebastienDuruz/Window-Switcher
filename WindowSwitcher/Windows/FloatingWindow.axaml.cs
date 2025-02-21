@@ -93,6 +93,11 @@ public partial class FloatingWindow : Window
             Header = "Add to blacklist",
             Command = new ContextMenuCommand(() => MainWindow.AddToBlacklist(WindowConfig.WindowTitle))
         });
+        FloatingWindowContextMenu.Items.Add(new MenuItem()
+        {
+            Header = "Add id to temp blacklist",
+            Command = new ContextMenuCommand(() => MainWindow.AddToTempBlacklist(WindowConfig.WindowId))
+        });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
         SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
