@@ -9,8 +9,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowSwitcherTester", "Win
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WindowSwitcher", "WindowSwitcher\WindowSwitcher.csproj", "{0B636DF0-19CC-4578-82BA-80C97DA08647}"
 EndProject
-Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "WindowSwitcherWinSetup", "WindowSwitcherWinSetup\WindowSwitcherWinSetup.vdproj", "{00FAB666-86AD-D5C8-6DAB-DD54688436B0}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,8 +27,6 @@ Global
 		{0B636DF0-19CC-4578-82BA-80C97DA08647}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0B636DF0-19CC-4578-82BA-80C97DA08647}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0B636DF0-19CC-4578-82BA-80C97DA08647}.Release|Any CPU.Build.0 = Release|Any CPU
-		{00FAB666-86AD-D5C8-6DAB-DD54688436B0}.Debug|Any CPU.ActiveCfg = Debug
-		{00FAB666-86AD-D5C8-6DAB-DD54688436B0}.Release|Any CPU.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
