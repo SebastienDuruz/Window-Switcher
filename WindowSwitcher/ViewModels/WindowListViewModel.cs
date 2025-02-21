@@ -53,7 +53,7 @@ public partial class WindowListViewModel : ObservableObject
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
             bool isOnBlacklist = ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
-                x.Contains(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
+                x.Equals(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
             bool isOnWhiteList = ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
                 fetchedWindow.WindowTitle.ToLower().Contains(prefix.ToLower()));
             bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
