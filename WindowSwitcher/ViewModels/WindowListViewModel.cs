@@ -16,7 +16,6 @@ namespace WindowSwitcher.ViewModels;
 public partial class WindowListViewModel : ObservableObject
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-    public string LastSelectedItemId { get; set; } = "";
     private WindowAccessor WindowAccessor { get; set; }
 
     [ObservableProperty] 
@@ -24,7 +23,11 @@ public partial class WindowListViewModel : ObservableObject
     
     [ObservableProperty]
     private ObservableCollection<WindowConfig> windowsConfigs = new();
+    
+    public string LastSelectedItemId { get; set; } = "";
 
+    public List<string> TempWindowIdsBlacklist { get; set; } = new List<string>();
+    
     public WindowListViewModel(WindowAccessor windowAccessor)
     {
         WindowAccessor = windowAccessor;
@@ -52,8 +55,8 @@ public partial class WindowListViewModel : ObservableObject
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
-            bool isOnBlacklist = ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
-                x.Contains(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase));
+            bool isOnBlacklist = (ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
+                x.Equals(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase)) || TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId));
             bool isOnWhiteList = ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
                 fetchedWindow.WindowTitle.ToLower().Contains(prefix.ToLower()));
             bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
