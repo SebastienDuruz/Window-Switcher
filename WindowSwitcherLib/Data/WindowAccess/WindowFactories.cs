@@ -12,7 +12,7 @@ public class WindowFactories
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new LinuxX11WindowAccessor();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            throw new PlatformNotSupportedException("Mac access is not supported on this software");
+            return new MacOsWindowAccessor();
         
         throw new PlatformNotSupportedException("Unknown platform");
     }
