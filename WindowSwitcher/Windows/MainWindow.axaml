@@ -32,7 +32,14 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel>
-                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14"></TextBlock>
+                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14">
+                                <TextBlock.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
+                                        <MenuItem Header="Add id to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
+                                    </ContextMenu>
+                                </TextBlock.ContextMenu>
+                            </TextBlock>
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

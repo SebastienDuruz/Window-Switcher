@@ -172,4 +172,14 @@ public partial class MainWindow : Window
             FloatingWindows.Remove(window);
         }
     }
+
+    private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+       AddToBlacklist((string)((MenuItem)sender).Tag); 
+    }
+    
+    private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        AddToTempBlacklist((string)((MenuItem)sender).Tag); 
+    }
 }
