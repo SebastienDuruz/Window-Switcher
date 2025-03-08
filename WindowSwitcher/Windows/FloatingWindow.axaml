@@ -8,7 +8,7 @@
         ShowInTaskbar="False"
         ShowActivated="False"
         mc:Ignorable="d"
-        x:Class="WindowSwitcher.FloatingWindow"
+        x:Class="WindowSwitcher.Windows.FloatingWindow"
         Title="FloatingWindow"
         Topmost="True"
         CanResize="True"

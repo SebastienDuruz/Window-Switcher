@@ -1,16 +1,11 @@
 using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Platform;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
@@ -20,12 +15,10 @@ using WindowSwitcherLib.WindowAccess;
 using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
-namespace WindowSwitcher;
+namespace WindowSwitcher.Windows;
 
 public partial class FloatingWindow : Window
 {
-    
-    
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     
     private readonly CancellationTokenSource _cts = new();
@@ -136,7 +129,7 @@ public partial class FloatingWindow : Window
         WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
             RegisterWindowThumbnail();
     }
 
@@ -150,9 +143,12 @@ public partial class FloatingWindow : Window
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         e.Cancel = !StaticData.AppClosing;
-        _cts.Cancel();
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-            Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
+        if (!e.Cancel)
+        {
+            _cts.Cancel();
+            if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
+                Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
+        }
     }
 
     private void RegisterWindowThumbnail()

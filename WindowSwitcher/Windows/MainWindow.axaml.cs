@@ -10,12 +10,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.ViewModels;
+using WindowSwitcher.Windows;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
 namespace WindowSwitcher;
@@ -24,9 +23,10 @@ public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private List<FloatingWindow> FloatingWindows { get; set; } = new();
+    private List<Windows.FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
+    private SettingsWindow SettingsWindow { get; set; }
     private static bool RefreshButtonEnabled { get; set; } = true;
     private List<WindowConfig> WindowConfigs { get; set; } = new();
     
@@ -37,10 +37,11 @@ public partial class MainWindow : Window
         DataContext = new WindowListViewModel(WindowAccessor);
         Title = StaticData.AppName;
 
-        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
+        PrefixesWindow = new Windows.PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
             StaticData.PrefixWindowType.whitelist, "Prefix window");
-        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes,
+        BlacklistWindow = new Windows.PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes,
             StaticData.PrefixWindowType.blacklist, "Blacklist window");
+        SettingsWindow = new SettingsWindow();
 
         StartBackgroundTask();
 
@@ -83,6 +84,7 @@ public partial class MainWindow : Window
         StaticData.AppClosing = true;
         PrefixesWindow.Close();
         BlacklistWindow.Close();
+        SettingsWindow.Close();
         foreach(FloatingWindow floatingWindow in FloatingWindows)
             floatingWindow.Close();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
@@ -107,6 +109,11 @@ public partial class MainWindow : Window
     private void OpenBlacklistWindowClick(object? sender, RoutedEventArgs e)
     {
         BlacklistWindow.Show();
+    }
+    
+    private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
+    {
+        SettingsWindow.Show();
     }
 
     public void AddToBlacklist(string windowTitle)
@@ -138,7 +145,7 @@ public partial class MainWindow : Window
     private void RefreshClicked(object? sender, RoutedEventArgs e)
     {
         RefreshButtonEnabled = false;
-        (((WindowListViewModel)DataContext!)!).FetchWindowsWithFilters();
+        ((WindowListViewModel)DataContext!).FetchWindowsWithFilters();
         RefreshButtonEnabled = true;
     }
 
@@ -150,17 +157,17 @@ public partial class MainWindow : Window
             if (FloatingWindows.All(x => x.WindowConfig.WindowId != window.WindowId))
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
+                    FloatingWindows.Add(new Windows.FloatingWindow(window, WindowAccessor, this));
                 });
         }
     }
 
     private async Task ClearClosedFloatingWindows()
     {
-        IEnumerable<FloatingWindow> windowsToRemove =
+        IEnumerable<Windows.FloatingWindow> windowsToRemove =
             FloatingWindows.Where(x => WindowConfigs.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
 
-        foreach (FloatingWindow window in windowsToRemove)
+        foreach (Windows.FloatingWindow window in windowsToRemove)
         {
             // TODO : Find a more elegant solution for closing the floating window
             StaticData.AppClosing = true;
@@ -171,5 +178,15 @@ public partial class MainWindow : Window
             StaticData.AppClosing = false;
             FloatingWindows.Remove(window);
         }
+    }
+
+    private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+       AddToBlacklist((string)((MenuItem)sender).Tag); 
+    }
+    
+    private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        AddToTempBlacklist((string)((MenuItem)sender).Tag); 
     }
 }
