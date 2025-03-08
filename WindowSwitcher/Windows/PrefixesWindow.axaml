@@ -9,7 +9,7 @@
         MinHeight="200"
         CanResize="True"
         Topmost="True"
-        x:Class="WindowSwitcher.PrefixesWindow"
+        x:Class="WindowSwitcher.Windows.PrefixesWindow"
         Title="PrefixesWindow">
     <StackPanel Orientation="Vertical" Name="PrefixesStackPanel">
         <StackPanel Orientation="Horizontal" Spacing="2">

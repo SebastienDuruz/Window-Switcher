@@ -6,9 +6,8 @@ using Avalonia.Threading;
 using WindowSwitcherLib.Data.CustomWindows;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.WindowAccess.CustomWindows;
 
-namespace WindowSwitcher;
+namespace WindowSwitcher.Windows;
 
 public partial class PrefixesWindow : EditListWindow
 {

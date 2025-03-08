@@ -15,7 +15,6 @@ public partial class App : Application
     
     public override void Initialize()
     {
-        ConfigFileAccessor.GetInstance().ReadUserSettings();
         AvaloniaXamlLoader.Load(this);
     }
 
