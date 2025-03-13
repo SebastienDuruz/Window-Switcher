@@ -3,13 +3,12 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
-        xmlns:windowAccess="clr-namespace:WindowSwitcherLib.WindowAccess;assembly=WindowSwitcherLib"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
-        xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="400" Height="300"
         x:Class="WindowSwitcher.MainWindow"
+        ShowInTaskbar="True"
         Topmost="True"
         Title="WindowSwitcher"
         ClosingBehavior="OwnerAndChildWindows"
@@ -19,6 +18,7 @@
             <MenuItem Header="_Settings" Padding="4">
                 <MenuItem Header="_Prefixes" Click="OpenPrefixesWindowClick" />
                 <MenuItem Header="_Blacklist" Click="OpenBlacklistWindowClick" />
+                <MenuItem Header="_General" Click="OpenSettingsWindowClick" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
@@ -31,7 +31,14 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel>
-                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14"></TextBlock>
+                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14">
+                                <TextBlock.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
+                                        <MenuItem Header="Add id to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
+                                    </ContextMenu>
+                                </TextBlock.ContextMenu>
+                            </TextBlock>
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

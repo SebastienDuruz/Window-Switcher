@@ -7,7 +7,7 @@ namespace WindowSwitcherLib.Data.FileAccess;
 
 public class ConfigFileAccessor
 {
-    private static ConfigFileAccessor Instance { get; set; }
+    private static ConfigFileAccessor Instance { get; set; } = null;
     private string FilePath { get; set; }
     public ConfigFile Config { get; set; }
     
@@ -39,6 +39,11 @@ public class ConfigFileAccessor
             try
             {
                 Config = JsonConvert.DeserializeObject<ConfigFile>(File.ReadAllText(FilePath));
+                if (Config == null)
+                {
+                    Config = new ConfigFile();
+                    WriteUserSettings();              
+                }
             }
             catch (Exception ex)
             {
