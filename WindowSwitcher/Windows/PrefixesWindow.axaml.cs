@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
@@ -29,15 +30,18 @@ public partial class PrefixesWindow : EditListWindow
 
     private void AddPrefixClick(object? sender, RoutedEventArgs e)
     {
-        PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
-        if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
+        if (!String.IsNullOrWhiteSpace(PrefixTextBox.Text))
         {
-            ListToEdit.Add(PrefixTextBox.Text);
-            ConfigFileAccessor.GetInstance().WriteUserSettings();
-            AddPrefixToList(PrefixTextBox.Text);
-            PrefixTextBox.Text = "";
+            PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
+            if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
+            {
+                ListToEdit.Add(PrefixTextBox.Text);
+                ConfigFileAccessor.GetInstance().WriteUserSettings();
+                AddPrefixToList(PrefixTextBox.Text);
+                PrefixTextBox.Text = "";
             
-            SavePrefixList();
+                SavePrefixList();
+            }
         }
     }
 
