@@ -96,11 +96,13 @@ public partial class FloatingWindow : Window
         SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
+        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        BeginMoveDrag(e);
+        if(ConfigFileAccessor.GetInstance().Config.MoveWindows)
+            BeginMoveDrag(e);
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)

@@ -28,6 +28,20 @@ public partial class SettingsWindow : Window
             ((CheckBox)sender).IsChecked.Value;
     }
     
+    private void ResizeWindowsCheckedChange(object? sender, RoutedEventArgs e)
+    {
+
+        ConfigFileAccessor.GetInstance().Config.ResizeWindows =
+            ((CheckBox)sender).IsChecked.Value;
+    }
+    
+    private void MoveWindowsCheckedChange(object? sender, RoutedEventArgs e)
+    {
+
+        ConfigFileAccessor.GetInstance().Config.MoveWindows =
+            ((CheckBox)sender).IsChecked.Value;
+    }
+    
     private void ShowWindowDecorationsCheckedChange(object? sender, RoutedEventArgs e)
     {
         ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations = 

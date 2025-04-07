@@ -15,6 +15,8 @@
         x:DataType="viewModels:SettingsViewModel">
         <StackPanel Orientation="Vertical" Margin="10 10" Spacing="0">
                 <CheckBox Content="Start minimized" IsCheckedChanged="StartMinimizedCheckedChange" IsChecked="{Binding ConfigFile.StartMinimized, Mode=OneTime}"></CheckBox>
+                <CheckBox Content="Resize Windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
+                <CheckBox Content="Move Windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Show decorations" IsCheckedChanged="ShowWindowDecorationsCheckedChange" IsChecked="{Binding ConfigFile.ShowWindowDecorations, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Activate previews" IsCheckedChanged="ActivateWindowsPreviewCheckedChange" IsChecked="{Binding ConfigFile.ActivateWindowsPreview, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Activate logs" IsCheckedChanged="ActivateLogsCheckedChange" IsChecked="{Binding ConfigFile.ActivateLogs, Mode=OneTime}"></CheckBox>

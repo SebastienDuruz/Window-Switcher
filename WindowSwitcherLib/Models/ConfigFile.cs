@@ -3,6 +3,8 @@ namespace WindowSwitcherLib.Models;
 public class ConfigFile
 {
     // General settings
+    public bool ResizeWindows { get; set; } = true;
+    public bool MoveWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
     public bool ShowWindowDecorations { get; set; } = false;
     public bool ActivateWindowsPreview { get; set; } = true;
