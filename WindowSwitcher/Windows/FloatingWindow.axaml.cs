@@ -150,24 +150,24 @@ public partial class FloatingWindow : Window
         {
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-                Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
+                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
         }
     }
 
     private void RegisterWindowThumbnail()
     {
         if (ThumbnailHandle != IntPtr.Zero)
-            Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
+            DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
         
         IntPtr windowHandle = this.TryGetPlatformHandle().Handle;
         IntPtr srcHandle = IntPtr.Parse(WindowConfig.WindowId);
-        int res = Win32DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
+        int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
         if (res == 0) // all good !
         {
             ThumbnailHandle = thumbnail;
             
-            Win32DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out Win32DwmFunctions.PSIZE size );
-            Win32DwmFunctions.Rect dest = new  Win32DwmFunctions.Rect()
+            DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
+            DwmFunctions.Rect dest = new  DwmFunctions.Rect()
             {
                 Left = 0,
                 Top = (int)(12 * Screens.Primary.Scaling),
@@ -175,20 +175,20 @@ public partial class FloatingWindow : Window
                 Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
 
-            Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
+            DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
 
             props.dwFlags =
-                Win32DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
-                Win32DwmFunctions.DWM_TNP_VISIBLE |
-                Win32DwmFunctions.DWM_TNP_OPACITY |
-                Win32DwmFunctions.DWM_TNP_RECTDESTINATION;
+                DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
+                DwmFunctions.DWM_TNP_VISIBLE |
+                DwmFunctions.DWM_TNP_OPACITY |
+                DwmFunctions.DWM_TNP_RECTDESTINATION;
 
             props.fSourceClientAreaOnly = false;
             props.fVisible = true;
             props.opacity = 255;
             props.rcDestination = dest;
 
-            Win32DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
+            DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
         }
     }
 }
