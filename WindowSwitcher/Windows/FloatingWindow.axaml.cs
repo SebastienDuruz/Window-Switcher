@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
@@ -166,13 +167,12 @@ public partial class FloatingWindow : Window
             ThumbnailHandle = thumbnail;
             
             Win32DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out Win32DwmFunctions.PSIZE size );
-
             Win32DwmFunctions.Rect dest = new  Win32DwmFunctions.Rect()
             {
                 Left = 0,
-                Top = 12,
-                Right = (int)WindowConfig.WindowWidth,
-                Bottom = (int)WindowConfig.WindowHeight,
+                Top = (int)(12 * Screens.Primary.Scaling),
+                Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
+                Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
 
             Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
