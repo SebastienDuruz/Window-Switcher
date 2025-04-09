@@ -1,18 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.Interop;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.WindowAccess;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
@@ -23,7 +21,7 @@ public partial class MainWindow : Window
 {
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     private WindowAccessor WindowAccessor { get; set; } = WindowFactories.GetAccessor();
-    private List<Windows.FloatingWindow> FloatingWindows { get; set; } = new();
+    private List<FloatingWindow> FloatingWindows { get; set; } = new();
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
     private SettingsWindow SettingsWindow { get; set; }
@@ -141,6 +139,13 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    public string RenameWindow(string windowId, string currentTitle)
+    {
+        string newWindowTitle = $"{currentTitle.Split("@[")[0]}@[{windowId.ToLower()}]";
+        User32Functions.SetWindowText(IntPtr.Parse(windowId), newWindowTitle);
+        return newWindowTitle;
+    }
     
     private void RefreshClicked(object? sender, RoutedEventArgs e)
     {
@@ -164,10 +169,10 @@ public partial class MainWindow : Window
 
     private async Task ClearClosedFloatingWindows()
     {
-        IEnumerable<Windows.FloatingWindow> windowsToRemove =
+        IEnumerable<FloatingWindow> windowsToRemove =
             FloatingWindows.Where(x => WindowConfigs.All(c => c.WindowId != x.WindowConfig.WindowId)).ToList();
 
-        foreach (Windows.FloatingWindow window in windowsToRemove)
+        foreach (FloatingWindow window in windowsToRemove)
         {
             // TODO : Find a more elegant solution for closing the floating window
             StaticData.AppClosing = true;

@@ -89,8 +89,13 @@ public partial class FloatingWindow : Window
         });
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
-            Header = "Add id to temp blacklist",
+            Header = "Add to temp blacklist",
             Command = new ContextMenuCommand(() => MainWindow.AddToTempBlacklist(WindowConfig.WindowId))
+        });
+        FloatingWindowContextMenu.Items.Add(new MenuItem()
+        {
+            Header = "Rename window",
+            Command = new ContextMenuCommand(() => WindowLabel.Content = MainWindow.RenameWindow(WindowConfig.WindowId, (string)WindowLabel.Content))
         });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
