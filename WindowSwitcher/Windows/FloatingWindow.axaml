@@ -3,7 +3,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
-        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         Icon="/Assets/WS_logo.ico"
         ShowInTaskbar="False"
         ShowActivated="False"
@@ -17,6 +16,7 @@
         Closing="FloatingWindowClosing"
         SystemDecorations="Full"
         x:DataType="windowSwitcher:MainWindow">
+        
         <Canvas Name="WindowCanvas" Background="Transparent" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>

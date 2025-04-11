@@ -4,7 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -95,7 +97,7 @@ public partial class FloatingWindow : Window
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Rename window",
-            Command = new ContextMenuCommand(() => WindowLabel.Content = MainWindow.RenameWindow(WindowConfig.WindowId, (string)WindowLabel.Content))
+            Command = new ContextMenuCommand(() => RenameWindowTitle())
         });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
@@ -195,5 +197,12 @@ public partial class FloatingWindow : Window
 
             DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
         }
+    }
+
+    private async void RenameWindowTitle()
+    {
+        string? newTitle = await MainWindow.RenameWindowTitle(WindowConfig.WindowId);
+        if(newTitle is not null)
+            WindowLabel.Content = newTitle;
     }
 }

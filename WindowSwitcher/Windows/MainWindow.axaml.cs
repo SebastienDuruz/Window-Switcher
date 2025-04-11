@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
     private PrefixesWindow PrefixesWindow { get; set; }
     private PrefixesWindow BlacklistWindow { get; set; }
     private SettingsWindow SettingsWindow { get; set; }
+    private RenameWindow RenameWindow { get; set; }
     private static bool RefreshButtonEnabled { get; set; } = true;
     private List<WindowConfig> WindowConfigs { get; set; } = new();
     
@@ -40,6 +42,7 @@ public partial class MainWindow : Window
         BlacklistWindow = new Windows.PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes,
             StaticData.PrefixWindowType.blacklist, "Blacklist window");
         SettingsWindow = new SettingsWindow();
+        RenameWindow = new RenameWindow();
 
         StartBackgroundTask();
 
@@ -83,6 +86,7 @@ public partial class MainWindow : Window
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
+        RenameWindow.Close();
         foreach(FloatingWindow floatingWindow in FloatingWindows)
             floatingWindow.Close();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
@@ -140,11 +144,26 @@ public partial class MainWindow : Window
         }
     }
 
-    public string RenameWindow(string windowId, string currentTitle)
+    /// <summary>
+    /// TODO : Optimise this method
+    /// </summary>
+    /// <param name="windowId"></param>
+    /// <returns></returns>
+    public async Task<string?> RenameWindowTitle(string windowId)
     {
-        string newWindowTitle = $"{currentTitle.Split("@[")[0]}@[{windowId.ToLower()}]";
-        User32Functions.SetWindowText(IntPtr.Parse(windowId), newWindowTitle);
-        return newWindowTitle;
+        RenameWindow.Show();
+        while (RenameWindow.IsVisible)
+        {
+            await Task.Delay(500);
+        }
+
+        if (RenameWindow.IsUpdated)
+        {
+            User32Functions.SetWindowText(IntPtr.Parse(windowId), RenameWindow.NewWindowTitle);
+            return RenameWindow.NewWindowTitle;
+        }
+
+        return null;
     }
     
     private void RefreshClicked(object? sender, RoutedEventArgs e)
