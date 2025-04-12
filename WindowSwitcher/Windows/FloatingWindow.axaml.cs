@@ -201,8 +201,8 @@ public partial class FloatingWindow : Window
 
     private async void RenameWindowTitle()
     {
-        string? newTitle = await MainWindow.RenameWindowTitle(WindowConfig.WindowId);
-        if(newTitle is not null)
-            WindowLabel.Content = newTitle;
+        // Works only for windows
+        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            await MainWindow.RenameWindowTitle(WindowConfig.WindowId);
     }
 }

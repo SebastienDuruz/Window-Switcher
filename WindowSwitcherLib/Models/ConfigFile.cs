@@ -7,6 +7,8 @@ public class ConfigFile
     public bool MoveWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
     public bool ShowWindowDecorations { get; set; } = false;
+    
+    // Debug
     public bool ActivateWindowsPreview { get; set; } = true;
     public bool ActivateLogs { get; set; } = false;
     

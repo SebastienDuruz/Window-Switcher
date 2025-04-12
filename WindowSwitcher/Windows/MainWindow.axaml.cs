@@ -149,21 +149,22 @@ public partial class MainWindow : Window
     /// </summary>
     /// <param name="windowId"></param>
     /// <returns></returns>
-    public async Task<string?> RenameWindowTitle(string windowId)
+    public async Task RenameWindowTitle(string windowId)
     {
         RenameWindow.Show();
         while (RenameWindow.IsVisible)
-        {
             await Task.Delay(500);
-        }
 
         if (RenameWindow.IsUpdated)
         {
             User32Functions.SetWindowText(IntPtr.Parse(windowId), RenameWindow.NewWindowTitle);
-            return RenameWindow.NewWindowTitle;
+            await Task.Delay(500); // Give time to windowTitle to be updated
+            FloatingWindow window = this.FloatingWindows.First(x => x.WindowConfig.WindowId == windowId);
+            FloatingWindows.Remove(window);
+            StaticData.AppClosing = true;
+            window.Close();
+            StaticData.AppClosing = false;
         }
-
-        return null;
     }
     
     private void RefreshClicked(object? sender, RoutedEventArgs e)
