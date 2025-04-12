@@ -17,6 +17,7 @@ This software **doesn't modify game clients**.
 - 🔍 **Live previews** of selected open windows
 - ⚙️ **Configurable filters** using prefixes and blacklists
 - 🖱️ **Click to focus** the window
+- 🖊️ **Rename** windows
 
 ## Compatibility
   - ✅ **Windows** (fully supported)
@@ -31,22 +32,48 @@ This software **doesn't modify game clients**.
 - [x] Windows support
 - [x] Basic Linux support (X11)
 - [ ] Advanced customization (access settings from the application)
-- [ ] MacOS implementation
 - [ ] UI enhancements
+- [ ] Better support for Linux (X11)
+- [ ] MacOS implementation
 
-## Demo v0.1.0
+## Demo
 
+<details open>
+  <summary>v0.4.0</summary>
+
+  ### Features
+  - Add a window to configure **settings**
+  - Add the ability to **rename** windows
+    - keep track of different settings for clients like **World of Warcraft**
+  
 | Main window | Prefix window |
 |-----------|-----------|
-| ![Screenshot 1](./Demo/settings.png) | ![Screenshot 2](./Demo/mainwindows.png) |
+| ![Screenshot 1](./Demo/0.4.0/mainwindow.png) | ![Screenshot 2](./Demo/0.4.0/prefixwindow.png) |
 
-| Live preview |
-|----------- |
-| ![Screenshot 3](./Demo/thumbnails.png) |
+| Live preview | Settings / Rename |
+|----------- |----------- |
+| ![Screenshot 3](./Demo/0.4.0/thumbnails.png) | ![Screenshot 4](./Demo/0.4.0/settingswindows.png) ![Screenshot 4](./Demo/0.4.0/renamewindow.png) |
 
-🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
+🎥 Example with **Eve Online**, **World of Warcraft** and **Project Gorgon** clients :
 
-[![Watch the video](https://img.youtube.com/vi/9oif2M7rryQ/0.jpg)](https://youtu.be/9oif2M7rryQ)
+ [![Watch the video](https://img.youtube.com/vi/hXvS_n32jaQ/0.jpg)](https://youtu.be/hXvS_n32jaQ)
+</details>
+<details>
+  <summary>v0.1.0</summary>
+
+  | Main window | Prefix window |
+  |-----------|-----------|
+  | ![Screenshot 1](./Demo/settings.png) | ![Screenshot 2](./Demo/mainwindows.png) |
+
+  | Live preview |
+  |----------- |
+  | ![Screenshot 3](./Demo/thumbnails.png) |
+
+  🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
+
+ 
+  [![Watch the video](https://img.youtube.com/vi/9oif2M7rryQ/0.jpg)](https://youtu.be/9oif2M7rryQ)
+</details>
 
 ## Installation
 

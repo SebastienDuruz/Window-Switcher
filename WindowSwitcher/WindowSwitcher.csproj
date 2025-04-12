@@ -44,5 +44,9 @@
         <DependentUpon>PrefixesWindow.axaml</DependentUpon>
         <SubType>Code</SubType>
       </Compile>
+      <Compile Update="Windows\RenameWindow.axaml.cs">
+        <DependentUpon>RenameWindow.axaml</DependentUpon>
+        <SubType>Code</SubType>
+      </Compile>
     </ItemGroup>
 </Project>

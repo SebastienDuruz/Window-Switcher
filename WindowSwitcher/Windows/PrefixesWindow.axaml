@@ -10,11 +10,11 @@
         CanResize="True"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.PrefixesWindow"
-        Title="PrefixesWindow">
+        Title="Prefixes">
     <StackPanel Orientation="Vertical" Name="PrefixesStackPanel">
         <StackPanel Orientation="Horizontal" Spacing="2">
             <TextBox Name="PrefixTextBox" HorizontalAlignment="Left" Width="250"></TextBox>
-            <Button Name="PrefixButton" HorizontalAlignment="Right" Content="Add" Click="AddPrefixClick"></Button>
+            <Button Name="PrefixButton" HorizontalAlignment="Right" Content="Add" Click="AddPrefixClick" HotKey="Enter"></Button>
         </StackPanel>
         <ListBox Name="PrefixListBox" SelectionChanged="PrefixListBoxSelectionChanged"></ListBox>
     </StackPanel>

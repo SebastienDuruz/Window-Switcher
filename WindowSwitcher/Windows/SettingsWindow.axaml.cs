@@ -25,24 +25,26 @@ public partial class SettingsWindow : Window
     {
 
         ConfigFileAccessor.GetInstance().Config.StartMinimized =
-            ((CheckBox)sender).IsChecked.Value;
+            ((CheckBox)sender!).IsChecked!.Value;
     }
     
-    private void ShowWindowDecorationsCheckedChange(object? sender, RoutedEventArgs e)
+    private void ResizeWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations = 
-            ((CheckBox)sender).IsChecked.Value;
+
+        ConfigFileAccessor.GetInstance().Config.ResizeWindows =
+            ((CheckBox)sender!).IsChecked!.Value;
     }
     
-    private void ActivateWindowsPreviewCheckedChange(object? sender, RoutedEventArgs e)
+    private void MoveWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview =
-            ((CheckBox)sender).IsChecked.Value;
+
+        ConfigFileAccessor.GetInstance().Config.MoveWindows =
+            ((CheckBox)sender!).IsChecked!.Value;
     }
     
-    private void ActivateLogsCheckedChange(object? sender, RoutedEventArgs e)
+    private void ApplyButtonClick(object? sender, RoutedEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().Config.ActivateLogs =
-            ((CheckBox)sender).IsChecked.Value;
+        MainWindow.ApplySettings();
+        Hide();
     }
 }

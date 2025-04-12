@@ -4,8 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
@@ -71,7 +74,7 @@ public partial class FloatingWindow : Window
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
+        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig!);
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -79,8 +82,11 @@ public partial class FloatingWindow : Window
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
+        
+        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
-        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        WindowLabel.Content = WindowConfig!.ShortWindowTitle;
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to blacklist",
@@ -88,24 +94,31 @@ public partial class FloatingWindow : Window
         });
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
-            Header = "Add id to temp blacklist",
+            Header = "Add to temp blacklist",
             Command = new ContextMenuCommand(() => MainWindow.AddToTempBlacklist(WindowConfig.WindowId))
+        });
+        FloatingWindowContextMenu.Items.Add(new MenuItem()
+        {
+            Header = "Rename window",
+            Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
         });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
         SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
+        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        BeginMoveDrag(e);
+        if(ConfigFileAccessor.GetInstance().Config.MoveWindows)
+            BeginMoveDrag(e);
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
+        WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
     }
 
     private Task UpdateScreenshot()
@@ -126,7 +139,7 @@ public partial class FloatingWindow : Window
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        WindowConfig.WindowHeight = Height;
+        WindowConfig!.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
@@ -135,7 +148,7 @@ public partial class FloatingWindow : Window
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowConfig.WindowLeft = Position.X;
+        WindowConfig!.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
     }
 
@@ -147,46 +160,52 @@ public partial class FloatingWindow : Window
         {
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-                Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
+                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
         }
     }
 
     private void RegisterWindowThumbnail()
     {
         if (ThumbnailHandle != IntPtr.Zero)
-            Win32DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
+            DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
         
-        IntPtr windowHandle = this.TryGetPlatformHandle().Handle;
-        IntPtr srcHandle = IntPtr.Parse(WindowConfig.WindowId);
-        int res = Win32DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
+        IntPtr windowHandle = TryGetPlatformHandle()!.Handle;
+        IntPtr srcHandle = IntPtr.Parse(WindowConfig!.WindowId);
+        int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
         if (res == 0) // all good !
         {
             ThumbnailHandle = thumbnail;
             
-            Win32DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out Win32DwmFunctions.PSIZE size );
-
-            Win32DwmFunctions.Rect dest = new  Win32DwmFunctions.Rect()
+            DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
+            DwmFunctions.Rect dest = new()
             {
                 Left = 0,
-                Top = 12,
-                Right = (int)WindowConfig.WindowWidth,
-                Bottom = (int)WindowConfig.WindowHeight,
+                Top = (int)(12 * Screens.Primary!.Scaling),
+                Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
+                Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
 
-            Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new Win32DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
+            DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
 
             props.dwFlags =
-                Win32DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
-                Win32DwmFunctions.DWM_TNP_VISIBLE |
-                Win32DwmFunctions.DWM_TNP_OPACITY |
-                Win32DwmFunctions.DWM_TNP_RECTDESTINATION;
+                DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
+                DwmFunctions.DWM_TNP_VISIBLE |
+                DwmFunctions.DWM_TNP_OPACITY |
+                DwmFunctions.DWM_TNP_RECTDESTINATION;
 
             props.fSourceClientAreaOnly = false;
             props.fVisible = true;
             props.opacity = 255;
             props.rcDestination = dest;
 
-            Win32DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
+            DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
         }
+    }
+
+    private async Task RenameWindowTitle()
+    {
+        // Works only for windows
+        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
     }
 }

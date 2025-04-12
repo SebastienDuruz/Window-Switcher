@@ -11,7 +11,6 @@ public static class AppLogger
     public static async void Log(string message, StaticData.LogSeverity severity)
     {
         LastLogMessage = $"\n[{severity}] [{DateTime.Now}] {message}";
-        if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
-            await File.AppendAllTextAsync(LogFilePath, LastLogMessage);
+        await File.AppendAllTextAsync(LogFilePath, LastLogMessage);
     }
 }
