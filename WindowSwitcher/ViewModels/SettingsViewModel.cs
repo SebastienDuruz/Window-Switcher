@@ -6,10 +6,5 @@ namespace WindowSwitcher.ViewModels;
 
 public class SettingsViewModel
 {
-    public ConfigFile ConfigFile { get; set; }
-    
-    public SettingsViewModel()
-    {
-        ConfigFile = ConfigFileAccessor.GetInstance().Config;
-    }
+    public ConfigFile ConfigFile { get; } = ConfigFileAccessor.GetInstance().Config;
 }

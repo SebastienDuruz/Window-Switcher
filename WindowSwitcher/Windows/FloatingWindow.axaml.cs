@@ -74,7 +74,7 @@ public partial class FloatingWindow : Window
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
+        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig!);
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -82,8 +82,11 @@ public partial class FloatingWindow : Window
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
+        
+        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
-        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        WindowLabel.Content = WindowConfig!.ShortWindowTitle;
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to blacklist",
@@ -97,7 +100,7 @@ public partial class FloatingWindow : Window
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Rename window",
-            Command = new ContextMenuCommand(() => RenameWindowTitle())
+            Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
         });
         Width = WindowConfig.WindowWidth;
         Height = WindowConfig.WindowHeight;
@@ -115,7 +118,7 @@ public partial class FloatingWindow : Window
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
+        WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
     }
 
     private Task UpdateScreenshot()
@@ -136,7 +139,7 @@ public partial class FloatingWindow : Window
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        WindowConfig.WindowHeight = Height;
+        WindowConfig!.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
@@ -145,7 +148,7 @@ public partial class FloatingWindow : Window
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowConfig.WindowLeft = Position.X;
+        WindowConfig!.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
     }
 
@@ -166,18 +169,18 @@ public partial class FloatingWindow : Window
         if (ThumbnailHandle != IntPtr.Zero)
             DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
         
-        IntPtr windowHandle = this.TryGetPlatformHandle().Handle;
-        IntPtr srcHandle = IntPtr.Parse(WindowConfig.WindowId);
+        IntPtr windowHandle = TryGetPlatformHandle()!.Handle;
+        IntPtr srcHandle = IntPtr.Parse(WindowConfig!.WindowId);
         int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
         if (res == 0) // all good !
         {
             ThumbnailHandle = thumbnail;
             
             DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
-            DwmFunctions.Rect dest = new  DwmFunctions.Rect()
+            DwmFunctions.Rect dest = new()
             {
                 Left = 0,
-                Top = (int)(12 * Screens.Primary.Scaling),
+                Top = (int)(12 * Screens.Primary!.Scaling),
                 Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
                 Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
@@ -199,10 +202,10 @@ public partial class FloatingWindow : Window
         }
     }
 
-    private async void RenameWindowTitle()
+    private async Task RenameWindowTitle()
     {
         // Works only for windows
         if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            await MainWindow.RenameWindowTitle(WindowConfig.WindowId);
+            await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
     }
 }

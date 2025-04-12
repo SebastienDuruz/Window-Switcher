@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
+        xmlns:windows="clr-namespace:WindowSwitcher.Windows"
         Icon="/Assets/WS_logo.ico"
         ShowInTaskbar="False"
         ShowActivated="False"
@@ -14,13 +15,14 @@
         Resized="FloatingWindowResized"
         PointerReleased="WindowPointerReleased"
         Closing="FloatingWindowClosing"
-        SystemDecorations="Full"
-        x:DataType="windowSwitcher:MainWindow">
-        
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        x:DataType="windows:MainWindow">
         <Canvas Name="WindowCanvas" Background="Transparent" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
                 </Canvas.ContextMenu>
-                <Label FontSize="10" Margin="0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel">window name</Label>
+                <Label FontSize="10" Margin="2 0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel"><TextBlock>window name</TextBlock></Label>
         </Canvas>
 </Window>

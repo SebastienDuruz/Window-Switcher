@@ -6,8 +6,8 @@
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
-        Width="400" Height="300"
-        x:Class="WindowSwitcher.MainWindow"
+        Width="300" Height="400"
+        x:Class="WindowSwitcher.Windows.MainWindow"
         ShowInTaskbar="True"
         Topmost="True"
         Title="WindowSwitcher"
@@ -16,9 +16,9 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
             <MenuItem Header="_Settings" Padding="4">
-                <MenuItem Header="_Prefixes" Click="OpenPrefixesWindowClick" />
-                <MenuItem Header="_Blacklist" Click="OpenBlacklistWindowClick" />
-                <MenuItem Header="_General" Click="OpenSettingsWindowClick" />
+                <MenuItem Header="_Configure prefixes" Click="OpenPrefixesWindowClick" />
+                <MenuItem Header="_Configure blacklist" Click="OpenBlacklistWindowClick" />
+                <MenuItem Header="_General settings" Click="OpenSettingsWindowClick" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>

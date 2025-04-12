@@ -14,7 +14,6 @@ public partial class RenameWindow : Window
     public RenameWindow()
     {
         InitializeComponent();
-        DataContext = new SettingsViewModel();
         Closing += OnClosing;
     }
     

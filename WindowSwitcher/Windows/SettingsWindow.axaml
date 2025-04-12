@@ -5,21 +5,20 @@
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="300" Height="400" 
-        MinWidth="300" MaxWidth="300" 
-        MinHeight="200"
-        CanResize="True"
+        Width="175" Height="140" 
+        CanResize="False"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
+        SystemDecorations="Full"
+        
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
-        <StackPanel Orientation="Vertical" Margin="10 10" Spacing="0">
+        <StackPanel Orientation="Vertical" Margin="5 5" Spacing="0">
                 <CheckBox Content="Start minimized" IsCheckedChanged="StartMinimizedCheckedChange" IsChecked="{Binding ConfigFile.StartMinimized, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Resize Windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Move Windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Show decorations" IsCheckedChanged="ShowWindowDecorationsCheckedChange" IsChecked="{Binding ConfigFile.ShowWindowDecorations, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Activate previews" IsCheckedChanged="ActivateWindowsPreviewCheckedChange" IsChecked="{Binding ConfigFile.ActivateWindowsPreview, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Activate logs" IsCheckedChanged="ActivateLogsCheckedChange" IsChecked="{Binding ConfigFile.ActivateLogs, Mode=OneTime}"></CheckBox>
-                <Label Foreground="Gray" FontSize="12">Restart the application to apply settings.</Label>
+                <CheckBox Content="Resize windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
+                <CheckBox Content="Move windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Click="ApplyButtonClick">Apply</Button>
+                </StackPanel>
         </StackPanel>
 </Window>

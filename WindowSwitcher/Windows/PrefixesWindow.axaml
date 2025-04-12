@@ -10,7 +10,7 @@
         CanResize="True"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.PrefixesWindow"
-        Title="PrefixesWindow">
+        Title="Prefixes">
     <StackPanel Orientation="Vertical" Name="PrefixesStackPanel">
         <StackPanel Orientation="Horizontal" Spacing="2">
             <TextBox Name="PrefixTextBox" HorizontalAlignment="Left" Width="250"></TextBox>

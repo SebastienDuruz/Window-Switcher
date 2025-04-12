@@ -15,27 +15,18 @@ namespace WindowSwitcher.ViewModels;
 
 public partial class WindowListViewModel : ObservableObject
 {
-    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-    private WindowAccessor WindowAccessor { get; set; }
-
+    private readonly CancellationTokenSource _cts = new ();
     [ObservableProperty] 
-    private ObservableCollection<ListBoxItem> windowsListBoxItems = new();
-    
+    private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
     [ObservableProperty]
-    private ObservableCollection<WindowConfig> windowsConfigs = new();
-    
-    public string LastSelectedItemId { get; set; } = "";
-
-    public List<string> TempWindowIdsBlacklist { get; set; } = new List<string>();
+    private ObservableCollection<WindowConfig> _windowsConfigs = new();
+    private WindowAccessor WindowAccessor { get; }
+    public string LastSelectedItemId { get; } = "";
+    public List<string> TempWindowIdsBlacklist { get; set; } = new ();
     
     public WindowListViewModel(WindowAccessor windowAccessor)
     {
         WindowAccessor = windowAccessor;
-        StartBackgroundTask();
-    }
-
-    private void StartBackgroundTask()
-    {
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
     }
 
@@ -63,12 +54,14 @@ public partial class WindowListViewModel : ObservableObject
 
             if ((isOnBlacklist && isOnWindowsList) || (isOnWindowsList && !isOnWhiteList))
             {
-                AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                    AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
             }
             else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
             {
-                AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                    AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Add(fetchedWindow);
             }
             else if (!isOnBlacklist && isOnWindowsList && isOnWhiteList)
@@ -76,7 +69,8 @@ public partial class WindowListViewModel : ObservableObject
                 WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
                 if (windowConfig.WindowTitle != fetchedWindow.WindowTitle)
                 {
-                    AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
+                    if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                        AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                     windowConfig.WindowTitle = fetchedWindow.WindowTitle;
                 }
             }

@@ -11,7 +11,7 @@ namespace WindowSwitcher;
 
 public partial class App : Application
 {
-    private MainWindow MainWindow { get; set; }
+    private Windows.MainWindow MainWindow { get; set; }
     
     public override void Initialize()
     {
@@ -24,7 +24,7 @@ public partial class App : Application
         
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            MainWindow = new MainWindow();
+            MainWindow = new Windows.MainWindow();
             desktop.MainWindow = MainWindow;
         }
 
