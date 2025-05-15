@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using WindowSwitcher.ViewModels;
@@ -46,5 +47,26 @@ public partial class SettingsWindow : Window
     {
         MainWindow.ApplySettings();
         Hide();
+    }
+
+    private void FixedWindowCheckedChange(object? sender, RoutedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.UseFixedWindowSize =
+            ((CheckBox)sender!).IsChecked!.Value;
+
+        FixedWidthStackPanel.IsVisible = ((CheckBox)sender!).IsChecked!.Value;
+        FixedHeightStackPanel.IsVisible = ((CheckBox)sender!).IsChecked!.Value;
+    }
+
+    private void FixedWidthNumericChange(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.WindowWidth =
+            (int)((NumericUpDown)sender!).Value.Value;
+    }
+    
+    private void FixedHeightNumericChange(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.WindowHeight =
+            (int)((NumericUpDown)sender!).Value.Value;
     }
 }

@@ -7,6 +7,9 @@ public class ConfigFile
     public bool MoveWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
     public bool ShowWindowDecorations { get; set; } = false;
+    public bool UseFixedWindowSize { get; set; } = false;
+    public int WindowWidth { get; set; } = 300;
+    public int WindowHeight { get; set; } = 200;
     
     // Debug
     public bool ActivateWindowsPreview { get; set; } = true;

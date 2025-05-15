@@ -102,12 +102,23 @@ public partial class FloatingWindow : Window
             Header = "Rename window",
             Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
         });
-        Width = WindowConfig.WindowWidth;
-        Height = WindowConfig.WindowHeight;
+        
+        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
+        if (ConfigFileAccessor.GetInstance().Config.UseFixedWindowSize)
+        {
+            CanResize = false;
+            Width = ConfigFileAccessor.GetInstance().Config.WindowWidth;
+            Height = ConfigFileAccessor.GetInstance().Config.WindowHeight; 
+        }
+        else
+        {
+            Width = WindowConfig.WindowWidth;
+            Height = WindowConfig.WindowHeight;
+        }
+        
         SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
-        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -143,7 +154,7 @@ public partial class FloatingWindow : Window
         WindowConfig.WindowWidth = Width;
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
-            RegisterWindowThumbnail();
+            RegisterWindowThumbnail();    
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
