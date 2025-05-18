@@ -46,7 +46,7 @@ public partial class SettingsWindow : Window
     private void ApplyButtonClick(object? sender, RoutedEventArgs e)
     {
         MainWindow.ApplySettings();
-        Hide();
+        //Hide();
     }
 
     private void FixedWindowCheckedChange(object? sender, RoutedEventArgs e)
