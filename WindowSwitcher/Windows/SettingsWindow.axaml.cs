@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using WindowSwitcher.ViewModels;
@@ -23,21 +24,18 @@ public partial class SettingsWindow : Window
 
     private void StartMinimizedCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.StartMinimized =
             ((CheckBox)sender!).IsChecked!.Value;
     }
     
     private void ResizeWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.ResizeWindows =
             ((CheckBox)sender!).IsChecked!.Value;
     }
     
     private void MoveWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.MoveWindows =
             ((CheckBox)sender!).IsChecked!.Value;
     }
@@ -45,6 +43,26 @@ public partial class SettingsWindow : Window
     private void ApplyButtonClick(object? sender, RoutedEventArgs e)
     {
         MainWindow.ApplySettings();
-        Hide();
+    }
+
+    private void FixedWindowCheckedChange(object? sender, RoutedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.UseFixedWindowSize =
+            ((CheckBox)sender!).IsChecked!.Value;
+
+        FixedWidthStackPanel.IsVisible = ((CheckBox)sender!).IsChecked!.Value;
+        FixedHeightStackPanel.IsVisible = ((CheckBox)sender!).IsChecked!.Value;
+    }
+
+    private void FixedWidthNumericChange(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.WindowWidth =
+            (int)((NumericUpDown)sender!).Value.Value;
+    }
+    
+    private void FixedHeightNumericChange(object? sender, NumericUpDownValueChangedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.WindowHeight =
+            (int)((NumericUpDown)sender!).Value.Value;
     }
 }

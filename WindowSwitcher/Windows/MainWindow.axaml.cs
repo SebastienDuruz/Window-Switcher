@@ -63,19 +63,28 @@ public partial class MainWindow : Window
             await RefreshWindowsAsync();
             await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
         }
+        Console.WriteLine("Refresh periodic task finished...");
     }
 
     private async Task RefreshWindowsAsync()
     {
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        try
         {
-            WindowConfigs = ((WindowListViewModel)DataContext!).WindowsConfigs.ToList();
-        });
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                WindowConfigs = ((WindowListViewModel)DataContext!).WindowsConfigs.ToList();
+            });
 
-        await AddFloatingWindows();
-        await ClearClosedFloatingWindows();
-        
-        GC.Collect();
+            await AddFloatingWindows();
+            await ClearClosedFloatingWindows();
+
+            GC.Collect();
+        }
+        catch (Exception ex)
+        {
+            if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
+        }
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

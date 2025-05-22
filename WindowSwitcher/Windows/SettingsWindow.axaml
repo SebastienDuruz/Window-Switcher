@@ -5,18 +5,26 @@
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="175" Height="140" 
+        Width="200" Height="270" 
         CanResize="False"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
         SystemDecorations="Full"
-        
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
         <StackPanel Orientation="Vertical" Margin="5 5" Spacing="0">
                 <CheckBox Content="Start minimized" IsCheckedChanged="StartMinimizedCheckedChange" IsChecked="{Binding ConfigFile.StartMinimized, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Resize windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Move windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
+                <CheckBox Content="Fixed size" IsCheckedChanged="FixedWindowCheckedChange" IsChecked="{Binding ConfigFile.UseFixedWindowSize, Mode=OneTime}"></CheckBox>
+                <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding ConfigFile.UseFixedWindowSize, Mode=OneWay}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
+                        <TextBlock Margin="0 5 10 5">Width</TextBlock>
+                        <NumericUpDown Width="130" ValueChanged="FixedWidthNumericChange" Value="{Binding ConfigFile.WindowWidth, Mode=OneTime}" Minimum="10" Maximum="2000" Increment="1" />
+                </StackPanel>
+                <StackPanel Name="FixedHeightStackPanel" IsVisible="{Binding ConfigFile.UseFixedWindowSize, Mode=OneWay}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
+                        <TextBlock Margin="0 5 5 5">Height</TextBlock>
+                        <NumericUpDown Width="130" ValueChanged="FixedHeightNumericChange" Value="{Binding ConfigFile.WindowHeight, Mode=OneTime}" Minimum="10" Maximum="2000" Increment="1" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Click="ApplyButtonClick">Apply</Button>
                 </StackPanel>
