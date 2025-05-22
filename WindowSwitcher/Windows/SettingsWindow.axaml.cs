@@ -24,21 +24,18 @@ public partial class SettingsWindow : Window
 
     private void StartMinimizedCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.StartMinimized =
             ((CheckBox)sender!).IsChecked!.Value;
     }
     
     private void ResizeWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.ResizeWindows =
             ((CheckBox)sender!).IsChecked!.Value;
     }
     
     private void MoveWindowsCheckedChange(object? sender, RoutedEventArgs e)
     {
-
         ConfigFileAccessor.GetInstance().Config.MoveWindows =
             ((CheckBox)sender!).IsChecked!.Value;
     }
@@ -46,7 +43,6 @@ public partial class SettingsWindow : Window
     private void ApplyButtonClick(object? sender, RoutedEventArgs e)
     {
         MainWindow.ApplySettings();
-        //Hide();
     }
 
     private void FixedWindowCheckedChange(object? sender, RoutedEventArgs e)
