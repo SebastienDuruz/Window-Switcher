@@ -6,7 +6,7 @@
         xmlns:windows="clr-namespace:WindowSwitcher.Windows"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="200" Height="100" 
+        Width="200" Height="100"
         MinWidth="200" MaxWidth="200" 
         MinHeight="100"
         CanResize="False"
