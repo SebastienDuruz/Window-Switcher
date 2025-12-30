@@ -1,7 +1,6 @@
 using Newtonsoft.Json;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.FileAccess;
 

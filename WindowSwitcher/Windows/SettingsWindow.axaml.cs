@@ -2,8 +2,8 @@ using System;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using WindowSwitcher.ViewModels;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcher.Windows;
 

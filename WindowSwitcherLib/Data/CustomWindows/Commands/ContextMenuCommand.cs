@@ -1,6 +1,6 @@
 using System.Windows.Input;
 
-namespace WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
+namespace WindowSwitcherLib.Data.CustomWindows.Commands;
 
 public class ContextMenuCommand : ICommand
 {

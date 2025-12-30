@@ -9,7 +9,7 @@
         ShowActivated="False"
         mc:Ignorable="d"
         x:Class="WindowSwitcher.Windows.FloatingWindow"
-        Title="FloatingWindow"
+        Title=""
         Topmost="True"
         CanResize="True"
         Resized="FloatingWindowResized"

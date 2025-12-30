@@ -6,7 +6,7 @@
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         Width="200" Height="270" 
-        CanResize="False"
+        CanResize="True"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
         SystemDecorations="Full"

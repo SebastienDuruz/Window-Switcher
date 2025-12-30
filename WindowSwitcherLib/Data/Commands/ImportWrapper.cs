@@ -1,24 +1,17 @@
-using System.Diagnostics;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.Commands;
 
-public class ImportWrapper : ICommandWrapper
+public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 {
     public string Execute(string client)
     {
-        using Process process = new Process();
-        process.StartInfo.FileName = "import";
-        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {DataFolders.ScreenshotFolder}/{client}.jpg";
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.CreateNoWindow = true;
+        _process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {DataFolders.ScreenshotFolder}/{client}.jpg";
 
-        process.Start();
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        _process.Start();
+        string output = _process.StandardOutput.ReadToEnd();
+        _process.WaitForExit();
 
         return output;
     }

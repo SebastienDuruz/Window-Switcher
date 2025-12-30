@@ -1,8 +1,4 @@
-using System.Runtime.InteropServices;
-using Avalonia;
-using Microsoft.VisualBasic.FileIO;
-
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data;
 
 public static class StaticData
 {

@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
 using static System.Drawing.Imaging.Encoder;
 using static WindowSwitcherLib.Data.FileAccess.ConfigFileAccessor;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;

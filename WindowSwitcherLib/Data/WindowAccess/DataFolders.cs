@@ -1,5 +1,3 @@
-using WindowSwitcherLib.WindowAccess;
-
 namespace WindowSwitcherLib.Data.WindowAccess;
 
 public static class DataFolders

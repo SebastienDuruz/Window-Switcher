@@ -8,10 +8,10 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
 using WindowSwitcherLib.Data.WindowAccess;
-using WindowSwitcherLib.WindowAccess;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows;

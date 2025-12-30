@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
+using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 

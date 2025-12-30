@@ -1,5 +1,4 @@
 using WindowSwitcherLib.Data.WindowAccess;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.FileAccess;
 

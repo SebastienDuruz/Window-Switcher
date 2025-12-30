@@ -6,10 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcher.ViewModels;
 
