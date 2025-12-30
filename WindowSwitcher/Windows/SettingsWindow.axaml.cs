@@ -39,6 +39,12 @@ public partial class SettingsWindow : Window
         ConfigFileAccessor.GetInstance().Config.MoveWindows =
             ((CheckBox)sender!).IsChecked!.Value;
     }
+
+    private void ShowWindowDecorationsCheckedChange(object? sender, RoutedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations =
+            ((CheckBox)sender!).IsChecked!.Value;
+    }
     
     private void ApplyButtonClick(object? sender, RoutedEventArgs e)
     {

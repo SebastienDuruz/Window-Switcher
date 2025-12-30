@@ -5,7 +5,7 @@
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="200" Height="270" 
+        Width="200" Height="300" 
         CanResize="True"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
@@ -16,6 +16,7 @@
                 <CheckBox Content="Start minimized" IsCheckedChanged="StartMinimizedCheckedChange" IsChecked="{Binding ConfigFile.StartMinimized, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Resize windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Move windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
+                <CheckBox Content="Window decorations" IsCheckedChanged="ShowWindowDecorationsCheckedChange" IsChecked="{Binding ConfigFile.ShowWindowDecorations, Mode=OneTime}"></CheckBox>
                 <CheckBox Content="Fixed size" IsCheckedChanged="FixedWindowCheckedChange" IsChecked="{Binding ConfigFile.UseFixedWindowSize, Mode=OneTime}"></CheckBox>
                 <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding ConfigFile.UseFixedWindowSize, Mode=OneWay}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Width</TextBlock>
