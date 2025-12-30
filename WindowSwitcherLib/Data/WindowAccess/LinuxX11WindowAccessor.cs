@@ -58,6 +58,12 @@ public class LinuxX11WindowAccessor : WindowAccessor
         return null;
     }
 
+    public override void RenameWindowTitle(string windowId, string windowTitle)
+    {
+        string escapedTitle = windowTitle.Replace("\"", "\\\"");
+        WmctrlWrapper.Execute($" -i -r {windowId} -T \"{escapedTitle}\"");
+    }
+
     private string ExtractWindowTitle(string windowInfo)
     {
         string windowTitle = "";

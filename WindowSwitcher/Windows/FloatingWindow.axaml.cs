@@ -212,8 +212,6 @@ public partial class FloatingWindow : Window
 
     private async Task RenameWindowTitle()
     {
-        // Works only for windows
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
+        await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
     }
 }

@@ -10,7 +10,6 @@ using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.Interop;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
@@ -161,7 +160,7 @@ public partial class MainWindow : Window
         if (RenameWindow.IsUpdated)
         {
             RenameWindow.IsUpdated = false;
-            User32Functions.SetWindowText(IntPtr.Parse(windowId), RenameWindow.NewWindowTitle);
+            WindowAccessor.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
             await Task.Delay(500); // Give time to windowTitle to be updated
             FloatingWindow window = FloatingWindows.First(x => x.WindowConfig!.WindowId == windowId);
             FloatingWindows.Remove(window);

@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.Interop;
 using static System.Drawing.Imaging.Encoder;
 using static WindowSwitcherLib.Data.FileAccess.ConfigFileAccessor;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
@@ -116,6 +117,18 @@ public class WindowsWindowAccessor : WindowAccessor
         finally
         {
             GC.Collect();
+        }
+    }
+
+    public override void RenameWindowTitle(string windowId, string windowTitle)
+    {
+        try
+        {
+            User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
+        }
+        catch (Exception ex)
+        {
+            // TODO : Log
         }
     }
 }
