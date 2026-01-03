@@ -21,8 +21,7 @@ This software **doesn't modify game clients**.
 
 ## Compatibility
   - ✅ **Windows** (fully supported)
-  - 🧪 **Linux X11** (experimental)
-  - ❌ **Linux Wayland** (not planned)
+  - 🧪 **Linux** (experimental)
   - ⏳ **MacOS** (not yet implemented)
 
 ## Limitations
@@ -30,10 +29,10 @@ This software **doesn't modify game clients**.
 
 ## Roadmap
 - [x] Windows support
-- [x] Basic Linux support (X11)
+- [x] Basic Linux support
 - [ ] Advanced customization (access settings from the application)
 - [ ] UI enhancements
-- [ ] Better support for Linux (X11)
+- [ ] Better support for Linux
 - [ ] MacOS implementation
 
 ## Demo
