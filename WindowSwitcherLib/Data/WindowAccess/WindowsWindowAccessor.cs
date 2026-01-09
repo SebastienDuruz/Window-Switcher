@@ -88,7 +88,7 @@ public class WindowsWindowAccessor : WindowAccessor
     /// <returns></returns>
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = int.Parse(windowId);
+        IntPtr hwnd = IntPtr.Parse(windowId);
         
         try
         {
