@@ -4,14 +4,24 @@ namespace WindowSwitcherLib.Data.Commands;
 
 public abstract class CommandBase
 {
-    protected Process _process;
+    protected string Command { get; }
 
-    public CommandBase(string command)
+    protected CommandBase(string command)
     {
-        _process = new Process();
-        _process.StartInfo.FileName = command;
-        _process.StartInfo.UseShellExecute = false;
-        _process.StartInfo.RedirectStandardOutput = true;
-        _process.StartInfo.CreateNoWindow = true;
+        Command = command;
+    }
+
+    protected Process CreateProcess()
+    {
+        return new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = Command,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            }
+        };
     }
 }

@@ -8,19 +8,20 @@ public class WmctrlWrapper() : CommandBase("wmctrl"), ICommandWrapper
     {
         if(!IsWmctrlInstalled()) 
             throw new ApplicationException("Wmctrl is not installed.");
-        
-        _process.StartInfo.Arguments = args;
 
-        _process.Start();
-        string output = _process.StandardOutput.ReadToEnd();
-        _process.WaitForExit();
+        using Process process = CreateProcess();
+        process.StartInfo.Arguments = args;
+
+        process.Start();
+        string output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
 
         return output;
     }
 
     private bool IsWmctrlInstalled()
     {
-        Process process = new Process
+        using Process process = new Process
         {
             StartInfo = new ProcessStartInfo
             {

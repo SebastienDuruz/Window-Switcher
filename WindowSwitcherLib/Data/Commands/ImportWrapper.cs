@@ -7,11 +7,12 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 {
     public string Execute(string client)
     {
-        _process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {DataFolders.ScreenshotFolder}/{client}.jpg";
+        using var process = CreateProcess();
+        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {DataFolders.ScreenshotFolder}/{client}.jpg";
 
-        _process.Start();
-        string output = _process.StandardOutput.ReadToEnd();
-        _process.WaitForExit();
+        process.Start();
+        string output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
 
         return output;
     }
