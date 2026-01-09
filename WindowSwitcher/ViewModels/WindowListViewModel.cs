@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
@@ -34,15 +35,19 @@ public partial class WindowListViewModel : ObservableObject
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            FetchWindowsWithFilters();
+            ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
+            await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
             await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
         }
     }
     
     public void FetchWindowsWithFilters()
     {
-        ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
+        ApplyWindowsWithFilters(WindowAccessor.GetWindows());
+    }
 
+    private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
+    {
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
