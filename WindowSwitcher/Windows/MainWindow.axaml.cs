@@ -76,8 +76,6 @@ public partial class MainWindow : Window
 
             await AddFloatingWindows();
             await ClearClosedFloatingWindows();
-
-            GC.Collect();
         }
         catch (Exception ex)
         {

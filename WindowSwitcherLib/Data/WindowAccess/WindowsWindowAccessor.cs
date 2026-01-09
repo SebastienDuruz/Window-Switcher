@@ -114,10 +114,6 @@ public class WindowsWindowAccessor : WindowAccessor
         {
             return null;
         }
-        finally
-        {
-            GC.Collect();
-        }
     }
 
     public override void RenameWindowTitle(string windowId, string windowTitle)
