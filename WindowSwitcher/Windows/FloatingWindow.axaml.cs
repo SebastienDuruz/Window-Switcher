@@ -54,7 +54,8 @@ public partial class FloatingWindow : Window
 
     private async Task RunPeriodicTask(CancellationToken cancellationToken)
     {
-        if (ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
+        var configAccessor = ConfigFileAccessor.GetInstance();
+        if (configAccessor.ReadConfig(config => config.ActivateWindowsPreview))
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) // Windows DWM Thumbnails
             {
@@ -65,7 +66,8 @@ public partial class FloatingWindow : Window
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     await UpdateScreenshot();
-                    await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
+                    int refreshTimeoutMs = configAccessor.ReadConfig(config => config.RefreshTimeoutMs);
+                    await Task.Delay(refreshTimeoutMs, cancellationToken);
                 }
             }
         }
@@ -102,12 +104,21 @@ public partial class FloatingWindow : Window
             Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
         });
         
-        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
-        if (ConfigFileAccessor.GetInstance().Config.UseFixedWindowSize)
+        var configSnapshot = ConfigFileAccessor.GetInstance().ReadConfig(config => new
+        {
+            config.ResizeWindows,
+            config.UseFixedWindowSize,
+            config.WindowWidth,
+            config.WindowHeight,
+            config.ShowWindowDecorations
+        });
+
+        CanResize = configSnapshot.ResizeWindows;
+        if (configSnapshot.UseFixedWindowSize)
         {
             CanResize = false;
-            Width = ConfigFileAccessor.GetInstance().Config.WindowWidth;
-            Height = ConfigFileAccessor.GetInstance().Config.WindowHeight; 
+            Width = configSnapshot.WindowWidth;
+            Height = configSnapshot.WindowHeight; 
         }
         else
         {
@@ -115,14 +126,14 @@ public partial class FloatingWindow : Window
             Height = WindowConfig.WindowHeight;
         }
         
-        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
+        SystemDecorations = configSnapshot.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if(ConfigFileAccessor.GetInstance().Config.MoveWindows)
+        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows))
             BeginMoveDrag(e);
     }
 
@@ -155,7 +166,8 @@ public partial class FloatingWindow : Window
         WindowConfig!.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
+            ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview))
             RegisterWindowThumbnail();    
     }
 

@@ -37,7 +37,8 @@ public partial class WindowListViewModel : ObservableObject
         {
             ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
             await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
-            await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
+            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
+            await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
     }
     
@@ -48,24 +49,33 @@ public partial class WindowListViewModel : ObservableObject
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
     {
+        var configAccessor = ConfigFileAccessor.GetInstance();
+        var configSnapshot = configAccessor.ReadConfig(config => new
+        {
+            config.ActivateLogs,
+            BlacklistPrefixes = config.BlacklistPrefixes.ToList(),
+            WhitelistPrefixes = config.WhitelistPrefixes.ToList()
+        });
+
         // Apply the prefixes and remove the blacklisted clients
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
-            bool isOnBlacklist = (ConfigFileAccessor.GetInstance().Config!.BlacklistPrefixes.Exists(x =>
-                x.Equals(fetchedWindow.WindowTitle, StringComparison.CurrentCultureIgnoreCase)) || TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId));
-            bool isOnWhiteList = ConfigFileAccessor.GetInstance().Config!.WhitelistPrefixes.Any(prefix =>
-                fetchedWindow.WindowTitle.ToLower().Contains(prefix.ToLower()));
+            bool isOnBlacklist = (configSnapshot.BlacklistPrefixes.Exists(x =>
+                x.Equals(fetchedWindow.WindowTitle, StringComparison.OrdinalIgnoreCase)) ||
+                TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId));
+            bool isOnWhiteList = configSnapshot.WhitelistPrefixes.Any(prefix =>
+                fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase));
             bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
 
             if ((isOnBlacklist && isOnWindowsList) || (isOnWindowsList && !isOnWhiteList))
             {
-                if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                if(configSnapshot.ActivateLogs)
                     AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
             }
             else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
             {
-                if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                if(configSnapshot.ActivateLogs)
                     AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Add(fetchedWindow);
             }
@@ -74,7 +84,7 @@ public partial class WindowListViewModel : ObservableObject
                 WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
                 if (windowConfig.WindowTitle != fetchedWindow.WindowTitle)
                 {
-                    if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+                    if(configSnapshot.ActivateLogs)
                         AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                     windowConfig.WindowTitle = fetchedWindow.WindowTitle;
                 }

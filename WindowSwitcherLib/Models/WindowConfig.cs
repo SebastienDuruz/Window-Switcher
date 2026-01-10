@@ -13,6 +13,8 @@ public class WindowConfig : INotifyPropertyChanged
     private int _windowTop = 100;
 
     public string WindowId { get; set; } = string.Empty;
+    public string ProcessName { get; set; } = string.Empty;
+    public string ConfigKey { get; set; } = string.Empty;
 
     public string WindowTitle
     {

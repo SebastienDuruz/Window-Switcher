@@ -8,7 +8,8 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
     public string Execute(string client)
     {
         using var process = CreateProcess();
-        process.StartInfo.Arguments = $"-window {client} -quality {ConfigFileAccessor.GetInstance().Config.ScreenshotQuality} {DataFolders.ScreenshotFolder}/{client}.jpg";
+        int quality = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotQuality);
+        process.StartInfo.Arguments = $"-window {client} -quality {quality} {DataFolders.ScreenshotFolder}/{client}.jpg";
 
         process.Start();
         string output = process.StandardOutput.ReadToEnd();

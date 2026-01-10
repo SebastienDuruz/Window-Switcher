@@ -4,9 +4,9 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
 using static System.Drawing.Imaging.Encoder;
-using static WindowSwitcherLib.Data.FileAccess.ConfigFileAccessor;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
@@ -36,14 +36,6 @@ public class WindowsWindowAccessor : WindowAccessor
         ImageCodecInfo.GetImageDecoders()
             .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
 
-    private static readonly EncoderParameters EncoderParameters = new(1)
-    {
-        Param =
-        [
-            new EncoderParameter(Quality, GetInstance().Config.ScreenshotQuality)
-        ]
-    };
-    
     private ObservableCollection<WindowConfig> Windows { get; set; } = new();
 
     public override ObservableCollection<WindowConfig> GetWindows()
@@ -63,6 +55,7 @@ public class WindowsWindowAccessor : WindowAccessor
             {
                 WindowTitle = process.MainWindowTitle, 
                 WindowId = process.MainWindowHandle.ToString(), 
+                ProcessName = process.ProcessName
             });    
         }
         
@@ -107,8 +100,11 @@ public class WindowsWindowAccessor : WindowAccessor
                     g.ReleaseHdc(hdc);
                 }
         
+                int quality = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotQuality);
+                using var encoderParameters = new EncoderParameters(1);
+                encoderParameters.Param[0] = new EncoderParameter(Quality, quality);
                 using var stream = new MemoryStream();
-                bitmap.Save(stream, JpegCodec, EncoderParameters);
+                bitmap.Save(stream, JpegCodec, encoderParameters);
                 stream.Position = 0;
                 return new Bitmap(stream);
             }

@@ -34,16 +34,16 @@ public partial class MainWindow : Window
         DataContext = new WindowListViewModel(WindowAccessor);
         Title = StaticData.AppName;
 
-        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.WhitelistPrefixes,
+        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.WhitelistPrefixes.ToList()),
             StaticData.PrefixWindowType.whitelist, "Prefixes");
-        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().Config.BlacklistPrefixes,
+        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.BlacklistPrefixes.ToList()),
             StaticData.PrefixWindowType.blacklist, "Blacklist");
         SettingsWindow = new SettingsWindow();
         RenameWindow = new RenameWindow();
 
         StartBackgroundTask();
 
-        if (ConfigFileAccessor.GetInstance().Config.StartMinimized)
+        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
             Dispatcher.UIThread.Post(() =>
             {
                 this.WindowState = WindowState.Minimized;
@@ -60,7 +60,8 @@ public partial class MainWindow : Window
         while (!cancellationToken.IsCancellationRequested)
         {
             await RefreshWindowsAsync();
-            await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
+            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
+            await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
         Console.WriteLine("Refresh periodic task finished...");
     }
@@ -79,7 +80,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            if(ConfigFileAccessor.GetInstance().Config.ActivateLogs)
+            if(ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
                 AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
         }
     }
