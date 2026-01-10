@@ -95,6 +95,8 @@ public class WindowsWindowAccessor : WindowAccessor
             GetWindowRect(hwnd, out RECT rect);
             int width = rect.right - rect.left;
             int height = rect.bottom - rect.top;
+            if (width <= 0 || height <= 0 || JpegCodec == null)
+                return null;
         
             using (System.Drawing.Bitmap bitmap = new(width, height))
             {
@@ -105,9 +107,10 @@ public class WindowsWindowAccessor : WindowAccessor
                     g.ReleaseHdc(hdc);
                 }
         
-                string filePath = $"{DataFolders.ScreenshotFolder}/{windowId}.jpg";
-                bitmap.Save(filePath, JpegCodec, EncoderParameters);
-                return new Bitmap(filePath);
+                using var stream = new MemoryStream();
+                bitmap.Save(stream, JpegCodec, EncoderParameters);
+                stream.Position = 0;
+                return new Bitmap(stream);
             }
         }
         catch (Exception ex)

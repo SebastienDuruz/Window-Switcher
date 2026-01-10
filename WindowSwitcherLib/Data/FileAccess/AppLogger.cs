@@ -1,15 +1,40 @@
+using System.Threading;
+using System.Threading.Tasks;
 using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcherLib.Data.FileAccess;
 
 public static class AppLogger
 {
-    public static string LogFilePath { get; set; } =
-        Path.Combine(DataFolders.LogsFolder, $"{DateTime.Today.Date.ToLongDateString()}.txt");
-    public static string LastLogMessage { get; set; } = string.Empty;
-    public static async void Log(string message, StaticData.LogSeverity severity)
+    private static readonly SemaphoreSlim LogLock = new(1, 1);
+    public static string LogFilePath => Path.Combine(DataFolders.LogsFolder, $"{DateTime.Now:yyyy-MM-dd}.txt");
+    public static string LastLogMessage { get; private set; } = string.Empty;
+
+    public static void Log(string message, StaticData.LogSeverity severity)
     {
-        LastLogMessage = $"\n[{severity}] [{DateTime.Now}] {message}";
-        await File.AppendAllTextAsync(LogFilePath, LastLogMessage);
+        string logMessage = $"\n[{severity}] [{DateTime.Now:O}] {message}";
+        LastLogMessage = logMessage;
+        _ = WriteLogAsync(logMessage);
+    }
+
+    private static async Task WriteLogAsync(string message)
+    {
+        bool lockTaken = false;
+        try
+        {
+            DataFolders.CheckFolders();
+            await LogLock.WaitAsync().ConfigureAwait(false);
+            lockTaken = true;
+            await File.AppendAllTextAsync(LogFilePath, message).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Best-effort logging: never block or crash the app on log failures.
+        }
+        finally
+        {
+            if (lockTaken)
+                LogLock.Release();
+        }
     }
 }

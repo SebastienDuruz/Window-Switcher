@@ -31,7 +31,7 @@ public partial class RenameWindow : Window
     private void RenameButtonClick(object? sender, RoutedEventArgs e)
     {
         IsUpdated = true;
-        NewWindowTitle = WindowTitleTextBox.Text;
+        NewWindowTitle = WindowTitleTextBox.Text ?? string.Empty;
         this.Hide();
     }
 }

@@ -11,7 +11,7 @@ namespace WindowSwitcher;
 
 public partial class App : Application
 {
-    private Windows.MainWindow MainWindow { get; set; }
+    private Windows.MainWindow? MainWindow { get; set; }
     
     public override void Initialize()
     {
@@ -33,12 +33,14 @@ public partial class App : Application
 
     private void ExitMenuItemClicked(object? sender, EventArgs e)
     {
-        MainWindow.Close();
+        MainWindow?.Close();
     }
 
     private void TrayIconClicked(object? sender, EventArgs e)
     {
-        if(MainWindow.WindowState == WindowState.Minimized)
+        if (MainWindow is null)
+            return;
+        if (MainWindow.WindowState == WindowState.Minimized)
             MainWindow.WindowState = WindowState.Normal;
     }
 }
