@@ -22,6 +22,8 @@ public partial class FloatingWindow : Window
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     
     private readonly CancellationTokenSource _cts = new();
+    private readonly ImageBrush _screenshotBrush = new() { Stretch = Stretch.Fill, Opacity = 0.8 };
+    private Bitmap? _currentScreenshot;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
@@ -129,20 +131,23 @@ public partial class FloatingWindow : Window
         WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
     }
 
-    private Task UpdateScreenshot()
+    private async Task UpdateScreenshot()
     {
-        Bitmap appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
-        if (appScreenshot is not null)
-            Dispatcher.UIThread.Invoke(() =>
-            {
-                WindowCanvas.Background = new ImageBrush()
-                {
-                    Source = appScreenshot,
-                    Stretch = Stretch.Fill,
-                    Opacity = 0.8
-                };
-            });
-        return Task.CompletedTask;
+        if (WindowConfig is null)
+            return;
+
+        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
+        if (appScreenshot is null)
+            return;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Bitmap? previous = _currentScreenshot;
+            _currentScreenshot = appScreenshot;
+            _screenshotBrush.Source = appScreenshot;
+            WindowCanvas.Background = _screenshotBrush;
+            previous?.Dispose();
+        });
     }
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
@@ -162,13 +167,15 @@ public partial class FloatingWindow : Window
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+        if (WindowConfig is not null)
+            ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
         {
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
+                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
+            _currentScreenshot?.Dispose();
         }
     }
 
