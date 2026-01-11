@@ -24,6 +24,7 @@ public partial class FloatingWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private readonly ImageBrush _screenshotBrush = new() { Stretch = Stretch.Fill, Opacity = 0.8 };
     private Bitmap? _currentScreenshot;
+    private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
@@ -65,7 +66,7 @@ public partial class FloatingWindow : Window
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    await UpdateScreenshot();
+                    await UpdateScreenshot(cancellationToken);
                     int refreshTimeoutMs = configAccessor.ReadConfig(config => config.RefreshTimeoutMs);
                     await Task.Delay(refreshTimeoutMs, cancellationToken);
                 }
@@ -142,12 +143,25 @@ public partial class FloatingWindow : Window
         WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
     }
 
-    private async Task UpdateScreenshot()
+    private async Task UpdateScreenshot(CancellationToken cancellationToken)
     {
         if (WindowConfig is null)
             return;
 
-        Bitmap? appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
+        Bitmap? appScreenshot = null;
+        bool lockTaken = false;
+        try
+        {
+            await ScreenshotSemaphore.WaitAsync(cancellationToken);
+            lockTaken = true;
+            appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
+        }
+        finally
+        {
+            if (lockTaken)
+                ScreenshotSemaphore.Release();
+        }
+
         if (appScreenshot is null)
             return;
 
