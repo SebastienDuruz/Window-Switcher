@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
@@ -19,10 +18,10 @@ namespace WindowSwitcher.Windows;
 
 public partial class FloatingWindow : Window
 {
+    private const double TitleReservedHeight = 12;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     
     private readonly CancellationTokenSource _cts = new();
-    private readonly ImageBrush _screenshotBrush = new() { Stretch = Stretch.Fill, Opacity = 0.8 };
     private Bitmap? _currentScreenshot;
     private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
     public WindowConfig? WindowConfig { get; set; }
@@ -89,6 +88,8 @@ public partial class FloatingWindow : Window
             User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
         WindowLabel.Content = WindowConfig!.ShortWindowTitle;
+        PreviewBorder.BorderBrush = WindowLabel.Foreground;
+        WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to blacklist",
@@ -130,10 +131,13 @@ public partial class FloatingWindow : Window
         SystemDecorations = configSnapshot.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
+
+        UpdatePreviewLayout();
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        MainWindow.SetActivePreview(this);
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows))
             BeginMoveDrag(e);
     }
@@ -169,8 +173,7 @@ public partial class FloatingWindow : Window
         {
             Bitmap? previous = _currentScreenshot;
             _currentScreenshot = appScreenshot;
-            _screenshotBrush.Source = appScreenshot;
-            WindowCanvas.Background = _screenshotBrush;
+            WindowScreenshot.Source = appScreenshot;
             previous?.Dispose();
         });
     }
@@ -179,6 +182,7 @@ public partial class FloatingWindow : Window
     {
         WindowConfig!.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
+        UpdatePreviewLayout();
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
             ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview))
@@ -195,6 +199,7 @@ public partial class FloatingWindow : Window
     {
         if (WindowConfig is not null)
             ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+        MainWindow.ClearActivePreview(this);
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
         {
@@ -221,7 +226,7 @@ public partial class FloatingWindow : Window
             DwmFunctions.Rect dest = new()
             {
                 Left = 0,
-                Top = (int)(12 * Screens.Primary!.Scaling),
+                Top = (int)(TitleReservedHeight * Screens.Primary!.Scaling),
                 Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
                 Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
@@ -246,5 +251,45 @@ public partial class FloatingWindow : Window
     private async Task RenameWindowTitle()
     {
         await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
+    }
+
+    public void SetPreviewHighlight(bool isSelected)
+    {
+        PreviewBorder.IsVisible = isSelected;
+    }
+
+    private void UpdatePreviewLayout()
+    {
+        double topOffset = TitleReservedHeight;
+        double previewWidth = Math.Max(0, Width);
+        double previewHeight = Math.Max(0, Height - topOffset);
+        double left = 0;
+        double top = topOffset;
+
+        left = RoundToPixel(left);
+        top = RoundToPixel(top);
+        previewWidth = RoundToPixel(previewWidth);
+        previewHeight = RoundToPixel(previewHeight);
+
+        Canvas.SetLeft(PreviewBorder, left);
+        Canvas.SetTop(PreviewBorder, top);
+        PreviewBorder.Width = previewWidth;
+        PreviewBorder.Height = previewHeight;
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        Canvas.SetLeft(WindowScreenshot, left);
+        Canvas.SetTop(WindowScreenshot, top);
+        WindowScreenshot.Width = previewWidth;
+        WindowScreenshot.Height = previewHeight;
+    }
+
+    private double RoundToPixel(double value)
+    {
+        double scale = RenderScaling;
+        if (scale <= 0)
+            scale = 1;
+        return Math.Round(value * scale) / scale;
     }
 }

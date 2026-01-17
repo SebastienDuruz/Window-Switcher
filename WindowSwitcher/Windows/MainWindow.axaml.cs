@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private RenameWindow RenameWindow { get; }
     private static bool RefreshButtonEnabled { get; set; } = true;
     private List<WindowConfig> WindowConfigs { get; set; } = new();
+    private FloatingWindow? _activePreviewWindow;
     
     public MainWindow()
     {
@@ -143,6 +144,25 @@ public partial class MainWindow : Window
         if (RefreshButtonEnabled)
             if (((WindowListViewModel)DataContext!).TempWindowIdsBlacklist.All(x => x != windowId))
                 ((WindowListViewModel)DataContext).TempWindowIdsBlacklist.Add(windowId);
+    }
+
+    public void SetActivePreview(FloatingWindow floatingWindow)
+    {
+        if (_activePreviewWindow == floatingWindow)
+            return;
+
+        _activePreviewWindow?.SetPreviewHighlight(false);
+        _activePreviewWindow = floatingWindow;
+        _activePreviewWindow.SetPreviewHighlight(true);
+    }
+
+    public void ClearActivePreview(FloatingWindow floatingWindow)
+    {
+        if (_activePreviewWindow != floatingWindow)
+            return;
+
+        _activePreviewWindow.SetPreviewHighlight(false);
+        _activePreviewWindow = null;
     }
 
     /// <summary>
