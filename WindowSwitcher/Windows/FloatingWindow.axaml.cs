@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
@@ -19,10 +18,10 @@ namespace WindowSwitcher.Windows;
 
 public partial class FloatingWindow : Window
 {
+    private const double TitleReservedHeight = 12;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     
     private readonly CancellationTokenSource _cts = new();
-    private readonly ImageBrush _screenshotBrush = new() { Stretch = Stretch.Fill, Opacity = 0.8 };
     private Bitmap? _currentScreenshot;
     private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
     public WindowConfig? WindowConfig { get; set; }
@@ -130,6 +129,8 @@ public partial class FloatingWindow : Window
         SystemDecorations = configSnapshot.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
+
+        UpdateScreenshotLayout();
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -169,8 +170,7 @@ public partial class FloatingWindow : Window
         {
             Bitmap? previous = _currentScreenshot;
             _currentScreenshot = appScreenshot;
-            _screenshotBrush.Source = appScreenshot;
-            WindowCanvas.Background = _screenshotBrush;
+            WindowScreenshot.Source = appScreenshot;
             previous?.Dispose();
         });
     }
@@ -179,6 +179,7 @@ public partial class FloatingWindow : Window
     {
         WindowConfig!.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
+        UpdateScreenshotLayout();
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
             ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview))
@@ -221,7 +222,7 @@ public partial class FloatingWindow : Window
             DwmFunctions.Rect dest = new()
             {
                 Left = 0,
-                Top = (int)(12 * Screens.Primary!.Scaling),
+                Top = (int)(TitleReservedHeight * Screens.Primary!.Scaling),
                 Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
                 Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
             };
@@ -246,5 +247,17 @@ public partial class FloatingWindow : Window
     private async Task RenameWindowTitle()
     {
         await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
+    }
+
+    private void UpdateScreenshotLayout()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        double topOffset = TitleReservedHeight;
+        Canvas.SetLeft(WindowScreenshot, 0);
+        Canvas.SetTop(WindowScreenshot, topOffset);
+        WindowScreenshot.Width = Width;
+        WindowScreenshot.Height = Math.Max(0, Height - topOffset);
     }
 }

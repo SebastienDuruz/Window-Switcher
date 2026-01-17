@@ -19,10 +19,11 @@
         ExtendClientAreaChromeHints="NoChrome"
         ExtendClientAreaTitleBarHeightHint="-1"
         x:DataType="windows:MainWindow">
-        <Canvas Name="WindowCanvas" Background="Transparent" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
+        <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
                 </Canvas.ContextMenu>
+                <Image Name="WindowScreenshot" Stretch="Fill" Opacity="0.8" IsHitTestVisible="False" />
                 <Label FontSize="10" Margin="2 0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel"><TextBlock>window name</TextBlock></Label>
         </Canvas>
 </Window>
