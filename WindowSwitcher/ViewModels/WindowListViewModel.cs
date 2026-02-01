@@ -14,7 +14,7 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
-public partial class WindowListViewModel : ObservableObject
+public partial class WindowListViewModel : ObservableObject, IDisposable
 {
     private readonly CancellationTokenSource _cts = new ();
     [ObservableProperty] 
@@ -40,6 +40,14 @@ public partial class WindowListViewModel : ObservableObject
             int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_cts.IsCancellationRequested)
+            return;
+        _cts.Cancel();
+        _cts.Dispose();
     }
     
     public void FetchWindowsWithFilters()
