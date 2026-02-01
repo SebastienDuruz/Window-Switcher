@@ -3,12 +3,17 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
@@ -26,10 +31,14 @@ public partial class MainWindow : Window
     private static bool RefreshButtonEnabled { get; set; } = true;
     private FloatingWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
+    private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
     
     public MainWindow()
     {
         InitializeComponent();
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            LinuxDependencies.DependencyMissing += OnDependencyMissing;
 
         ViewModel = new WindowListViewModel(WindowAccessor);
         DataContext = ViewModel;
@@ -44,6 +53,7 @@ public partial class MainWindow : Window
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
         InitializeFloatingWindows(ViewModel.WindowsConfigs);
+        ShowPreviouslyReportedDependencies();
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
             Dispatcher.UIThread.Post(() =>
@@ -55,6 +65,8 @@ public partial class MainWindow : Window
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         PrefixesWindow.Close();
         BlacklistWindow.Close();
@@ -161,6 +173,60 @@ public partial class MainWindow : Window
         RefreshButtonEnabled = false;
         ViewModel.FetchWindowsWithFilters();
         RefreshButtonEnabled = true;
+    }
+
+    private void ShowPreviouslyReportedDependencies()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            return;
+
+        foreach (string dependency in LinuxDependencies.GetReportedMissing())
+            OnDependencyMissing(dependency);
+    }
+
+    private void OnDependencyMissing(string dependency)
+    {
+        if (StaticData.AppClosing)
+            return;
+        if (!_missingDependenciesShown.Add(dependency))
+            return;
+
+        Dispatcher.UIThread.Post(() => ShowDependencyMissingDialog(dependency));
+    }
+
+    private void ShowDependencyMissingDialog(string dependency)
+    {
+        var message = $"Missing dependency: {dependency}\nInstall it and restart the app.";
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Spacing = 10
+        };
+        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(okButton);
+
+        var dialog = new Window
+        {
+            Title = "Missing dependency",
+            CanResize = false,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel
+        };
+
+        okButton.Click += (_, _) => dialog.Close();
+
+        if (IsVisible)
+            _ = dialog.ShowDialog(this);
+        else
+            dialog.Show();
     }
 
     private void InitializeFloatingWindows(IEnumerable<WindowConfig> windows)

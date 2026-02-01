@@ -35,8 +35,16 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
-            await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+            try
+            {
+                ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
+                await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+            }
+            catch (Exception ex)
+            {
+                if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                    AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
+            }
             int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }

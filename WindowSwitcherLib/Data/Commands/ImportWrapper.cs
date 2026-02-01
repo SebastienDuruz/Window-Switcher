@@ -6,6 +6,12 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 {
     public MemoryStream? CaptureScreenshotStream(string client)
     {
+        if (!LinuxDependencies.IsImportAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("import");
+            return null;
+        }
+
         using var process = CreateProcess();
         int quality = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotQuality);
         process.StartInfo.Arguments = $"-window {client} -quality {quality} jpg:-";
