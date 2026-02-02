@@ -19,6 +19,7 @@ namespace WindowSwitcher.Windows;
 public partial class FloatingWindow : Window
 {
     private const double TitleReservedHeight = 12;
+    private const double PreviewBorderThickness = 2;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     
     private readonly CancellationTokenSource _cts = new();
@@ -223,12 +224,14 @@ public partial class FloatingWindow : Window
             ThumbnailHandle = thumbnail;
             
             DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
+            double scale = Screens.Primary!.Scaling;
+            int inset = (int)Math.Round(PreviewBorderThickness * scale);
             DwmFunctions.Rect dest = new()
             {
-                Left = 0,
-                Top = (int)(TitleReservedHeight * Screens.Primary!.Scaling),
-                Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
-                Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
+                Left = inset,
+                Top = (int)(TitleReservedHeight * scale) + inset,
+                Right = (int)(WindowConfig.WindowWidth * scale) - inset,
+                Bottom = (int)(WindowConfig.WindowHeight * scale) - inset,
             };
 
             DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
