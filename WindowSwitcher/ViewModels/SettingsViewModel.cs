@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcherLib.Data.FileAccess;
@@ -137,6 +138,36 @@ public class SettingsViewModel : ObservableObject
                 if (config.WindowHeight == value)
                     return;
                 config.WindowHeight = value;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public string PreviewHighlightColor
+    {
+        get => _configAccessor.ReadConfig(config => config.PreviewHighlightColor);
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                OnPropertyChanged();
+                return;
+            }
+
+            if (!Color.TryParse(value, out _))
+            {
+                OnPropertyChanged();
+                return;
+            }
+
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (string.Equals(config.PreviewHighlightColor, value, StringComparison.OrdinalIgnoreCase))
+                    return;
+                config.PreviewHighlightColor = value.ToUpperInvariant();
                 updated = true;
             });
             if (updated)

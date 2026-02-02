@@ -10,6 +10,7 @@ public class ConfigFile
     public bool UseFixedWindowSize { get; set; } = false;
     public int WindowWidth { get; set; } = 300;
     public int WindowHeight { get; set; } = 200;
+    public string PreviewHighlightColor { get; set; } = "#FF27C9";
     
     // Debug
     public bool ActivateWindowsPreview { get; set; } = true;

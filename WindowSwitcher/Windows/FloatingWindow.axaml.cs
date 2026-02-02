@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
@@ -89,7 +90,6 @@ public partial class FloatingWindow : Window
             User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
         WindowLabel.Content = WindowConfig!.ShortWindowTitle;
-        PreviewBorder.BorderBrush = WindowLabel.Foreground;
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
@@ -113,7 +113,8 @@ public partial class FloatingWindow : Window
             config.UseFixedWindowSize,
             config.WindowWidth,
             config.WindowHeight,
-            config.ShowWindowDecorations
+            config.ShowWindowDecorations,
+            config.PreviewHighlightColor
         });
 
         CanResize = configSnapshot.ResizeWindows;
@@ -132,6 +133,17 @@ public partial class FloatingWindow : Window
         SystemDecorations = configSnapshot.ShowWindowDecorations
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
+
+        if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
+        {
+            var highlightBrush = new SolidColorBrush(highlightColor);
+            WindowLabel.Foreground = highlightBrush;
+            PreviewBorder.BorderBrush = highlightBrush;
+        }
+        else
+        {
+            PreviewBorder.BorderBrush = WindowLabel.Foreground;
+        }
 
         UpdatePreviewLayout();
     }

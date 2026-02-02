@@ -18,6 +18,10 @@
                 <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}"></CheckBox>
                 <CheckBox Content="Window decorations" IsVisible="{Binding ShowWindowDecorationsVisible}" IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}"></CheckBox>
                 <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}"></CheckBox>
+                <StackPanel Orientation="Horizontal" Margin="5 5" Spacing="8" HorizontalAlignment="Stretch">
+                        <TextBlock Margin="0 5 10 5">Highlight color</TextBlock>
+                        <TextBox Width="130" Text="{Binding PreviewHighlightColor, Mode=TwoWay}" />
+                </StackPanel>
                 <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding UseFixedWindowSize}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Width</TextBlock>
                         <NumericUpDown Width="130" Value="{Binding WindowWidth, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />
