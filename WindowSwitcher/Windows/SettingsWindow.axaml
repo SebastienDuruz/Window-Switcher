@@ -16,7 +16,7 @@
                 <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}"></CheckBox>
                 <CheckBox Content="Resize windows" IsChecked="{Binding ResizeWindows, Mode=TwoWay}"></CheckBox>
                 <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}"></CheckBox>
-                <CheckBox Content="Window decorations" IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}"></CheckBox>
+                <CheckBox Content="Window decorations" IsVisible="{Binding ShowWindowDecorationsVisible}" IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}"></CheckBox>
                 <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}"></CheckBox>
                 <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding UseFixedWindowSize}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Width</TextBlock>

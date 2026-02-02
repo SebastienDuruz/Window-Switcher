@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcherLib.Data.FileAccess;
@@ -8,6 +9,7 @@ namespace WindowSwitcher.ViewModels;
 public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
+    public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
     public SettingsViewModel(Action applyAction)
     {
