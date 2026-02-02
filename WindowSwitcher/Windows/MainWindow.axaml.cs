@@ -48,7 +48,7 @@ public partial class MainWindow : Window
             StaticData.PrefixWindowType.whitelist, "Prefixes");
         BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.BlacklistPrefixes.ToList()),
             StaticData.PrefixWindowType.blacklist, "Blacklist");
-        SettingsWindow = new SettingsWindow();
+        SettingsWindow = new SettingsWindow(ApplySettings);
         RenameWindow = new RenameWindow();
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
@@ -296,12 +296,9 @@ public partial class MainWindow : Window
         AddToTempBlacklist((string)((MenuItem)sender!).Tag!); 
     }
 
-    public static void ApplySettings()
+    public void ApplySettings()
     {
-        StaticData.AppClosing = true;
-        foreach(FloatingWindow floatingWindow in FloatingWindows)
-            floatingWindow.Close();
-        StaticData.AppClosing = false;
-        FloatingWindows.Clear();
+        ViewModel.WindowsConfigs.Clear();
+        ViewModel.FetchWindowsWithFilters();
     }
 }
