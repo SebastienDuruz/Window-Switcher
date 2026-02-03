@@ -22,6 +22,7 @@ public partial class FloatingWindow : Window
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
+    private bool _isPointerInside;
     
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
@@ -158,6 +159,31 @@ public partial class FloatingWindow : Window
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
+    }
+
+    private void CanvasPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (_isPointerInside)
+            return;
+        _isPointerInside = true;
+
+        if (!ConfigFileAccessor.GetInstance().ReadConfig(config => config.FocusOnHover))
+            return;
+
+        if (WindowConfig is null)
+            return;
+
+        PointerPoint point = e.GetCurrentPoint(this);
+        if (point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
+            return;
+
+        MainWindow.SetActivePreview(this);
+        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
+    }
+
+    private void CanvasPointerExited(object? sender, PointerEventArgs e)
+    {
+        _isPointerInside = false;
     }
 
     private async Task UpdateScreenshot(CancellationToken cancellationToken)

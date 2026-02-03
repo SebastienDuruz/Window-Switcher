@@ -74,6 +74,24 @@ public class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool FocusOnHover
+    {
+        get => _configAccessor.ReadConfig(config => config.FocusOnHover);
+        set
+        {
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.FocusOnHover == value)
+                    return;
+                config.FocusOnHover = value;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
     public bool ShowWindowDecorations
     {
         get => _configAccessor.ReadConfig(config => config.ShowWindowDecorations);
