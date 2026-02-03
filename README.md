@@ -14,69 +14,102 @@ The primary goal is to provide an **easy and efficient way to multibox** differe
 This software **doesn't modify game clients**.
 
 ## Main features:
+
 - 🔍 **Live previews** of selected open windows
 - ⚙️ **Configurable filters** using prefixes and blacklists
 - 🖱️ **Click to focus** the window
+- 🧲 **Focus on hover** (optional)
 - 🖊️ **Rename** windows
 
 ## Compatibility
-  - ✅ **Windows** (fully supported)
-  - 🧪 **Linux** (experimental)
-  - ⏳ **MacOS** (not yet implemented)
+
+- ✅ **Windows** (fully supported)
+- 🧪 **Linux** (experimental)
+- ⏳ **macOS** (not yet implemented)
 
 ## Limitations
+
 - 🖵 **Fullscreen applications** not supported
 
+## How it works
+
+- **Windows:** uses DWM thumbnails for smooth live previews.
+- **Linux (X11):** uses periodic screenshots (requires ImageMagick `import`) and `wmctrl` to focus/rename windows.
+
 ## Roadmap
+
 - [x] Windows support
 - [x] Basic Linux support
-- [ ] Advanced customization (access settings from the application)
+- [x] Advanced customization (access settings from the application)
 - [ ] UI enhancements
 - [ ] Better support for Linux
-- [ ] MacOS implementation
+- [ ] macOS implementation
 
 ## Demo
 
 <details open>
   <summary>v0.4.0</summary>
 
-  ### Features
-  - Add a window to configure **settings**
-  - Add the ability to **rename** windows
+### Features
+
+- Add a window to configure **settings**
+- Add the ability to **rename** windows
     - keep track of different settings for clients like **World of Warcraft**
-  
-| Main window | Prefix window |
-|-----------|-----------|
+
+| Main window                                  | Prefix window                                  |
+| -------------------------------------------- | ---------------------------------------------- |
 | ![Screenshot 1](./Demo/0.4.0/mainwindow.png) | ![Screenshot 2](./Demo/0.4.0/prefixwindow.png) |
 
-| Live preview | Settings / Rename |
-|----------- |----------- |
+| Live preview                                 | Settings / Rename                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | ![Screenshot 3](./Demo/0.4.0/thumbnails.png) | ![Screenshot 4](./Demo/0.4.0/settingswindows.png) ![Screenshot 4](./Demo/0.4.0/renamewindow.png) |
 
 🎥 Example with **Eve Online**, **World of Warcraft** and **Project Gorgon** clients :
 
- [![Watch the video](https://img.youtube.com/vi/hXvS_n32jaQ/0.jpg)](https://youtu.be/hXvS_n32jaQ)
+[![Watch the video](https://img.youtube.com/vi/hXvS_n32jaQ/0.jpg)](https://youtu.be/hXvS_n32jaQ)
+
 </details>
 <details>
   <summary>v0.1.0</summary>
 
-  | Main window | Prefix window |
-  |-----------|-----------|
-  | ![Screenshot 1](./Demo/settings.png) | ![Screenshot 2](./Demo/mainwindows.png) |
+| Main window                          | Prefix window                           |
+| ------------------------------------ | --------------------------------------- |
+| ![Screenshot 1](./Demo/settings.png) | ![Screenshot 2](./Demo/mainwindows.png) |
 
-  | Live preview |
-  |----------- |
-  | ![Screenshot 3](./Demo/thumbnails.png) |
+| Live preview                           |
+| -------------------------------------- |
+| ![Screenshot 3](./Demo/thumbnails.png) |
 
-  🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
+🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
 
- 
-  [![Watch the video](https://img.youtube.com/vi/9oif2M7rryQ/0.jpg)](https://youtu.be/9oif2M7rryQ)
+[![Watch the video](https://img.youtube.com/vi/9oif2M7rryQ/0.jpg)](https://youtu.be/9oif2M7rryQ)
+
 </details>
 
 ## Installation
 
 Download the latest release [here](https://github.com/SebastienDuruz/Window-Switcher/releases)
+
+### Quick start
+
+**Windows**
+
+- Download and run the `WindowSwitcher-Setup-*.exe` installer from the releases page.
+
+**Linux**
+
+- Download the `*.AppImage` from the releases page.
+- Make it executable and run it:
+    - `chmod +x WindowSwitcher-*.AppImage`
+    - `./WindowSwitcher-*.AppImage`
+
+## Build from source
+
+From the repo root:
+
+- Build: `dotnet build Window-Switcher.sln`
+- Run: `dotnet run --project WindowSwitcher/WindowSwitcher.csproj`
+- Tester project: `dotnet run --project WindowSwitcherTester/WindowSwitcherTester.csproj`
 
 ## Build Windows installer (scripted)
 
@@ -84,32 +117,50 @@ Prerequisite: install NSIS (so `makensis.exe` is available).
 
 From the repo root:
 
-`pwsh ./scripts/build-installer.ps1 -Version 0.4.0`
+`pwsh ./scripts/build-installer.ps1 -Version 0.6.0`
 
-(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.4.0`.)
+(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.6.0`.)
 
 ## Build Linux AppImage (scripted)
 
 From the repo root:
 
-`./scripts/build-appimage.sh -v 0.4.0`
+`./scripts/build-appimage.sh -v 0.6.0`
 
-Output: `./artifacts/appimage/WindowSwitcher-0.4.0-linux-x64.AppImage`
+Output: `./artifacts/appimage/WindowSwitcher-0.6.0-linux-x64.AppImage`
 
-### Linux specific dependancies
-Make sure your system is able to use the next commands:
-- [wmctrl](https://linux.die.net/man/1/wmctrl)
-- [export](https://linuxcommand.org/lc3_man_pages/exporth.html)
+### Linux dependencies
+
+Make sure your system has:
+
+- [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows)
+- ImageMagick [`import`](https://linux.die.net/man/1/import) (screenshots for live preview)
+
+Install examples (depends on your distro):
+
+- Debian/Ubuntu: `sudo apt install wmctrl imagemagick`
+- Arch: `sudo pacman -S wmctrl imagemagick`
+- Fedora: `sudo dnf install wmctrl ImageMagick`
 
 ## Usage
+
 1. Launch Window Switcher.
 2. Configure which windows to preview:
-3. Prefix filter: Only show windows with specific names.
-4. Blacklist filter: Exclude unwanted windows.
-5. Adjust the preview size and position.
-6. Enjoy !
+    - Prefix filter: only show windows with specific names.
+    - Blacklist filter: exclude unwanted windows.
+3. Adjust the preview size and position.
+4. (Optional) Enable **Focus on hover** from the **Settings** window.
+5. Enjoy !
+
+## Configuration
+
+Settings are persisted to `config.json` under the app data folder:
+
+- Windows: `%APPDATA%\\WindowSwitcher\\config.json`
+- Linux: `~/.config/WindowSwitcher/config.json` (typically)
 
 ## License
+
 This project is licensed under the [GPL3 License](LICENSE).
 
 ## Donations
