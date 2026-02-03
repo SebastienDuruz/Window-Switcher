@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:colorPicker="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.ColorPicker"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
@@ -20,7 +21,9 @@
                 <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}"></CheckBox>
                 <StackPanel Orientation="Horizontal" Margin="5 5" Spacing="8" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Highlight color</TextBlock>
-                        <TextBox Width="130" Text="{Binding PreviewHighlightColor, Mode=TwoWay}" />
+                        <colorPicker:ColorPicker Width="60"
+                                                 Color="{Binding PreviewHighlightColor, Mode=TwoWay}"
+                                                 IsAlphaVisible="False" />
                 </StackPanel>
                 <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding UseFixedWindowSize}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Width</TextBlock>

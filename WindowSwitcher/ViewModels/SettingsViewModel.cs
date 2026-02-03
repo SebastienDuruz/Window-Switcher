@@ -145,33 +145,41 @@ public class SettingsViewModel : ObservableObject
         }
     }
 
-    public string PreviewHighlightColor
+    public Color PreviewHighlightColor
     {
-        get => _configAccessor.ReadConfig(config => config.PreviewHighlightColor);
+        get
+        {
+            string value = _configAccessor.ReadConfig(config => config.PreviewHighlightColor);
+            if (Color.TryParse(value, out Color color))
+                return color;
+
+            // Defensive fallback for corrupted config values.
+            return Colors.Magenta;
+        }
         set
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                OnPropertyChanged();
-                return;
-            }
-
-            if (!Color.TryParse(value, out _))
-            {
-                OnPropertyChanged();
-                return;
-            }
+            string configValue = ToConfigColorString(value);
 
             bool updated = false;
             _configAccessor.UpdateConfig(config =>
             {
-                if (string.Equals(config.PreviewHighlightColor, value, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(config.PreviewHighlightColor, configValue, StringComparison.OrdinalIgnoreCase))
                     return;
-                config.PreviewHighlightColor = value.ToUpperInvariant();
+                config.PreviewHighlightColor = configValue;
                 updated = true;
             });
             if (updated)
                 OnPropertyChanged();
         }
+    }
+
+    private static string ToConfigColorString(Color color)
+    {
+        // Keep a stable, human-friendly format in the config file.
+        // - #RRGGBB when fully opaque
+        // - #AARRGGBB when transparent
+        return color.A == 0xFF
+            ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
+            : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 }
