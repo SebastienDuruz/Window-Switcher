@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Window Switcher
+Comment=Live previews of selected open windows
+Exec=AppRun
+Icon=windowswitcher
+Categories=Utility;
+Terminal=false
+StartupWMClass=WindowSwitcher

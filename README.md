@@ -88,6 +88,14 @@ From the repo root:
 
 (Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.4.0`.)
 
+## Build Linux AppImage (scripted)
+
+From the repo root:
+
+`./scripts/build-appimage.sh -v 0.4.0`
+
+Output: `./artifacts/appimage/WindowSwitcher-0.4.0-linux-x64.AppImage`
+
 ### Linux specific dependancies
 Make sure your system is able to use the next commands:
 - [wmctrl](https://linux.die.net/man/1/wmctrl)
