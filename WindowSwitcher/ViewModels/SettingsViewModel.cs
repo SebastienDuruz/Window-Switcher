@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data.FileAccess;
 
 namespace WindowSwitcher.ViewModels;
@@ -169,7 +170,10 @@ public class SettingsViewModel : ObservableObject
                 updated = true;
             });
             if (updated)
+            {
+                AccentColorApplier.Apply(value);
                 OnPropertyChanged();
+            }
         }
     }
 
