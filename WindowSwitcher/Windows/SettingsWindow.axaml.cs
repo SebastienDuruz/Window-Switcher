@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data;
@@ -6,10 +7,10 @@ namespace WindowSwitcher.Windows;
 
 public partial class SettingsWindow : Window
 {
-    public SettingsWindow()
+    public SettingsWindow(Action applyAction)
     {
         InitializeComponent();
-        DataContext = new SettingsViewModel(MainWindow.ApplySettings);
+        DataContext = new SettingsViewModel(applyAction);
         Closing += OnClosing;
     }
     

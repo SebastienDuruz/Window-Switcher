@@ -12,7 +12,15 @@ public class LinuxX11WindowAccessor : WindowAccessor
     
     public override ObservableCollection<WindowConfig> GetWindows()
     {
+        if (!LinuxDependencies.IsWmctrlAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("wmctrl");
+            return new ObservableCollection<WindowConfig>();
+        }
+
         string wmctrlOutput = WmctrlWrapper.Execute(" -l");
+        if (string.IsNullOrWhiteSpace(wmctrlOutput))
+            return new ObservableCollection<WindowConfig>();
         
         ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
         string[] lines = wmctrlOutput.Split('\n');

@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
@@ -17,7 +22,6 @@ namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window
 {
-    private readonly CancellationTokenSource _cts = new ();
     private WindowAccessor WindowAccessor { get; } = WindowFactories.GetAccessor();
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
@@ -25,24 +29,31 @@ public partial class MainWindow : Window
     private SettingsWindow SettingsWindow { get; }
     private RenameWindow RenameWindow { get; }
     private static bool RefreshButtonEnabled { get; set; } = true;
-    private List<WindowConfig> WindowConfigs { get; set; } = new();
     private FloatingWindow? _activePreviewWindow;
+    private WindowListViewModel ViewModel { get; }
+    private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
     
     public MainWindow()
     {
         InitializeComponent();
 
-        DataContext = new WindowListViewModel(WindowAccessor);
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            LinuxDependencies.DependencyMissing += OnDependencyMissing;
+
+        ViewModel = new WindowListViewModel(WindowAccessor);
+        DataContext = ViewModel;
         Title = StaticData.AppName;
 
         PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.WhitelistPrefixes.ToList()),
             StaticData.PrefixWindowType.whitelist, "Prefixes");
         BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.BlacklistPrefixes.ToList()),
             StaticData.PrefixWindowType.blacklist, "Blacklist");
-        SettingsWindow = new SettingsWindow();
+        SettingsWindow = new SettingsWindow(ApplySettings);
         RenameWindow = new RenameWindow();
 
-        StartBackgroundTask();
+        ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
+        InitializeFloatingWindows(ViewModel.WindowsConfigs);
+        ShowPreviouslyReportedDependencies();
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
             Dispatcher.UIThread.Post(() =>
@@ -51,44 +62,12 @@ public partial class MainWindow : Window
             }, DispatcherPriority.Background);
     }
 
-    private void StartBackgroundTask()
-    {
-        Task.Run(async () => await RunPeriodicTask(_cts.Token));
-    }
-
-    private async Task RunPeriodicTask(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await RefreshWindowsAsync();
-            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
-            await Task.Delay(refreshTimeoutMs, cancellationToken);
-        }
-        Console.WriteLine("Refresh periodic task finished...");
-    }
-
-    private async Task RefreshWindowsAsync()
-    {
-        try
-        {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                WindowConfigs = ((WindowListViewModel)DataContext!).WindowsConfigs.ToList();
-            });
-
-            await AddFloatingWindows();
-            await ClearClosedFloatingWindows();
-        }
-        catch (Exception ex)
-        {
-            if(ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
-        }
-    }
-
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            LinuxDependencies.DependencyMissing -= OnDependencyMissing;
+        ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
@@ -96,7 +75,7 @@ public partial class MainWindow : Window
         foreach(FloatingWindow floatingWindow in FloatingWindows)
             floatingWindow.Close();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
-        _cts.Cancel();
+        ViewModel.Dispose();
         base.OnClosing(e);
     }
 
@@ -142,8 +121,8 @@ public partial class MainWindow : Window
     public void AddToTempBlacklist(string windowId)
     {
         if (RefreshButtonEnabled)
-            if (((WindowListViewModel)DataContext!).TempWindowIdsBlacklist.All(x => x != windowId))
-                ((WindowListViewModel)DataContext).TempWindowIdsBlacklist.Add(windowId);
+            if (ViewModel.TempWindowIdsBlacklist.All(x => x != windowId))
+                ViewModel.TempWindowIdsBlacklist.Add(windowId);
     }
 
     public void SetActivePreview(FloatingWindow floatingWindow)
@@ -192,39 +171,119 @@ public partial class MainWindow : Window
     private void RefreshClicked(object? sender, RoutedEventArgs e)
     {
         RefreshButtonEnabled = false;
-        ((WindowListViewModel)DataContext!).FetchWindowsWithFilters();
+        ViewModel.FetchWindowsWithFilters();
         RefreshButtonEnabled = true;
     }
 
-    private async Task AddFloatingWindows()
+    private void ShowPreviouslyReportedDependencies()
     {
-        // Show the managed windows on the ui
-        foreach (WindowConfig window in WindowConfigs)
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            return;
+
+        foreach (string dependency in LinuxDependencies.GetReportedMissing())
+            OnDependencyMissing(dependency);
+    }
+
+    private void OnDependencyMissing(string dependency)
+    {
+        if (StaticData.AppClosing)
+            return;
+        if (!_missingDependenciesShown.Add(dependency))
+            return;
+
+        Dispatcher.UIThread.Post(() => ShowDependencyMissingDialog(dependency));
+    }
+
+    private void ShowDependencyMissingDialog(string dependency)
+    {
+        var message = $"Missing dependency: {dependency}\nInstall it and restart the app.";
+
+        var okButton = new Button
+        {
+            Content = "OK",
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(12),
+            Spacing = 10
+        };
+        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(okButton);
+
+        var dialog = new Window
+        {
+            Title = "Missing dependency",
+            CanResize = false,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel
+        };
+
+        okButton.Click += (_, _) => dialog.Close();
+
+        if (IsVisible)
+            _ = dialog.ShowDialog(this);
+        else
+            dialog.Show();
+    }
+
+    private void InitializeFloatingWindows(IEnumerable<WindowConfig> windows)
+    {
+        foreach (WindowConfig window in windows)
         {
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
-                });
+                FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
         }
     }
 
-    private async Task ClearClosedFloatingWindows()
+    private void WindowsConfigsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        IEnumerable<FloatingWindow> windowsToRemove =
-            FloatingWindows.Where(x => WindowConfigs.All(c => c.WindowId != x.WindowConfig!.WindowId)).ToList();
-
-        foreach (FloatingWindow window in windowsToRemove)
+        if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            // TODO : Find a more elegant solution for closing the floating window
-            StaticData.AppClosing = true;
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            CloseAllFloatingWindows();
+            InitializeFloatingWindows(ViewModel.WindowsConfigs);
+            return;
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
-                window.Close();
-            });
-            StaticData.AppClosing = false;
+                if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (WindowConfig window in e.OldItems.OfType<WindowConfig>())
+                CloseFloatingWindow(window.WindowId);
+        }
+    }
+
+    private void CloseAllFloatingWindows()
+    {
+        StaticData.AppClosing = true;
+        foreach (FloatingWindow window in FloatingWindows.ToList())
+        {
+            window.Close();
             FloatingWindows.Remove(window);
         }
+        StaticData.AppClosing = false;
+    }
+
+    private void CloseFloatingWindow(string windowId)
+    {
+        FloatingWindow? window = FloatingWindows.FirstOrDefault(x => x.WindowConfig?.WindowId == windowId);
+        if (window is null)
+            return;
+
+        StaticData.AppClosing = true;
+        window.Close();
+        StaticData.AppClosing = false;
+        FloatingWindows.Remove(window);
     }
 
     private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
@@ -237,12 +296,9 @@ public partial class MainWindow : Window
         AddToTempBlacklist((string)((MenuItem)sender!).Tag!); 
     }
 
-    public static void ApplySettings()
+    public void ApplySettings()
     {
-        StaticData.AppClosing = true;
-        foreach(FloatingWindow floatingWindow in FloatingWindows)
-            floatingWindow.Close();
-        StaticData.AppClosing = false;
-        FloatingWindows.Clear();
+        ViewModel.WindowsConfigs.Clear();
+        ViewModel.FetchWindowsWithFilters();
     }
 }

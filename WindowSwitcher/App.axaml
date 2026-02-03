@@ -14,8 +14,10 @@
                  </TrayIcon.Menu>
              </TrayIcon>
          </TrayIcons>
-     </TrayIcon.Icons>
+    </TrayIcon.Icons>
     <Application.Styles>
         <FluentTheme />
+        <!-- Avalonia.Controls.ColorPicker styles are not part of FluentTheme by default. -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     </Application.Styles>
 </Application>

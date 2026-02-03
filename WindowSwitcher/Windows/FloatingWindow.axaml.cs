@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
@@ -19,7 +20,9 @@ namespace WindowSwitcher.Windows;
 public partial class FloatingWindow : Window
 {
     private const double TitleReservedHeight = 12;
+    private const double PreviewBorderThickness = 2;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
+    private bool _isPointerInside;
     
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
@@ -88,7 +91,6 @@ public partial class FloatingWindow : Window
             User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
         WindowLabel.Content = WindowConfig!.ShortWindowTitle;
-        PreviewBorder.BorderBrush = WindowLabel.Foreground;
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
@@ -112,7 +114,8 @@ public partial class FloatingWindow : Window
             config.UseFixedWindowSize,
             config.WindowWidth,
             config.WindowHeight,
-            config.ShowWindowDecorations
+            config.ShowWindowDecorations,
+            config.PreviewHighlightColor
         });
 
         CanResize = configSnapshot.ResizeWindows;
@@ -132,6 +135,17 @@ public partial class FloatingWindow : Window
             ? SystemDecorations.Full
             : SystemDecorations.BorderOnly;
 
+        if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
+        {
+            var highlightBrush = new SolidColorBrush(highlightColor);
+            WindowLabel.Foreground = highlightBrush;
+            PreviewBorder.BorderBrush = highlightBrush;
+        }
+        else
+        {
+            PreviewBorder.BorderBrush = WindowLabel.Foreground;
+        }
+
         UpdatePreviewLayout();
     }
 
@@ -145,6 +159,31 @@ public partial class FloatingWindow : Window
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
+    }
+
+    private void CanvasPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (_isPointerInside)
+            return;
+        _isPointerInside = true;
+
+        if (!ConfigFileAccessor.GetInstance().ReadConfig(config => config.FocusOnHover))
+            return;
+
+        if (WindowConfig is null)
+            return;
+
+        PointerPoint point = e.GetCurrentPoint(this);
+        if (point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
+            return;
+
+        MainWindow.SetActivePreview(this);
+        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
+    }
+
+    private void CanvasPointerExited(object? sender, PointerEventArgs e)
+    {
+        _isPointerInside = false;
     }
 
     private async Task UpdateScreenshot(CancellationToken cancellationToken)
@@ -223,12 +262,14 @@ public partial class FloatingWindow : Window
             ThumbnailHandle = thumbnail;
             
             DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
+            double scale = Screens.Primary!.Scaling;
+            int inset = (int)Math.Round(PreviewBorderThickness * scale);
             DwmFunctions.Rect dest = new()
             {
-                Left = 0,
-                Top = (int)(TitleReservedHeight * Screens.Primary!.Scaling),
-                Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
-                Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
+                Left = inset,
+                Top = (int)(TitleReservedHeight * scale) + inset,
+                Right = (int)(WindowConfig.WindowWidth * scale) - inset,
+                Bottom = (int)(WindowConfig.WindowHeight * scale) - inset,
             };
 
             DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();

@@ -14,7 +14,7 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
-public partial class WindowListViewModel : ObservableObject
+public partial class WindowListViewModel : ObservableObject, IDisposable
 {
     private readonly CancellationTokenSource _cts = new ();
     [ObservableProperty] 
@@ -35,11 +35,27 @@ public partial class WindowListViewModel : ObservableObject
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
-            await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+            try
+            {
+                ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
+                await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+            }
+            catch (Exception ex)
+            {
+                if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                    AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
+            }
             int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_cts.IsCancellationRequested)
+            return;
+        _cts.Cancel();
+        _cts.Dispose();
     }
     
     public void FetchWindowsWithFilters()

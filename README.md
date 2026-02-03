@@ -78,6 +78,24 @@ This software **doesn't modify game clients**.
 
 Download the latest release [here](https://github.com/SebastienDuruz/Window-Switcher/releases)
 
+## Build Windows installer (scripted)
+
+Prerequisite: install NSIS (so `makensis.exe` is available).
+
+From the repo root:
+
+`pwsh ./scripts/build-installer.ps1 -Version 0.4.0`
+
+(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.4.0`.)
+
+## Build Linux AppImage (scripted)
+
+From the repo root:
+
+`./scripts/build-appimage.sh -v 0.4.0`
+
+Output: `./artifacts/appimage/WindowSwitcher-0.4.0-linux-x64.AppImage`
+
 ### Linux specific dependancies
 Make sure your system is able to use the next commands:
 - [wmctrl](https://linux.die.net/man/1/wmctrl)

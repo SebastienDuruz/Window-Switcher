@@ -8,8 +8,10 @@ public class ConfigFile
     public bool StartMinimized { get; set; } = false;
     public bool ShowWindowDecorations { get; set; } = false;
     public bool UseFixedWindowSize { get; set; } = false;
+    public bool FocusOnHover { get; set; } = false;
     public int WindowWidth { get; set; } = 300;
     public int WindowHeight { get; set; } = 200;
+    public string PreviewHighlightColor { get; set; } = "#E3008C";
     
     // Debug
     public bool ActivateWindowsPreview { get; set; } = true;
