@@ -1,21 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Avalonia" Version="11.2.4" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-      <PackageReference Include="System.Drawing.Common" Version="9.0.2" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Reference Include="Avalonia.Controls">
-        <HintPath>..\WindowSwitcher\bin\Debug\net9.0\Avalonia.Controls.dll</HintPath>
-      </Reference>
+      <PackageReference Include="Avalonia" Version="11.3.10" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+      <PackageReference Include="System.Drawing.Common" Version="10.0.1" />
     </ItemGroup>
 
 </Project>

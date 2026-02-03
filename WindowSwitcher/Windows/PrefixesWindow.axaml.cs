@@ -1,14 +1,14 @@
+using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows;
 using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.WindowAccess.CustomWindows;
 
-namespace WindowSwitcher;
+namespace WindowSwitcher.Windows;
 
 public partial class PrefixesWindow : EditListWindow
 {
@@ -30,15 +30,18 @@ public partial class PrefixesWindow : EditListWindow
 
     private void AddPrefixClick(object? sender, RoutedEventArgs e)
     {
-        PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
-        if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
+        if (!String.IsNullOrWhiteSpace(PrefixTextBox.Text))
         {
-            ListToEdit.Add(PrefixTextBox.Text);
-            ConfigFileAccessor.GetInstance().WriteUserSettings();
-            AddPrefixToList(PrefixTextBox.Text);
-            PrefixTextBox.Text = "";
+            PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
+            if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
+            {
+                ListToEdit.Add(PrefixTextBox.Text);
+                ConfigFileAccessor.GetInstance().WriteUserSettings();
+                AddPrefixToList(PrefixTextBox.Text);
+                PrefixTextBox.Text = "";
             
-            SavePrefixList();
+                SavePrefixList();
+            }
         }
     }
 

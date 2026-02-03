@@ -3,24 +3,29 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
-        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
+        xmlns:windows="clr-namespace:WindowSwitcher.Windows"
         Icon="/Assets/WS_logo.ico"
         ShowInTaskbar="False"
         ShowActivated="False"
         mc:Ignorable="d"
-        x:Class="WindowSwitcher.FloatingWindow"
-        Title="FloatingWindow"
+        x:Class="WindowSwitcher.Windows.FloatingWindow"
+        Title=""
         Topmost="True"
         CanResize="True"
         Resized="FloatingWindowResized"
         PointerReleased="WindowPointerReleased"
         Closing="FloatingWindowClosing"
-        SystemDecorations="Full"
-        x:DataType="windowSwitcher:MainWindow">
-        <Canvas Name="WindowCanvas" Background="Transparent" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        x:DataType="windows:MainWindow">
+        <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
                 </Canvas.ContextMenu>
-                <Label FontSize="10" Margin="0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel">window name</Label>
+                <Image Name="WindowScreenshot" Stretch="Fill" Opacity="0.8" IsHitTestVisible="False" />
+                <Border Name="PreviewBorder" BorderThickness="2" Background="Transparent"
+                        IsVisible="False" IsHitTestVisible="False" />
+                <Label FontSize="10" Margin="2 0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel"><TextBlock>window name</TextBlock></Label>
         </Canvas>
 </Window>

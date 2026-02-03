@@ -23,4 +23,11 @@ public abstract class WindowAccessor
     /// </summary>
     /// <param name="window">The window to screenshot</param>
     public abstract Bitmap? TakeScreenshot(string windowId);
+
+    /// <summary>
+    /// Rename a window title
+    /// </summary>
+    /// <param name="windowId">The window id to rename</param>
+    /// <param name="windowTitle">The new window title</param>
+    public abstract void RenameWindowTitle(string windowId, string windowTitle);
 }

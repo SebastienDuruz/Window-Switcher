@@ -21,7 +21,7 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
+        "MsmKey" = "8:_B70ABEBBB6F546358112B4EF064CA804"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -82,6 +82,14 @@
             "PrerequisitesLocation" = "2:1"
             "Url" = "8:"
             "ComponentsUrl" = "8:"
+                "Items"
+                {
+                    "{EDC2488A-8267-493A-A98E-7D9C3B36CDF3}:.NETFramework,Version=v4.7.2"
+                    {
+                    "Name" = "8:Microsoft .NET Framework 4.7.2 (x86 and x64)"
+                    "ProductCode" = "8:.NETFramework,Version=v4.7.2"
+                    }
+                }
             }
         }
     }
@@ -124,7 +132,7 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_ABF25E51504D40BEA75EE58CA5E7C230"
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_B70ABEBBB6F546358112B4EF064CA804"
             {
             "SourcePath" = "8:..\\WindowSwitcher\\bin\\Release\\net9.0\\win-x64\\publish\\WindowSwitcher.exe"
             "TargetName" = "8:WindowSwitcher.exe"
@@ -200,22 +208,22 @@
         {
         "Name" = "8:Microsoft Visual Studio"
         "ProductName" = "8:WindowSwitcher"
-        "ProductCode" = "8:{D9D57FAB-D64B-404D-A75F-4C7F5964ABF3}"
-        "PackageCode" = "8:{C869A2C4-56B5-4133-B6AD-E98B9E7B4A6E}"
+        "ProductCode" = "8:{1BC2085E-F773-4555-8CED-9B987A447EC7}"
+        "PackageCode" = "8:{3C36653E-DD4D-47F4-B857-B9958503CC5A}"
         "UpgradeCode" = "8:{B54B61FB-4AB7-47E9-BDA7-09400E60AEDB}"
         "AspNetVersion" = "8:4.0.30319.0"
         "RestartWWWService" = "11:FALSE"
         "RemovePreviousVersions" = "11:TRUE"
         "DetectNewerInstalledVersion" = "11:TRUE"
         "InstallAllUsers" = "11:FALSE"
-        "ProductVersion" = "8:0.2.0"
+        "ProductVersion" = "8:0.5.0"
         "Manufacturer" = "8:Sébastien Duruz"
         "ARPHELPTELEPHONE" = "8:"
         "ARPHELPLINK" = "8:https://github.com/SebastienDuruz"
-        "Title" = "8:Window Switcher v0.2.0"
+        "Title" = "8:Window Switcher v0.5.0"
         "Subject" = "8:Application"
         "ARPCONTACT" = "8:Sébastien Duruz"
-        "Keywords" = "8:"
+        "Keywords" = "8:window switcher"
         "ARPCOMMENTS" = "8:Visual window switcher for all kinds of applications."
         "ARPURLINFOABOUT" = "8:https://github.com/SebastienDuruz"
         "ARPPRODUCTICON" = "8:_8344357ADCE24B3BAEB9493BF725947A"
@@ -321,7 +329,7 @@
         }
         "Shortcut"
         {
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_CC1B473F2CDD4E7488241D760DA4D1C6"
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_3B4A02B51DC34E7FA0A67CA420C56594"
             {
             "Name" = "8:WindowSwitcher"
             "Arguments" = "8:"
@@ -329,13 +337,13 @@
             "ShowCmd" = "3:1"
             "IconIndex" = "3:0"
             "Transitive" = "11:FALSE"
-            "Target" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
-            "Folder" = "8:_EF78E43BA0FB4827ADFD2370F35FE147"
+            "Target" = "8:_B70ABEBBB6F546358112B4EF064CA804"
+            "Folder" = "8:_9DF1FA6272B642408D5F6F5593FBE276"
             "WorkingFolder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Icon" = "8:_8344357ADCE24B3BAEB9493BF725947A"
             "Feature" = "8:"
             }
-            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_FCCED077F0D243AFA15973EA599791E9"
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_743A19D5A99747E49BCD485F3E90E994"
             {
             "Name" = "8:WindowSwitcher"
             "Arguments" = "8:"
@@ -343,8 +351,8 @@
             "ShowCmd" = "3:1"
             "IconIndex" = "3:0"
             "Transitive" = "11:FALSE"
-            "Target" = "8:_ABF25E51504D40BEA75EE58CA5E7C230"
-            "Folder" = "8:_9DF1FA6272B642408D5F6F5593FBE276"
+            "Target" = "8:_B70ABEBBB6F546358112B4EF064CA804"
+            "Folder" = "8:_EF78E43BA0FB4827ADFD2370F35FE147"
             "WorkingFolder" = "8:_2A925DAA197A4B77B5363EB82113D43F"
             "Icon" = "8:_8344357ADCE24B3BAEB9493BF725947A"
             "Feature" = "8:"

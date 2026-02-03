@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace WindowSwitcherLib.Data.Interop;
 
-public static class Win32DwmFunctions
+public static class DwmFunctions
 {
     public const int DWM_TNP_RECTDESTINATION = 0x00000001;
     public const int DWM_TNP_OPACITY = 0x00000004;

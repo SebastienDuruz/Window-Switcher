@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "WindowSwitcherWinSetup", "WindowSwitcherWinSetup.vdproj", "{03CD3F62-E62E-7158-8BD0-29BD703E27A1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Default = Debug|Default
+		Release|Default = Release|Default
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{03CD3F62-E62E-7158-8BD0-29BD703E27A1}.Debug|Default.ActiveCfg = Debug
+		{03CD3F62-E62E-7158-8BD0-29BD703E27A1}.Debug|Default.Build.0 = Debug
+		{03CD3F62-E62E-7158-8BD0-29BD703E27A1}.Release|Default.ActiveCfg = Release
+		{03CD3F62-E62E-7158-8BD0-29BD703E27A1}.Release|Default.Build.0 = Release
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4A2FEE4E-266B-4DEA-9D5A-F515D457B101}
+	EndGlobalSection
+EndGlobal

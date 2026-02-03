@@ -1,20 +1,16 @@
 using System.Diagnostics;
 
-namespace WindowSwitcherLib.WindowAccess;
+namespace WindowSwitcherLib.Data.Commands;
 
-public class WmctrlWrapper : ICommandWrapper
+public class WmctrlWrapper() : CommandBase("wmctrl"), ICommandWrapper
 {
     public string Execute(string args)
     {
         if(!IsWmctrlInstalled()) 
             throw new ApplicationException("Wmctrl is not installed.");
-        
-        using Process process = new Process();
-        process.StartInfo.FileName = "wmctrl";
+
+        using Process process = CreateProcess();
         process.StartInfo.Arguments = args;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.CreateNoWindow = true;
 
         process.Start();
         string output = process.StandardOutput.ReadToEnd();
@@ -25,7 +21,7 @@ public class WmctrlWrapper : ICommandWrapper
 
     private bool IsWmctrlInstalled()
     {
-        Process process = new Process
+        using Process process = new Process
         {
             StartInfo = new ProcessStartInfo
             {

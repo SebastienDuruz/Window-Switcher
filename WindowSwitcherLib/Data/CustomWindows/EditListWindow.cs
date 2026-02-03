@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using WindowSwitcherLib.WindowAccess;
 
 namespace WindowSwitcherLib.Data.CustomWindows;
 
