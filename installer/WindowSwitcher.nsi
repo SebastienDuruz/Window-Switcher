@@ -6,9 +6,10 @@
 !define APP_NAME "Window Switcher"
 !define APP_PUBLISHER "Window Switcher"
 !define APP_EXE "WindowSwitcher.exe"
+!define APP_ICON_REL "Assets\\WS_logo.ico"
 
 !ifndef APP_VERSION
-!define APP_VERSION "0.0.0"
+!define APP_VERSION "0.6.0"
 !endif
 
 !ifndef PUBLISH_DIR
@@ -50,8 +51,8 @@ Section "Install" SecInstall
 
   ; Shortcuts
   CreateDirectory "$SMPROGRAMS\\${APP_NAME}"
-  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\WS_logo.ico"
-  CreateShortCut "$DESKTOP\\${APP_NAME}.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\WS_logo.ico"
+  CreateShortCut "$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\${APP_ICON_REL}"
+  CreateShortCut "$DESKTOP\\${APP_NAME}.lnk" "$INSTDIR\\${APP_EXE}" "" "$INSTDIR\\${APP_ICON_REL}"
 
   ; Uninstall registration
   WriteUninstaller "$INSTDIR\\Uninstall.exe"
@@ -59,7 +60,7 @@ Section "Install" SecInstall
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "Publisher" "${APP_PUBLISHER}"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\WS_logo.ico"
+  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "DisplayIcon" "$INSTDIR\\${APP_ICON_REL}"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "UninstallString" "$\"$INSTDIR\\Uninstall.exe$\""
   WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoModify" 1
   WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${APP_NAME}" "NoRepair" 1

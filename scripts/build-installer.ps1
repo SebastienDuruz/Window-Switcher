@@ -1,7 +1,7 @@
 param(
     [string] $Configuration = "Release",
     [string] $Runtime = "win-x64",
-    [string] $Version = "0.0.0",
+    [string] $Version = "0.6.0",
     [switch] $SelfContained,
     [string] $PublishDir = (Join-Path $PSScriptRoot "..\\artifacts\\publish\\$Runtime"),
     [string] $OutDir = (Join-Path $PSScriptRoot "..\\artifacts\\installer")
@@ -28,7 +28,8 @@ $publishArgs = @(
 if ($SelfContained) {
     $publishArgs += "--self-contained"
     $publishArgs += "true"
-} else {
+}
+else {
     $publishArgs += "--self-contained"
     $publishArgs += "false"
 }
