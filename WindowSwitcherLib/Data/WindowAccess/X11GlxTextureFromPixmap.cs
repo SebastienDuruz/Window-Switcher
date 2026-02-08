@@ -5,6 +5,9 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 
 public sealed class X11GlxTextureFromPixmap : IDisposable
 {
+    private static readonly Lazy<(glXBindTexImageEXTDelegate? Bind, glXReleaseTexImageEXTDelegate? Release)> CachedTextureFromPixmap =
+        new(LoadTextureFromPixmapDelegates, isThreadSafe: true);
+
     private readonly string _windowId;
     private IntPtr _display;
     private IntPtr _pixmap;
@@ -34,16 +37,15 @@ public sealed class X11GlxTextureFromPixmap : IDisposable
             return false;
         }
 
-        IntPtr bindPtr = glXGetProcAddress("glXBindTexImageEXT");
-        IntPtr releasePtr = glXGetProcAddress("glXReleaseTexImageEXT");
-        if (bindPtr == IntPtr.Zero || releasePtr == IntPtr.Zero)
+        var cached = CachedTextureFromPixmap.Value;
+        if (cached.Bind is null || cached.Release is null)
         {
             error = "Missing GLX_EXT_texture_from_pixmap entry points.";
             return false;
         }
 
-        _bindTexImage = Marshal.GetDelegateForFunctionPointer<glXBindTexImageEXTDelegate>(bindPtr);
-        _releaseTexImage = Marshal.GetDelegateForFunctionPointer<glXReleaseTexImageEXTDelegate>(releasePtr);
+        _bindTexImage = cached.Bind;
+        _releaseTexImage = cached.Release;
 
         _display = currentDisplay;
         int screen = XDefaultScreen(_display);
@@ -82,6 +84,25 @@ public sealed class X11GlxTextureFromPixmap : IDisposable
 
         _initialized = true;
         return true;
+    }
+
+    private static (glXBindTexImageEXTDelegate? Bind, glXReleaseTexImageEXTDelegate? Release) LoadTextureFromPixmapDelegates()
+    {
+        try
+        {
+            IntPtr bindPtr = glXGetProcAddress("glXBindTexImageEXT");
+            IntPtr releasePtr = glXGetProcAddress("glXReleaseTexImageEXT");
+            if (bindPtr == IntPtr.Zero || releasePtr == IntPtr.Zero)
+                return (null, null);
+
+            var bind = Marshal.GetDelegateForFunctionPointer<glXBindTexImageEXTDelegate>(bindPtr);
+            var release = Marshal.GetDelegateForFunctionPointer<glXReleaseTexImageEXTDelegate>(releasePtr);
+            return (bind, release);
+        }
+        catch
+        {
+            return (null, null);
+        }
     }
 
     private bool TryCreateGlxPixmap(int screen, bool bindRgba, out string? error)

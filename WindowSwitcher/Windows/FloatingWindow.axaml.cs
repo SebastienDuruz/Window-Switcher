@@ -28,7 +28,6 @@ public partial class FloatingWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
     private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
-    private bool _useX11OpenGlStream;
     private bool _useWaylandPortalPreview;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
@@ -71,34 +70,14 @@ public partial class FloatingWindow : Window
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    bool streamActive = false;
-                    if (_useX11OpenGlStream)
+                    if (_useWaylandPortalPreview)
                     {
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            WindowStream.RequestFrame();
-                            streamActive = WindowStream.StreamingActive;
-                            WindowScreenshot.IsVisible = !streamActive;
-                            if (streamActive && _currentScreenshot is not null)
-                            {
-                                _currentScreenshot.Dispose();
-                                _currentScreenshot = null;
-                                WindowScreenshot.Source = null;
-                            }
-                        });
-                    }
-
-                    if (!_useX11OpenGlStream || !streamActive)
-                    {
-                        if (_useWaylandPortalPreview)
-                        {
-                            bool updated = await UpdateWaylandPortalPreview(cancellationToken);
-                            if (!updated)
-                                await UpdateScreenshot(cancellationToken);
-                        }
-                        else
+                        bool updated = await UpdateWaylandPortalPreview(cancellationToken);
+                        if (!updated)
                             await UpdateScreenshot(cancellationToken);
                     }
+                    else
+                        await UpdateScreenshot(cancellationToken);
 
                     int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
                     await Task.Delay(refreshTimeoutMs, cancellationToken);
@@ -126,20 +105,10 @@ public partial class FloatingWindow : Window
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
             && string.Equals(TryGetPlatformHandle()?.HandleDescriptor, "XID", StringComparison.OrdinalIgnoreCase);
 
-        _useX11OpenGlStream =
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-            && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            && isAvaloniaX11
-            && LinuxX11OpenGlStreamingSupport.IsSupported();
-
         _useWaylandPortalPreview =
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
             && !isAvaloniaX11;
 
-        if (_useX11OpenGlStream)
-            WindowStream.WindowId = WindowConfig.WindowId;
-
-        WindowStream.IsVisible = _useX11OpenGlStream;
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
@@ -295,7 +264,6 @@ public partial class FloatingWindow : Window
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
                 DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
             _currentScreenshot?.Dispose();
-            WindowStream.WindowId = null;
         }
     }
 
@@ -374,11 +342,6 @@ public partial class FloatingWindow : Window
         Canvas.SetTop(WindowScreenshot, top);
         WindowScreenshot.Width = previewWidth;
         WindowScreenshot.Height = previewHeight;
-
-        Canvas.SetLeft(WindowStream, left);
-        Canvas.SetTop(WindowStream, top);
-        WindowStream.Width = previewWidth;
-        WindowStream.Height = previewHeight;
     }
 
     private double RoundToPixel(double value)

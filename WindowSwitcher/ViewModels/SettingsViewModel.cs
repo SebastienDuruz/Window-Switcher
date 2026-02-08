@@ -16,17 +16,10 @@ public class SettingsViewModel : ObservableObject
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-    public bool LinuxOpenGlPreviewActive => LinuxScreenshotSettingsVisible && IsAvaloniaX11() && LinuxX11OpenGlStreamingSupport.IsSupported();
-    public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible && !LinuxOpenGlPreviewActive;
+    public bool LinuxOpenGlPreviewActive => false;
+    public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible;
 
-    private static bool IsAvaloniaX11()
-    {
-        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
-            return false;
-
-        string? descriptor = desktop.MainWindow?.TryGetPlatformHandle()?.HandleDescriptor;
-        return string.Equals(descriptor, "XID", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsAvaloniaX11() => false;
 
     public SettingsViewModel(Action applyAction)
     {

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia.Skia;
 using Avalonia.X11;
+using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcher;
 
@@ -29,16 +30,20 @@ static class Program
     public static AppBuilder BuildAvaloniaApp()
     {
         var builder = AppBuilder.Configure<App>()
-            .UseSkia()
-            .UsePlatformDetect();
+            .UseSkia();
 
-        // Configure X11 options even when using platform-detect; they apply only when the X11 backend is selected.
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        // DWM-like Linux capture requires X11/XWayland (GLX + XComposite). Prefer X11 when available.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && LinuxX11Availability.IsAvailable())
         {
-            builder = builder.With(new X11PlatformOptions
-            {
-                RenderingMode = [X11RenderingMode.Glx, X11RenderingMode.Software]
-            });
+            builder = builder.UseX11()
+                .With(new X11PlatformOptions
+                {
+                    RenderingMode = [X11RenderingMode.Software]
+                });
+        }
+        else
+        {
+            builder = builder.UsePlatformDetect();
         }
 
         return builder

@@ -164,8 +164,6 @@ public sealed class X11WindowStreamControl : OpenGlControlBase
             return;
         if (string.IsNullOrWhiteSpace(WindowId))
             return;
-        if (!LinuxX11OpenGlStreamingSupport.IsSupported())
-            return;
 
         _pixmapSource ??= new X11GlxTextureFromPixmap(WindowId);
         if (!_pixmapSource.TryInitializeForCurrentContext(out string? initError))
