@@ -22,7 +22,8 @@ public partial class FloatingWindow : Window
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
-    private bool _isPointerInside;
+    private volatile bool _isPointerInside;
+    private volatile bool _isActivePreview;
     
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
@@ -30,6 +31,9 @@ public partial class FloatingWindow : Window
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
+
+    private int _targetScreenshotWidthPx;
+    private int _targetScreenshotHeightPx;
     
     public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor, MainWindow mainWindow)
     {
@@ -66,12 +70,33 @@ public partial class FloatingWindow : Window
             }
             else // Screenshot
             {
+                // Spread initial captures across floating windows to reduce spikes on Linux.
+                await Task.Delay(Random.Shared.Next(0, 400), cancellationToken);
+
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    await UpdateScreenshot(cancellationToken);
+                    try
+                    {
+                        int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
+                        refreshTimeoutMs = Math.Clamp(refreshTimeoutMs, 100, 10_000);
 
-                    int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
-                    await Task.Delay(refreshTimeoutMs, cancellationToken);
+                        // Optimization: do not refresh the *active* preview window (usually the foreground app).
+                        if (!_isActivePreview)
+                            await UpdateScreenshot(cancellationToken);
+
+                        await Task.Delay(refreshTimeoutMs, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // Shutdown path.
+                    }
+                    catch (Exception ex)
+                    {
+                        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                            AppLogger.Log($"Preview screenshot loop failed: {ex.Message}", StaticData.LogSeverity.WARN);
+
+                        await Task.Delay(500, cancellationToken);
+                    }
                 }
             }
         }
@@ -197,9 +222,19 @@ public partial class FloatingWindow : Window
         bool lockTaken = false;
         try
         {
-            await ScreenshotSemaphore.WaitAsync(cancellationToken);
+            await ScreenshotSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockTaken = true;
-            appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
+
+            int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
+            int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
+            var request = new ScreenshotRequest(
+                MaxWidthPx: widthPx > 0 ? widthPx : null,
+                MaxHeightPx: heightPx > 0 ? heightPx : null,
+                TimeoutMs: 1500);
+
+            appScreenshot = await WindowAccessor
+                .TakeScreenshotAsync(WindowConfig.WindowId, request, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -298,7 +333,10 @@ public partial class FloatingWindow : Window
 
     public void SetPreviewHighlight(bool isSelected)
     {
+        _isActivePreview = isSelected;
         PreviewBorder.IsVisible = isSelected;
+        if (!isSelected && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            _ = UpdateScreenshot(_cts.Token);
     }
 
     private void UpdatePreviewLayout()
@@ -326,6 +364,14 @@ public partial class FloatingWindow : Window
         Canvas.SetTop(WindowScreenshot, top);
         WindowScreenshot.Width = previewWidth;
         WindowScreenshot.Height = previewHeight;
+
+        double scale = RenderScaling;
+        if (scale <= 0)
+            scale = 1;
+        int widthPx = (int)Math.Clamp(Math.Round(previewWidth * scale), 1, 8192);
+        int heightPx = (int)Math.Clamp(Math.Round(previewHeight * scale), 1, 8192);
+        Volatile.Write(ref _targetScreenshotWidthPx, widthPx);
+        Volatile.Write(ref _targetScreenshotHeightPx, heightPx);
     }
 
     private double RoundToPixel(double value)

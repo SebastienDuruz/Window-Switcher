@@ -1,7 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
@@ -57,20 +61,53 @@ public class LinuxX11WindowAccessor : WindowAccessor
 
     public override Bitmap? TakeScreenshot(string windowId)
     {
+        return TakeScreenshot(windowId, new ScreenshotRequest());
+    }
+
+    public override Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request)
+    {
         try
         {
-            using var stream = ImportWrapper.CaptureScreenshotStream(windowId);
+            using var stream = ImportWrapper.CaptureScreenshotStream(windowId, request);
             if (stream is null)
                 return null;
 
             return new Bitmap(stream);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Todo : Log
+            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                AppLogger.Log($"Linux screenshot failed: {ex.Message}", StaticData.LogSeverity.WARN);
+            return null;
         }
+    }
 
-        return null;
+    public override async Task<Bitmap?> TakeScreenshotAsync(
+        string windowId,
+        ScreenshotRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var stream = await ImportWrapper
+                .CaptureScreenshotStreamAsync(windowId, request, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (stream is null)
+                return null;
+
+            return new Bitmap(stream);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                AppLogger.Log($"Linux screenshot failed: {ex.Message}", StaticData.LogSeverity.WARN);
+            return null;
+        }
     }
 
     public override void RenameWindowTitle(string windowId, string windowTitle)
