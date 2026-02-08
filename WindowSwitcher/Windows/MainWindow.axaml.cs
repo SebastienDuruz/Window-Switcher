@@ -23,6 +23,7 @@ namespace WindowSwitcher.Windows;
 public partial class MainWindow : Window
 {
     private WindowAccessor WindowAccessor { get; } = WindowFactories.GetAccessor();
+    private ScreenshotQueue ScreenshotQueue { get; }
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
@@ -40,6 +41,8 @@ public partial class MainWindow : Window
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
+
+        ScreenshotQueue = new ScreenshotQueue(WindowAccessor);
 
         ViewModel = new WindowListViewModel(WindowAccessor);
         DataContext = ViewModel;
@@ -70,6 +73,7 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
+        ScreenshotQueue.Dispose();
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
@@ -248,7 +252,7 @@ public partial class MainWindow : Window
         foreach (WindowConfig window in windows)
         {
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
+                FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, ScreenshotQueue, this));
         }
     }
 
@@ -266,7 +270,7 @@ public partial class MainWindow : Window
             foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
                 if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, this));
+                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, ScreenshotQueue, this));
             }
         }
 

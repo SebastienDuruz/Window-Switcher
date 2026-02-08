@@ -27,20 +27,25 @@ public partial class FloatingWindow : Window
     
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
-    private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
+    private ScreenshotQueue ScreenshotQueue { get; }
 
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
     
-    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor, MainWindow mainWindow)
+    public FloatingWindow(
+        WindowConfig? windowConfig,
+        WindowAccessor windowAccessor,
+        ScreenshotQueue screenshotQueue,
+        MainWindow mainWindow)
     {
         InitializeComponent();
 
         WindowConfig = windowConfig;
         WindowAccessor = windowAccessor;
+        ScreenshotQueue = screenshotQueue;
         MainWindow = mainWindow;
 
         SetInitialWindowSettings();
@@ -218,29 +223,16 @@ public partial class FloatingWindow : Window
         if (WindowConfig is null)
             return;
 
-        Bitmap? appScreenshot = null;
-        bool lockTaken = false;
-        try
-        {
-            await ScreenshotSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lockTaken = true;
+        int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
+        int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
+        var request = new ScreenshotRequest(
+            MaxWidthPx: widthPx > 0 ? widthPx : null,
+            MaxHeightPx: heightPx > 0 ? heightPx : null,
+            TimeoutMs: 1500);
 
-            int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-            int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
-            var request = new ScreenshotRequest(
-                MaxWidthPx: widthPx > 0 ? widthPx : null,
-                MaxHeightPx: heightPx > 0 ? heightPx : null,
-                TimeoutMs: 1500);
-
-            appScreenshot = await WindowAccessor
-                .TakeScreenshotAsync(WindowConfig.WindowId, request, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            if (lockTaken)
-                ScreenshotSemaphore.Release();
-        }
+        Bitmap? appScreenshot = await ScreenshotQueue
+            .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
+            .ConfigureAwait(false);
 
         if (appScreenshot is null)
             return;
@@ -279,6 +271,7 @@ public partial class FloatingWindow : Window
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
         {
+            ScreenshotQueue.ForgetWindow(WindowConfig?.WindowId ?? string.Empty);
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
                 DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
