@@ -30,7 +30,7 @@ public partial class AppInfoWindow : Window
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         e.Cancel = !StaticData.AppClosing;
-        Hide();
+        if (e.Cancel)
+            Hide();
     }
 }
-

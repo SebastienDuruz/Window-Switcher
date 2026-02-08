@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Models;
@@ -18,7 +19,11 @@ public class LinuxX11WindowAccessor : WindowAccessor
             return new ObservableCollection<WindowConfig>();
         }
 
-        string wmctrlOutput = WmctrlWrapper.Execute(" -l");
+        int currentPid = Process.GetCurrentProcess().Id;
+
+        // -l : list windows
+        // -p : include PID (allows filtering our own windows)
+        string wmctrlOutput = WmctrlWrapper.Execute(" -lp");
         if (string.IsNullOrWhiteSpace(wmctrlOutput))
             return new ObservableCollection<WindowConfig>();
         
@@ -27,10 +32,16 @@ public class LinuxX11WindowAccessor : WindowAccessor
         foreach (string line in lines)
             if (!String.IsNullOrWhiteSpace(line))
             {
-                string windowName = ExtractWindowTitle(line);
+                if (!TryParseWmctrlLine(line, out string? windowId, out int pid, out string windowName))
+                    continue;
+
+                // Never list WindowSwitcher windows (Main/Settings/About/Floating previews).
+                if (pid == currentPid)
+                    continue;
+
                 windows.Add(new WindowConfig()
                 {
-                    WindowId = line.Split(' ')[0], 
+                    WindowId = windowId!,
                     WindowTitle = windowName,
                     ShortWindowTitle = windowName.Length > 40 ? $"{windowName[..40]}..." : windowName
                 });
@@ -68,21 +79,32 @@ public class LinuxX11WindowAccessor : WindowAccessor
         WmctrlWrapper.Execute($" -i -r {windowId} -T \"{escapedTitle}\"");
     }
 
-    private string ExtractWindowTitle(string windowInfo)
+    private static bool TryParseWmctrlLine(string windowInfo, out string? windowId, out int pid, out string windowTitle)
     {
-        string windowTitle = "";
+        windowId = null;
+        pid = -1;
+        windowTitle = string.Empty;
 
         try
         {
-            windowInfo = windowInfo.Trim().Replace("  ", " ");
-            string[] splitedWindowInfo = windowInfo.Split(' ');
-            windowTitle = windowInfo.Substring(splitedWindowInfo[0].Length + splitedWindowInfo[1].Length + splitedWindowInfo[2].Length + 3);
+            // Expected format for `wmctrl -lp`:
+            // <0xid> <desktop> <pid> <host> <title...>
+            string[] parts = windowInfo.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 5)
+                return false;
+
+            windowId = parts[0];
+            _ = int.TryParse(parts[2], out pid);
+
+            int titleStartIndex = windowInfo.IndexOf(parts[4], StringComparison.Ordinal);
+            windowTitle = titleStartIndex >= 0 ? windowInfo[titleStartIndex..].Trim() : string.Join(' ', parts.Skip(4));
         }
         catch (Exception ex)
         {
             // TODO : Log
+            return false;
         }
         
-        return windowTitle;
+        return !string.IsNullOrWhiteSpace(windowId);
     }
 }

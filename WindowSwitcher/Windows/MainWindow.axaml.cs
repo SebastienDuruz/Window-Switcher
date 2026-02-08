@@ -73,6 +73,7 @@ public partial class MainWindow : Window
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
+        AppInfoWindow.Close();
         RenameWindow.Close();
         foreach(FloatingWindow floatingWindow in FloatingWindows)
             floatingWindow.Close();
