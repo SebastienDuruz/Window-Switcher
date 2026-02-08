@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 
@@ -33,11 +34,14 @@ public class ConfigFileAccessor
     {
         lock (_syncRoot)
         {
+            JObject? rawConfig = null;
             if (File.Exists(_filePath))
             {
                 try
                 {
-                    _config = JsonConvert.DeserializeObject<ConfigFile>(File.ReadAllText(_filePath)) ?? new ConfigFile();
+                    string fileContents = File.ReadAllText(_filePath);
+                    _config = JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
+                    rawConfig = JsonConvert.DeserializeObject<JObject>(fileContents);
                 }
                 catch (Exception)
                 {
@@ -55,12 +59,49 @@ public class ConfigFileAccessor
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
+
+            // Backward-compat: migrate legacy 'RefreshTimeoutMs' (removed) to the new 'ScreenshotRefreshTimeoutMs'
+            // only when the new property is missing from the JSON.
+            if (rawConfig is not null
+                && !rawConfig.TryGetValue(nameof(ConfigFile.ScreenshotRefreshTimeoutMs), StringComparison.OrdinalIgnoreCase, out _)
+                && TryGetInt(rawConfig, "RefreshTimeoutMs", out int legacyRefresh))
+            {
+                _config.ScreenshotRefreshTimeoutMs = legacyRefresh;
+            }
+
+            _config.ScreenshotRefreshTimeoutMs = Math.Clamp(_config.ScreenshotRefreshTimeoutMs, 100, 10_000);
+            _config.ScreenshotQuality = Math.Clamp(_config.ScreenshotQuality, 1, 100);
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
             {
                 if (string.IsNullOrWhiteSpace(windowConfig.ConfigKey))
                     windowConfig.ConfigKey = CreateConfigKey(windowConfig);
             }
         }
+    }
+
+    private static bool TryGetInt(JObject raw, string propertyName, out int value)
+    {
+        value = default;
+        if (!raw.TryGetValue(propertyName, StringComparison.OrdinalIgnoreCase, out JToken? token))
+            return false;
+
+        try
+        {
+            if (token.Type == JTokenType.Integer)
+            {
+                value = token.Value<int>();
+                return true;
+            }
+
+            if (token.Type == JTokenType.String && int.TryParse(token.Value<string>(), out value))
+                return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     public void WriteUserSettings()

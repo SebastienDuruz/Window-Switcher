@@ -26,6 +26,24 @@
                                                  Color="{Binding PreviewHighlightColor, Mode=TwoWay}"
                                                  IsAlphaVisible="False" />
                 </StackPanel>
+                <StackPanel IsVisible="{Binding LinuxScreenshotSettingsVisible}" Orientation="Vertical" Margin="5 5" Spacing="4">
+                        <TextBlock Text="{Binding ScreenshotQuality, StringFormat=Screenshot quality: {0}}" />
+                        <Slider Width="240"
+                                Minimum="1"
+                                Maximum="100"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding ScreenshotQuality, Mode=TwoWay}" />
+                </StackPanel>
+                <StackPanel IsVisible="{Binding LinuxScreenshotSettingsVisible}" Orientation="Vertical" Margin="5 5" Spacing="4">
+                        <TextBlock Text="{Binding ScreenshotRefreshTimeoutMs, StringFormat=Screenshot refresh (ms): {0}}" />
+                        <Slider Width="240"
+                                Minimum="100"
+                                Maximum="10000"
+                                TickFrequency="100"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding ScreenshotRefreshTimeoutMs, Mode=TwoWay}" />
+                </StackPanel>
                 <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding UseFixedWindowSize}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
                         <TextBlock Margin="0 5 10 5">Width</TextBlock>
                         <NumericUpDown Width="130" Value="{Binding WindowWidth, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />

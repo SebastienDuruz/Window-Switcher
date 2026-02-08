@@ -45,7 +45,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
                 if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
                     AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
             }
-            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.RefreshTimeoutMs);
+            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
     }

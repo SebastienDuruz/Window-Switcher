@@ -69,7 +69,7 @@ public partial class FloatingWindow : Window
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     await UpdateScreenshot(cancellationToken);
-                    int refreshTimeoutMs = configAccessor.ReadConfig(config => config.RefreshTimeoutMs);
+                    int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
                     await Task.Delay(refreshTimeoutMs, cancellationToken);
                 }
             }

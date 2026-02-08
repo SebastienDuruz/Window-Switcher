@@ -18,7 +18,7 @@ public class ConfigFile
     public bool ActivateLogs { get; set; } = false;
     
     // Screenshot methods
-    public int RefreshTimeoutMs { get; set; } = 1000;
+    public int ScreenshotRefreshTimeoutMs { get; set; } = 1000;
     public int ScreenshotQuality { get; set; } = 5;
     
     // Prefix / Blacklist

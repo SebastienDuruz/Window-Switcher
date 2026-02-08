@@ -12,6 +12,7 @@ public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
     public SettingsViewModel(Action applyAction)
     {
@@ -192,6 +193,44 @@ public class SettingsViewModel : ObservableObject
                 AccentColorApplier.Apply(value);
                 OnPropertyChanged();
             }
+        }
+    }
+
+    public int ScreenshotQuality
+    {
+        get => _configAccessor.ReadConfig(config => config.ScreenshotQuality);
+        set
+        {
+            int clamped = Math.Clamp(value, 1, 100);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.ScreenshotQuality == clamped)
+                    return;
+                config.ScreenshotQuality = clamped;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public int ScreenshotRefreshTimeoutMs
+    {
+        get => _configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
+        set
+        {
+            int clamped = Math.Clamp(value, 100, 10_000);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.ScreenshotRefreshTimeoutMs == clamped)
+                    return;
+                config.ScreenshotRefreshTimeoutMs = clamped;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
         }
     }
 
