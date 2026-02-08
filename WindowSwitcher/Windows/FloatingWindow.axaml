@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:windowSwitcher="clr-namespace:WindowSwitcher"
         xmlns:windows="clr-namespace:WindowSwitcher.Windows"
+        xmlns:controls="clr-namespace:WindowSwitcher.Controls"
         Icon="/Assets/WS_logo.ico"
         ShowInTaskbar="False"
         ShowActivated="False"
@@ -23,6 +24,7 @@
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
                 </Canvas.ContextMenu>
+                <controls:X11WindowStreamControl Name="WindowStream" Opacity="0.8" IsHitTestVisible="False" IsVisible="False" />
                 <Image Name="WindowScreenshot" Stretch="Fill" Opacity="0.8" IsHitTestVisible="False" />
                 <Border Name="PreviewBorder" BorderThickness="2" Background="Transparent"
                         IsVisible="False" IsHitTestVisible="False" />

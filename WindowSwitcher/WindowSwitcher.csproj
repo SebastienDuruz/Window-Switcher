@@ -13,6 +13,7 @@
         <PackageReference Include="Avalonia" Version="11.3.10" />
         <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.3.10" />
         <PackageReference Include="Avalonia.Desktop" Version="11.3.10" />
+        <PackageReference Include="Avalonia.X11" Version="11.3.10" />
         <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.10" />
         <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.10" />
         <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->

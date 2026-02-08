@@ -1,6 +1,9 @@
 ﻿using Avalonia;
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
+using Avalonia.Skia;
+using Avalonia.X11;
 
 namespace WindowSwitcher;
 
@@ -24,8 +27,22 @@ static class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
+    {
+        var builder = AppBuilder.Configure<App>()
+            .UseSkia()
+            .UsePlatformDetect();
+
+        // Configure X11 options even when using platform-detect; they apply only when the X11 backend is selected.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            builder = builder.With(new X11PlatformOptions
+            {
+                RenderingMode = [X11RenderingMode.Glx, X11RenderingMode.Software]
+            });
+        }
+
+        return builder
             .WithInterFont()
             .LogToTrace();
+    }
 }

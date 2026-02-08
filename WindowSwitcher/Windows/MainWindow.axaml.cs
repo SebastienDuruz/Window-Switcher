@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
+    private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
     private static bool RefreshButtonEnabled { get; set; } = true;
     private FloatingWindow? _activePreviewWindow;
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
         BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.BlacklistPrefixes.ToList()),
             StaticData.PrefixWindowType.blacklist, "Blacklist");
         SettingsWindow = new SettingsWindow(ApplySettings);
+        AppInfoWindow = new AppInfoWindow { Title = $"About {StaticData.AppName}" };
         RenameWindow = new RenameWindow();
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
@@ -101,6 +103,24 @@ public partial class MainWindow : Window
     private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
     {
         SettingsWindow.Show();
+    }
+
+    private void OpenAppInfoWindowClick(object? sender, RoutedEventArgs e)
+    {
+        AppInfoWindow.Refresh();
+        if (AppInfoWindow.IsVisible)
+        {
+            AppInfoWindow.Activate();
+            return;
+        }
+
+        if (IsVisible)
+        {
+            AppInfoWindow.Show(this);
+            return;
+        }
+
+        AppInfoWindow.Show();
     }
 
     public void AddToBlacklist(string windowTitle)
@@ -166,13 +186,6 @@ public partial class MainWindow : Window
             window.Close();
             StaticData.AppClosing = false;
         }
-    }
-    
-    private void RefreshClicked(object? sender, RoutedEventArgs e)
-    {
-        RefreshButtonEnabled = false;
-        ViewModel.FetchWindowsWithFilters();
-        RefreshButtonEnabled = true;
     }
 
     private void ShowPreviouslyReportedDependencies()

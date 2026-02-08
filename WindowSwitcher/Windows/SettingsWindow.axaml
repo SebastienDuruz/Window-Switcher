@@ -56,7 +56,7 @@
                         
 
                         <!-- Linux-only screenshot settings: keep last -->
-                        <StackPanel IsVisible="{Binding LinuxScreenshotSettingsVisible}" Orientation="Vertical" Spacing="0">
+                        <StackPanel IsVisible="{Binding LinuxScreenshotQualityVisible}" Orientation="Vertical" Spacing="0">
                                 <TextBlock Text="{Binding ScreenshotQuality, StringFormat=Screenshot quality: {0}}" />
                                 <Slider Width="240"
                                         Minimum="1"

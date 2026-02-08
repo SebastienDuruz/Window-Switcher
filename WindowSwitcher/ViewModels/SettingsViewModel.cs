@@ -1,10 +1,13 @@
 using System;
 using System.Runtime.InteropServices;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -13,6 +16,17 @@ public class SettingsViewModel : ObservableObject
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    public bool LinuxOpenGlPreviewActive => LinuxScreenshotSettingsVisible && IsAvaloniaX11() && LinuxX11OpenGlStreamingSupport.IsSupported();
+    public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible && !LinuxOpenGlPreviewActive;
+
+    private static bool IsAvaloniaX11()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return false;
+
+        string? descriptor = desktop.MainWindow?.TryGetPlatformHandle()?.HandleDescriptor;
+        return string.Equals(descriptor, "XID", StringComparison.OrdinalIgnoreCase);
+    }
 
     public SettingsViewModel(Action applyAction)
     {

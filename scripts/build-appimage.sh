@@ -11,7 +11,7 @@ Usage:
 Options:
   -c, --configuration <Release|Debug>   Build configuration (default: Release)
   -r, --runtime <linux-x64|linux-arm64> Runtime identifier (default: linux-x64)
-  -v, --version <x.y.z>                 App version for the output name (default: 0.0.0)
+  -v, --version <x.y.z>                 App version for the output name (default: 0.6.0)
       --[no-]self-contained             Publish self-contained (default: self-contained)
       --publish-dir <path>              Dotnet publish output dir (default: artifacts/publish/<rid>)
       --out-dir <path>                  Output directory (default: artifacts/appimage)
@@ -100,7 +100,7 @@ ensure_appimagetool() {
 
 configuration="Release"
 runtime="linux-x64"
-version="0.0.6"
+version="0.6.0"
 self_contained="true"
 publish_dir=""
 out_dir=""
@@ -145,7 +145,12 @@ mkdir -p "$publish_dir" "$out_dir"
 export AVALONIA_TELEMETRY_OPTOUT="1"
 
 echo "Publishing (${configuration}, ${runtime}, self-contained=${self_contained})..." >&2
-dotnet publish "$project" -c "$configuration" -r "$runtime" -o "$publish_dir" --self-contained "$self_contained" -p:UsedAvaloniaProducts=
+publish_msbuild_props=( -p:UsedAvaloniaProducts= -p:Version="$version" -p:InformationalVersion="$version" )
+if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  publish_msbuild_props+=( -p:AssemblyVersion="${version}.0" -p:FileVersion="${version}.0" )
+fi
+
+dotnet publish "$project" -c "$configuration" -r "$runtime" -o "$publish_dir" --self-contained "$self_contained" "${publish_msbuild_props[@]}"
 
 exe="${publish_dir}/WindowSwitcher"
 if [[ ! -f "$exe" ]]; then

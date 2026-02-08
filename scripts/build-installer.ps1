@@ -22,8 +22,17 @@ $publishArgs = @(
     "publish", $project,
     "-c", $Configuration,
     "-r", $Runtime,
-    "-o", $PublishDir
+    "-o", $PublishDir,
+    "-p:Version=$Version",
+    "-p:InformationalVersion=$Version"
 )
+
+$semver = [regex]::Match($Version, "^(\\d+)\\.(\\d+)\\.(\\d+)$")
+if ($semver.Success) {
+    $fourPart = "$($semver.Groups[1].Value).$($semver.Groups[2].Value).$($semver.Groups[3].Value).0"
+    $publishArgs += "-p:AssemblyVersion=$fourPart"
+    $publishArgs += "-p:FileVersion=$fourPart"
+}
 
 if ($SelfContained) {
     $publishArgs += "--self-contained"

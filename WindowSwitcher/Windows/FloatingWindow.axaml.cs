@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using WindowSwitcher.Platform;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
 using WindowSwitcherLib.Data.FileAccess;
@@ -27,6 +28,8 @@ public partial class FloatingWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
     private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
+    private bool _useX11OpenGlStream;
+    private bool _useWaylandPortalPreview;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
@@ -68,7 +71,35 @@ public partial class FloatingWindow : Window
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    await UpdateScreenshot(cancellationToken);
+                    bool streamActive = false;
+                    if (_useX11OpenGlStream)
+                    {
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            WindowStream.RequestFrame();
+                            streamActive = WindowStream.StreamingActive;
+                            WindowScreenshot.IsVisible = !streamActive;
+                            if (streamActive && _currentScreenshot is not null)
+                            {
+                                _currentScreenshot.Dispose();
+                                _currentScreenshot = null;
+                                WindowScreenshot.Source = null;
+                            }
+                        });
+                    }
+
+                    if (!_useX11OpenGlStream || !streamActive)
+                    {
+                        if (_useWaylandPortalPreview)
+                        {
+                            bool updated = await UpdateWaylandPortalPreview(cancellationToken);
+                            if (!updated)
+                                await UpdateScreenshot(cancellationToken);
+                        }
+                        else
+                            await UpdateScreenshot(cancellationToken);
+                    }
+
                     int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
                     await Task.Delay(refreshTimeoutMs, cancellationToken);
                 }
@@ -91,6 +122,24 @@ public partial class FloatingWindow : Window
             User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
         WindowLabel.Content = WindowConfig!.ShortWindowTitle;
+        bool isAvaloniaX11 =
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            && string.Equals(TryGetPlatformHandle()?.HandleDescriptor, "XID", StringComparison.OrdinalIgnoreCase);
+
+        _useX11OpenGlStream =
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            && isAvaloniaX11
+            && LinuxX11OpenGlStreamingSupport.IsSupported();
+
+        _useWaylandPortalPreview =
+            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+            && !isAvaloniaX11;
+
+        if (_useX11OpenGlStream)
+            WindowStream.WindowId = WindowConfig.WindowId;
+
+        WindowStream.IsVisible = _useX11OpenGlStream;
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
@@ -246,6 +295,7 @@ public partial class FloatingWindow : Window
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
                 DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
             _currentScreenshot?.Dispose();
+            WindowStream.WindowId = null;
         }
     }
 
@@ -324,6 +374,11 @@ public partial class FloatingWindow : Window
         Canvas.SetTop(WindowScreenshot, top);
         WindowScreenshot.Width = previewWidth;
         WindowScreenshot.Height = previewHeight;
+
+        Canvas.SetLeft(WindowStream, left);
+        Canvas.SetTop(WindowStream, top);
+        WindowStream.Width = previewWidth;
+        WindowStream.Height = previewHeight;
     }
 
     private double RoundToPixel(double value)
@@ -332,5 +387,25 @@ public partial class FloatingWindow : Window
         if (scale <= 0)
             scale = 1;
         return Math.Round(value * scale) / scale;
+    }
+
+    private async Task<bool> UpdateWaylandPortalPreview(CancellationToken cancellationToken)
+    {
+        if (WindowConfig is null)
+            return false;
+
+        var provider = WaylandPortalPreviewProvider.GetInstance();
+        await provider.EnsureStarted(cancellationToken);
+
+        if (!provider.TryGetLatestBitmap(out Bitmap? bitmap))
+            return false;
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            // Portal bitmap is owned by the provider; do not Dispose it here.
+            WindowScreenshot.Source = bitmap;
+        });
+
+        return true;
     }
 }
