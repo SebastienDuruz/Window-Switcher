@@ -12,17 +12,11 @@ public static class LinuxDependencies
     private static bool _wmctrlAvailable;
     private static bool _importChecked;
     private static bool _importAvailable;
-    private static bool _gdbusChecked;
-    private static bool _gdbusAvailable;
-    private static bool _gstLaunchChecked;
-    private static bool _gstLaunchAvailable;
 
     public static event Action<string>? DependencyMissing;
 
     public static bool IsWmctrlAvailable => CheckCached("wmctrl", ref _wmctrlChecked, ref _wmctrlAvailable);
     public static bool IsImportAvailable => CheckCached("import", ref _importChecked, ref _importAvailable);
-    public static bool IsGdbusAvailable => CheckCached("gdbus", ref _gdbusChecked, ref _gdbusAvailable);
-    public static bool IsGstLaunchAvailable => CheckCached("gst-launch-1.0", ref _gstLaunchChecked, ref _gstLaunchAvailable);
 
     public static IReadOnlyCollection<string> GetReportedMissing()
     {

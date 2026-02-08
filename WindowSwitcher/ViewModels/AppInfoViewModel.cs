@@ -8,7 +8,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -71,8 +70,6 @@ public partial class AppInfoViewModel : ObservableObject
         [
             $"wmctrl: {(LinuxDependencies.IsWmctrlAvailable ? "OK" : "missing")}",
             $"import: {(LinuxDependencies.IsImportAvailable ? "OK" : "missing")}",
-            $"gdbus: {(LinuxDependencies.IsGdbusAvailable ? "OK" : "missing")}",
-            $"gst-launch-1.0: {(LinuxDependencies.IsGstLaunchAvailable ? "OK" : "missing")}",
         ];
 
         var reported = LinuxDependencies.GetReportedMissing().ToArray();
@@ -87,19 +84,6 @@ public partial class AppInfoViewModel : ObservableObject
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return "N/A";
 
-        bool isX11 = false;
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-        {
-            string? descriptor = desktop.MainWindow?.TryGetPlatformHandle()?.HandleDescriptor;
-            isX11 = string.Equals(descriptor, "XID", StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (isX11 && LinuxX11OpenGlStreamingSupport.IsSupported())
-            return "X11 OpenGL stream (texture-from-pixmap)";
-
-        if (!isX11)
-            return "Wayland portal (xdg-desktop-portal + PipeWire)";
-
-        return "X11 screenshots (import)";
+        return "Screenshots (import)";
     }
 }

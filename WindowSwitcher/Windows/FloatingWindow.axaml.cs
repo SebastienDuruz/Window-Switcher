@@ -7,7 +7,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
-using WindowSwitcher.Platform;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.CustomWindows.Commands;
 using WindowSwitcherLib.Data.FileAccess;
@@ -28,7 +27,6 @@ public partial class FloatingWindow : Window
     private readonly CancellationTokenSource _cts = new();
     private Bitmap? _currentScreenshot;
     private static readonly SemaphoreSlim ScreenshotSemaphore = new(1, 1);
-    private bool _useWaylandPortalPreview;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WindowAccessor WindowAccessor { get; set; }
@@ -70,14 +68,7 @@ public partial class FloatingWindow : Window
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if (_useWaylandPortalPreview)
-                    {
-                        bool updated = await UpdateWaylandPortalPreview(cancellationToken);
-                        if (!updated)
-                            await UpdateScreenshot(cancellationToken);
-                    }
-                    else
-                        await UpdateScreenshot(cancellationToken);
+                    await UpdateScreenshot(cancellationToken);
 
                     int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
                     await Task.Delay(refreshTimeoutMs, cancellationToken);
@@ -101,13 +92,6 @@ public partial class FloatingWindow : Window
             User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
         WindowLabel.Content = WindowConfig!.ShortWindowTitle;
-        bool isAvaloniaX11 =
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-            && string.Equals(TryGetPlatformHandle()?.HandleDescriptor, "XID", StringComparison.OrdinalIgnoreCase);
-
-        _useWaylandPortalPreview =
-            RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-            && !isAvaloniaX11;
 
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
@@ -352,23 +336,5 @@ public partial class FloatingWindow : Window
         return Math.Round(value * scale) / scale;
     }
 
-    private async Task<bool> UpdateWaylandPortalPreview(CancellationToken cancellationToken)
-    {
-        if (WindowConfig is null)
-            return false;
-
-        var provider = WaylandPortalPreviewProvider.GetInstance();
-        await provider.EnsureStarted(cancellationToken);
-
-        if (!provider.TryGetLatestBitmap(out Bitmap? bitmap))
-            return false;
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            // Portal bitmap is owned by the provider; do not Dispose it here.
-            WindowScreenshot.Source = bitmap;
-        });
-
-        return true;
-    }
+    
 }

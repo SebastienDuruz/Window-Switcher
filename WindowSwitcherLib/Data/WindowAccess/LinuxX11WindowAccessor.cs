@@ -57,9 +57,6 @@ public class LinuxX11WindowAccessor : WindowAccessor
 
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        if (LinuxX11CompositeImageCapture.TryCaptureWindow(windowId, out Bitmap? native))
-            return native;
-
         try
         {
             using var stream = ImportWrapper.CaptureScreenshotStream(windowId);
