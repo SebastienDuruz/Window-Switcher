@@ -31,7 +31,7 @@ public partial class AppInfoViewModel : ObservableObject
     public void Refresh()
     {
         AppName = StaticData.AppName;
-        AppVersion = GetAppVersion();
+        AppVersion = "0.6.0";
         OsDescription = RuntimeInformation.OSDescription;
         FrameworkDescription = RuntimeInformation.FrameworkDescription;
         ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString();
@@ -39,11 +39,6 @@ public partial class AppInfoViewModel : ObservableObject
         ConfigPath = ConfigFileAccessor.GetInstance().GetFilePath();
         LinuxDependenciesStatus = GetLinuxDependencies();
         PreviewMode = GetLinuxPreviewMode();
-    }
-
-    private static string GetAppVersion()
-    {
-        return "0.6.0";
     }
 
     private static string GetUiBackend()
