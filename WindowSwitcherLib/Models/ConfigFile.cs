@@ -20,6 +20,12 @@ public class ConfigFile
     // Screenshot methods
     public int ScreenshotRefreshTimeoutMs { get; set; } = 1000;
     public int ScreenshotQuality { get; set; } = 5;
+
+    // Linux preview backend
+    public string LinuxPreviewBackend { get; set; } = "Auto";
+    public int LinuxPipeWireFps { get; set; } = 15;
+    public int LinuxPipeWireReconnectDelayMs { get; set; } = 1000;
+    public string LinuxPipeWireNodeId { get; set; } = string.Empty;
     
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();

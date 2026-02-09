@@ -71,6 +71,10 @@ public class ConfigFileAccessor
 
             _config.ScreenshotRefreshTimeoutMs = Math.Clamp(_config.ScreenshotRefreshTimeoutMs, 100, 10_000);
             _config.ScreenshotQuality = Math.Clamp(_config.ScreenshotQuality, 1, 100);
+            _config.LinuxPreviewBackend = NormalizeLinuxPreviewBackend(_config.LinuxPreviewBackend);
+            _config.LinuxPipeWireFps = Math.Clamp(_config.LinuxPipeWireFps, 1, 60);
+            _config.LinuxPipeWireReconnectDelayMs = Math.Clamp(_config.LinuxPipeWireReconnectDelayMs, 100, 30_000);
+            _config.LinuxPipeWireNodeId ??= string.Empty;
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
             {
                 if (string.IsNullOrWhiteSpace(windowConfig.ConfigKey))
@@ -207,5 +211,16 @@ public class ConfigFileAccessor
     private static string NormalizeKeyPart(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeLinuxPreviewBackend(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return nameof(LinuxPreviewBackend.Auto);
+
+        if (Enum.TryParse(value, ignoreCase: true, out LinuxPreviewBackend backend))
+            return backend.ToString();
+
+        return nameof(LinuxPreviewBackend.Auto);
     }
 }

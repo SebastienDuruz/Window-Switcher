@@ -55,6 +55,38 @@
 
                         
 
+                        <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="Linux preview backend" />
+                                <ComboBox Width="240"
+                                          ItemsSource="{Binding LinuxPreviewBackendOptions}"
+                                          SelectedItem="{Binding LinuxPreviewBackend, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="0">
+                                <TextBlock Text="{Binding LinuxPipeWireFps, StringFormat=PipeWire fps: {0}}" />
+                                <Slider Width="240"
+                                        Minimum="1"
+                                        Maximum="60"
+                                        TickFrequency="1"
+                                        IsSnapToTickEnabled="True"
+                                        Value="{Binding LinuxPipeWireFps, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="0">
+                                <TextBlock Text="{Binding LinuxPipeWireReconnectDelayMs, StringFormat=PipeWire reconnect (ms): {0}}" />
+                                <Slider Width="240"
+                                        Minimum="100"
+                                        Maximum="30000"
+                                        TickFrequency="100"
+                                        IsSnapToTickEnabled="True"
+                                        Value="{Binding LinuxPipeWireReconnectDelayMs, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="4">
+                                <TextBlock Text="PipeWire node id (optional override)" />
+                                <TextBox Width="240" Text="{Binding LinuxPipeWireNodeId, Mode=TwoWay}" />
+                        </StackPanel>
+
                         <!-- Linux-only screenshot settings: keep last -->
                         <StackPanel IsVisible="{Binding LinuxScreenshotQualityVisible}" Orientation="Vertical" Spacing="0">
                                 <TextBlock Text="{Binding ScreenshotQuality, StringFormat=Screenshot quality: {0}}" />

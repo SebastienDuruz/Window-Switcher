@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -16,10 +17,9 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
     public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-    public bool LinuxOpenGlPreviewActive => false;
     public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible;
-
-    private static bool IsAvaloniaX11() => false;
+    public bool LinuxPipeWireSettingsVisible => LinuxScreenshotSettingsVisible;
+    public string[] LinuxPreviewBackendOptions => Enum.GetNames<LinuxPreviewBackend>();
 
     public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
 
@@ -236,6 +236,82 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         }
     }
 
+    public string LinuxPreviewBackend
+    {
+        get => _configAccessor.ReadConfig(config => NormalizeLinuxPreviewBackend(config.LinuxPreviewBackend));
+        set
+        {
+            string normalized = NormalizeLinuxPreviewBackend(value);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (string.Equals(config.LinuxPreviewBackend, normalized, StringComparison.OrdinalIgnoreCase))
+                    return;
+                config.LinuxPreviewBackend = normalized;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public int LinuxPipeWireFps
+    {
+        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireFps);
+        set
+        {
+            int clamped = Math.Clamp(value, 1, 60);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.LinuxPipeWireFps == clamped)
+                    return;
+                config.LinuxPipeWireFps = clamped;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public int LinuxPipeWireReconnectDelayMs
+    {
+        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireReconnectDelayMs);
+        set
+        {
+            int clamped = Math.Clamp(value, 100, 30_000);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.LinuxPipeWireReconnectDelayMs == clamped)
+                    return;
+                config.LinuxPipeWireReconnectDelayMs = clamped;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public string LinuxPipeWireNodeId
+    {
+        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireNodeId ?? string.Empty);
+        set
+        {
+            string normalized = value?.Trim() ?? string.Empty;
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (string.Equals(config.LinuxPipeWireNodeId, normalized, StringComparison.Ordinal))
+                    return;
+                config.LinuxPipeWireNodeId = normalized;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
     private static string ToConfigColorString(Color color)
     {
         // Keep a stable, human-friendly format in the config file.
@@ -244,5 +320,13 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         return color.A == 0xFF
             ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
             : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
+    private static string NormalizeLinuxPreviewBackend(string? value)
+    {
+        if (Enum.TryParse(value, ignoreCase: true, out WindowSwitcherLib.Models.LinuxPreviewBackend backend))
+            return backend.ToString();
+
+        return WindowSwitcherLib.Models.LinuxPreviewBackend.Auto.ToString();
     }
 }

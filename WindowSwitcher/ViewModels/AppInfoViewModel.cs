@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -57,9 +58,8 @@ public partial class AppInfoViewModel : ObservableObject
 
     private static string? GetLinuxSessionType()
     {
-        var wrapper = new ShWrapper();
-        string output = wrapper.Execute("echo $XDG_SESSION_TYPE").Trim();
-        return string.IsNullOrWhiteSpace(output) ? null : output;
+        string? sessionType = LinuxSessionDetector.GetSessionType();
+        return string.IsNullOrWhiteSpace(sessionType) ? null : sessionType;
     }
 
     private static string GetLinuxDependencies()
@@ -71,6 +71,10 @@ public partial class AppInfoViewModel : ObservableObject
         [
             $"wmctrl: {(LinuxDependencies.IsWmctrlAvailable ? "OK" : "missing")}",
             $"import: {(LinuxDependencies.IsImportAvailable ? "OK" : "missing")}",
+            $"gst-launch-1.0: {(LinuxDependencies.IsGstLaunchAvailable ? "OK" : "missing")}",
+            $"gstreamer pipewiresrc: {(LinuxDependencies.IsGstPipeWireSrcAvailable ? "OK" : "missing")}",
+            $"gdbus: {(LinuxDependencies.IsGdbusAvailable ? "OK" : "missing")}",
+            $"pw-dump: {(LinuxDependencies.IsPwDumpAvailable ? "OK" : "missing")}",
         ];
 
         var reported = LinuxDependencies.GetReportedMissing().ToArray();
@@ -85,6 +89,27 @@ public partial class AppInfoViewModel : ObservableObject
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return "Desktop Window Manager (DWM)";
 
+        LinuxPreviewBackend backend = ConfigFileAccessor.GetInstance()
+            .ReadConfig(config => ParseLinuxPreviewBackend(config.LinuxPreviewBackend));
+        bool waylandSession = string.Equals(GetLinuxSessionType(), "wayland", StringComparison.OrdinalIgnoreCase);
+        bool pipeWireReady = LinuxDependencies.IsGstLaunchAvailable
+                             && LinuxDependencies.IsGstPipeWireSrcAvailable
+                             && LinuxDependencies.IsPwDumpAvailable;
+
+        if (backend == LinuxPreviewBackend.PipeWire)
+            return pipeWireReady ? "PipeWire stream (wmctrl/gstreamer)" : "Screenshots (fallback)";
+
+        if (backend == LinuxPreviewBackend.Auto && waylandSession)
+            return pipeWireReady ? "PipeWire stream (auto)" : "Screenshots (fallback)";
+
         return "Screenshots (import)";
+    }
+
+    private static LinuxPreviewBackend ParseLinuxPreviewBackend(string? value)
+    {
+        if (Enum.TryParse(value, ignoreCase: true, out LinuxPreviewBackend backend))
+            return backend;
+
+        return LinuxPreviewBackend.Auto;
     }
 }

@@ -30,7 +30,7 @@ public partial class FloatingWindow : Window
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WinAccessor WinAccessor { get; set; }
-    private ScreenshotQueue ScreenshotQueue { get; }
+    private IPreviewFrameProvider PreviewFrameProvider { get; }
 
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
@@ -38,14 +38,14 @@ public partial class FloatingWindow : Window
     public FloatingWindow(
         WindowConfig? windowConfig,
         WinAccessor winAccessor,
-        ScreenshotQueue screenshotQueue,
+        IPreviewFrameProvider previewFrameProvider,
         MainWindow mainWindow)
     {
         InitializeComponent();
 
         WindowConfig = windowConfig;
         WinAccessor = winAccessor;
-        ScreenshotQueue = screenshotQueue;
+        PreviewFrameProvider = previewFrameProvider;
         MainWindow = mainWindow;
 
         SetInitialWindowSettings();
@@ -230,7 +230,7 @@ public partial class FloatingWindow : Window
             MaxHeightPx: heightPx > 0 ? heightPx : null,
             TimeoutMs: 1500);
 
-        Bitmap? appScreenshot = await ScreenshotQueue
+        Bitmap? appScreenshot = await PreviewFrameProvider
             .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
             .ConfigureAwait(false);
 
@@ -271,7 +271,7 @@ public partial class FloatingWindow : Window
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
         {
-            ScreenshotQueue.ForgetWindow(WindowConfig?.WindowId ?? string.Empty);
+            PreviewFrameProvider.ForgetWindow(WindowConfig?.WindowId ?? string.Empty);
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
                 DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);

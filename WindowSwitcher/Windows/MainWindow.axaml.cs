@@ -23,7 +23,7 @@ namespace WindowSwitcher.Windows;
 public partial class MainWindow : Window
 {
     private WinAccessor WinAccessor { get; } = WinFactories.GetAccessor();
-    private ScreenshotQueue ScreenshotQueue { get; }
+    private IPreviewFrameProvider PreviewFrameProvider { get; }
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
@@ -42,7 +42,7 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
 
-        ScreenshotQueue = new ScreenshotQueue(WinAccessor);
+        PreviewFrameProvider = PreviewProviderFactory.Create(WinAccessor);
 
         ViewModel = new WindowListViewModel(WinAccessor);
         DataContext = ViewModel;
@@ -73,7 +73,7 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
-        ScreenshotQueue.Dispose();
+        PreviewFrameProvider.Dispose();
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
@@ -252,7 +252,7 @@ public partial class MainWindow : Window
         foreach (WindowConfig window in windows)
         {
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                FloatingWindows.Add(new FloatingWindow(window, WinAccessor, ScreenshotQueue, this));
+                FloatingWindows.Add(new FloatingWindow(window, WinAccessor, PreviewFrameProvider, this));
         }
     }
 
@@ -270,7 +270,7 @@ public partial class MainWindow : Window
             foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
                 if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WinAccessor, ScreenshotQueue, this));
+                    FloatingWindows.Add(new FloatingWindow(window, WinAccessor, PreviewFrameProvider, this));
             }
         }
 
