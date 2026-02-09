@@ -18,7 +18,6 @@ public class ConfigFile
     public bool ActivateLogs { get; set; } = false;
     
     // Linux preview backend
-    public string LinuxPreviewBackend { get; set; } = "Auto";
     public int LinuxPipeWireFps { get; set; } = 15;
     public int LinuxPipeWireRefreshTimeoutMs { get; set; } = 100;
     public int LinuxPipeWireReconnectDelayMs { get; set; } = 1000;

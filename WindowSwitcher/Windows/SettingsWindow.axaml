@@ -21,7 +21,7 @@
                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
                         <CheckBox Content="Resize windows" IsChecked="{Binding ResizeWindows, Mode=TwoWay}" />
                         <CheckBox Content="Window decorations"
-                                  IsVisible="{Binding ShowWindowDecorationsVisible}"
+                                  IsVisible="{Binding IsLinuxRuntime}"
                                   IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
                         <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
                         <StackPanel Name="FixedWidthStackPanel"
@@ -53,39 +53,24 @@
                                                          IsAlphaVisible="False" />
                         </Grid>
 
-                        <StackPanel Orientation="Vertical" Spacing="0">
-                                <TextBlock Text="{Binding LinuxPipeWireFps, StringFormat=PipeWire fps: {0}}" />
-                                <Slider Width="240"
-                                        Minimum="1"
-                                        Maximum="60"
-                                        TickFrequency="1"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding LinuxPipeWireFps, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <StackPanel Orientation="Vertical" Spacing="0">
+                        <StackPanel Orientation="Vertical" Spacing="0" IsVisible="{Binding IsLinuxRuntime}">
                                 <TextBlock Text="{Binding LinuxPipeWireRefreshTimeoutMs, StringFormat=PipeWire refresh (ms): {0}}" />
                                 <Slider Width="240"
-                                        Minimum="30"
+                                        Minimum="1"
                                         Maximum="5000"
                                         TickFrequency="10"
                                         IsSnapToTickEnabled="True"
                                         Value="{Binding LinuxPipeWireRefreshTimeoutMs, Mode=TwoWay}" />
                         </StackPanel>
 
-                        <StackPanel Orientation="Vertical" Spacing="0">
+                        <StackPanel Orientation="Vertical" Spacing="0" IsVisible="{Binding IsLinuxRuntime}">
                                 <TextBlock Text="{Binding LinuxPipeWireReconnectDelayMs, StringFormat=PipeWire reconnect (ms): {0}}" />
                                 <Slider Width="240"
-                                        Minimum="100"
+                                        Minimum="1"
                                         Maximum="30000"
                                         TickFrequency="100"
                                         IsSnapToTickEnabled="True"
                                         Value="{Binding LinuxPipeWireReconnectDelayMs, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <StackPanel Orientation="Vertical" Spacing="4">
-                                <TextBlock Text="PipeWire node id (optional override)" />
-                                <TextBox Width="240" Text="{Binding LinuxPipeWireNodeId, Mode=TwoWay}" />
                         </StackPanel>
                 </StackPanel>
 

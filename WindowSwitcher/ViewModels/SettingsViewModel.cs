@@ -15,7 +15,7 @@ namespace WindowSwitcher.ViewModels;
 public class SettingsViewModel(Action applyAction) : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
-    public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    public bool IsLinuxRuntime => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
     public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
 
@@ -194,25 +194,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         }
     }
 
-    public int LinuxPipeWireFps
-    {
-        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireFps);
-        set
-        {
-            int clamped = Math.Clamp(value, 1, 60);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.LinuxPipeWireFps == clamped)
-                    return;
-                config.LinuxPipeWireFps = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
     public int LinuxPipeWireRefreshTimeoutMs
     {
         get => _configAccessor.ReadConfig(config => config.LinuxPipeWireRefreshTimeoutMs);
@@ -244,25 +225,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
                 if (config.LinuxPipeWireReconnectDelayMs == clamped)
                     return;
                 config.LinuxPipeWireReconnectDelayMs = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
-    public string LinuxPipeWireNodeId
-    {
-        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireNodeId ?? string.Empty);
-        set
-        {
-            string normalized = value?.Trim() ?? string.Empty;
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (string.Equals(config.LinuxPipeWireNodeId, normalized, StringComparison.Ordinal))
-                    return;
-                config.LinuxPipeWireNodeId = normalized;
                 updated = true;
             });
             if (updated)

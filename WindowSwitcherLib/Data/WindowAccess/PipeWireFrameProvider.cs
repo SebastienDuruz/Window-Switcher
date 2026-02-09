@@ -19,7 +19,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private readonly bool _activateLogs;
     private readonly int _reconnectDelayMs;
-    private readonly int _fps;
+    private readonly int _fps = 30;
     private readonly bool _isWaylandSession;
     private readonly string? _configuredNodeId;
     private readonly bool _allowPortalFallback;
@@ -40,9 +40,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         });
 
         _activateLogs = config.ActivateLogs;
-        _fps = Math.Clamp(config.LinuxPipeWireFps, 1, 60);
-        _reconnectDelayMs = Math.Clamp(config.LinuxPipeWireReconnectDelayMs, 100, 30_000);
-        _configuredNodeId = GetConfiguredOrEnvironmentNodeId(config.LinuxPipeWireNodeId);
+        _reconnectDelayMs = Math.Clamp(config.LinuxPipeWireReconnectDelayMs, 1, 30_000);
+        _configuredNodeId = null;
         _isWaylandSession = IsWaylandSession();
         _allowPortalFallback = ParseBooleanEnvironment("WINDOW_SWITCHER_PIPEWIRE_ALLOW_PORTAL");
 
@@ -425,18 +424,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         string normalized = NormalizeForSearch(value);
         if (!string.IsNullOrWhiteSpace(normalized))
             patterns.Add(normalized);
-    }
-
-    private string? GetConfiguredOrEnvironmentNodeId(string? configuredNodeId)
-    {
-        if (!string.IsNullOrWhiteSpace(configuredNodeId))
-            return configuredNodeId.Trim();
-
-        string? envNodeId = Environment.GetEnvironmentVariable("WINDOW_SWITCHER_PIPEWIRE_NODE_ID");
-        if (!string.IsNullOrWhiteSpace(envNodeId))
-            return envNodeId.Trim();
-
-        return null;
     }
 
     private static bool ParseBooleanEnvironment(string variableName)
