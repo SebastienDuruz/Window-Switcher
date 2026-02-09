@@ -45,7 +45,16 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
                 if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
                     AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
             }
-            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
+            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config =>
+            {
+                if (!Enum.TryParse(config.LinuxPreviewBackend, ignoreCase: true, out LinuxPreviewBackend backend))
+                    backend = LinuxPreviewBackend.Auto;
+
+                if (backend == LinuxPreviewBackend.PipeWire)
+                    return Math.Clamp(config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
+
+                return Math.Clamp(config.ScreenshotRefreshTimeoutMs, 100, 10_000);
+            });
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }
     }

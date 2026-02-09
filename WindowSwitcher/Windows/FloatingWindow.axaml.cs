@@ -82,12 +82,23 @@ public partial class FloatingWindow : Window
                 {
                     try
                     {
-                        int refreshTimeoutMs = configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
-                        refreshTimeoutMs = Math.Clamp(refreshTimeoutMs, 100, 10_000);
+                        bool isPipeWireProvider = PreviewFrameProvider is PipeWireFrameProvider;
+                        var timing = configAccessor.ReadConfig(config => new
+                        {
+                            RefreshMs = isPipeWireProvider
+                                ? config.LinuxPipeWireRefreshTimeoutMs
+                                : config.ScreenshotRefreshTimeoutMs
+                        });
+                        int refreshTimeoutMs = isPipeWireProvider
+                            ? Math.Clamp(timing.RefreshMs, 30, 5_000)
+                            : Math.Clamp(timing.RefreshMs, 100, 10_000);
+                        int requestTimeoutMs = isPipeWireProvider
+                            ? Math.Clamp(Math.Max(refreshTimeoutMs * 3, 1_500), 250, 10_000)
+                            : 1_500;
 
                         // Optimization: do not refresh the *active* preview window (usually the foreground app).
                         if (!_isActivePreview)
-                            await UpdateScreenshot(cancellationToken);
+                            await UpdateScreenshot(requestTimeoutMs, cancellationToken);
 
                         await Task.Delay(refreshTimeoutMs, cancellationToken);
                     }
@@ -218,7 +229,7 @@ public partial class FloatingWindow : Window
         _isPointerInside = false;
     }
 
-    private async Task UpdateScreenshot(CancellationToken cancellationToken)
+    private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
     {
         if (WindowConfig is null)
             return;
@@ -228,7 +239,7 @@ public partial class FloatingWindow : Window
         var request = new ScreenshotRequest(
             MaxWidthPx: widthPx > 0 ? widthPx : null,
             MaxHeightPx: heightPx > 0 ? heightPx : null,
-            TimeoutMs: 1500);
+            TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000));
 
         Bitmap? appScreenshot = await PreviewFrameProvider
             .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
@@ -329,7 +340,7 @@ public partial class FloatingWindow : Window
         _isActivePreview = isSelected;
         PreviewBorder.IsVisible = isSelected;
         if (!isSelected && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            _ = UpdateScreenshot(_cts.Token);
+            _ = UpdateScreenshot(1_500, _cts.Token);
     }
 
     private void UpdatePreviewLayout()

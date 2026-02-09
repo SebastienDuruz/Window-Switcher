@@ -73,6 +73,16 @@
                         </StackPanel>
 
                         <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="0">
+                                <TextBlock Text="{Binding LinuxPipeWireRefreshTimeoutMs, StringFormat=PipeWire refresh (ms): {0}}" />
+                                <Slider Width="240"
+                                        Minimum="30"
+                                        Maximum="5000"
+                                        TickFrequency="10"
+                                        IsSnapToTickEnabled="True"
+                                        Value="{Binding LinuxPipeWireRefreshTimeoutMs, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <StackPanel IsVisible="{Binding LinuxPipeWireSettingsVisible}" Orientation="Vertical" Spacing="0">
                                 <TextBlock Text="{Binding LinuxPipeWireReconnectDelayMs, StringFormat=PipeWire reconnect (ms): {0}}" />
                                 <Slider Width="240"
                                         Minimum="100"

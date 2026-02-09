@@ -97,7 +97,7 @@ public partial class AppInfoViewModel : ObservableObject
                              && LinuxDependencies.IsPwDumpAvailable;
 
         if (backend == LinuxPreviewBackend.PipeWire)
-            return pipeWireReady ? "PipeWire stream (wmctrl/gstreamer)" : "Screenshots (fallback)";
+            return pipeWireReady ? "PipeWire stream (wmctrl/gstreamer)" : "PipeWire requested (not ready)";
 
         if (backend == LinuxPreviewBackend.Auto && waylandSession)
             return pipeWireReady ? "PipeWire stream (auto)" : "Screenshots (fallback)";

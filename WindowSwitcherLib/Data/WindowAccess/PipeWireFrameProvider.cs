@@ -60,17 +60,17 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                 return null;
 
             if (string.IsNullOrWhiteSpace(windowId) || !RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                return await _fallbackProvider.RequestAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+                return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
 
             WindowCaptureContext? capture = EnsureCapture(windowId);
             if (capture is null || capture.ForceFallback)
-                return await _fallbackProvider.RequestAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+                return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
 
             Bitmap? frame = await TryRequestCaptureFrameAsync(capture, request, cancellationToken).ConfigureAwait(false);
             if (frame is not null)
                 return frame;
 
-            return await _fallbackProvider.RequestAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+            return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -79,7 +79,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         catch (Exception ex)
         {
             LogWarn($"PipeWire request failed unexpectedly: {ex.Message}");
-            return await _fallbackProvider.RequestAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+            return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -456,6 +456,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             "ON" => true,
             _ => false
         };
+    }
+
+    private async Task<Bitmap?> RequestFallbackAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken)
+    {
+        var safeRequest = new ScreenshotRequest(
+            MaxWidthPx: request.MaxWidthPx,
+            MaxHeightPx: request.MaxHeightPx,
+            TimeoutMs: Math.Clamp(Math.Max(request.TimeoutMs, 1_500), 100, 10_000));
+
+        return await _fallbackProvider.RequestAsync(windowId, safeRequest, cancellationToken).ConfigureAwait(false);
     }
 
     private static List<NodeCandidate> GetPipeWireNodeCandidates()

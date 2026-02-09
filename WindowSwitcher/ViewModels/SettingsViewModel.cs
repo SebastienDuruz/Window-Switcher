@@ -16,9 +16,9 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-    public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && !IsPipeWireOnlyBackendSelected();
     public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible;
-    public bool LinuxPipeWireSettingsVisible => LinuxScreenshotSettingsVisible;
+    public bool LinuxPipeWireSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public string[] LinuxPreviewBackendOptions => Enum.GetNames<LinuxPreviewBackend>();
 
     public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
@@ -251,7 +251,11 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
                 updated = true;
             });
             if (updated)
+            {
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(LinuxScreenshotSettingsVisible));
+                OnPropertyChanged(nameof(LinuxScreenshotQualityVisible));
+            }
         }
     }
 
@@ -267,6 +271,25 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
                 if (config.LinuxPipeWireFps == clamped)
                     return;
                 config.LinuxPipeWireFps = clamped;
+                updated = true;
+            });
+            if (updated)
+                OnPropertyChanged();
+        }
+    }
+
+    public int LinuxPipeWireRefreshTimeoutMs
+    {
+        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireRefreshTimeoutMs);
+        set
+        {
+            int clamped = Math.Clamp(value, 30, 5_000);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (config.LinuxPipeWireRefreshTimeoutMs == clamped)
+                    return;
+                config.LinuxPipeWireRefreshTimeoutMs = clamped;
                 updated = true;
             });
             if (updated)
@@ -328,5 +351,11 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
             return backend.ToString();
 
         return WindowSwitcherLib.Models.LinuxPreviewBackend.Auto.ToString();
+    }
+
+    private bool IsPipeWireOnlyBackendSelected()
+    {
+        string backend = _configAccessor.ReadConfig(config => NormalizeLinuxPreviewBackend(config.LinuxPreviewBackend));
+        return string.Equals(backend, WindowSwitcherLib.Models.LinuxPreviewBackend.PipeWire.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }

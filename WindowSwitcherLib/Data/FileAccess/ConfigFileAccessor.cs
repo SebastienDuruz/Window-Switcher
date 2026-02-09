@@ -73,6 +73,7 @@ public class ConfigFileAccessor
             _config.ScreenshotQuality = Math.Clamp(_config.ScreenshotQuality, 1, 100);
             _config.LinuxPreviewBackend = NormalizeLinuxPreviewBackend(_config.LinuxPreviewBackend);
             _config.LinuxPipeWireFps = Math.Clamp(_config.LinuxPipeWireFps, 1, 60);
+            _config.LinuxPipeWireRefreshTimeoutMs = Math.Clamp(_config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
             _config.LinuxPipeWireReconnectDelayMs = Math.Clamp(_config.LinuxPipeWireReconnectDelayMs, 100, 30_000);
             _config.LinuxPipeWireNodeId ??= string.Empty;
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
