@@ -199,7 +199,7 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         get => _configAccessor.ReadConfig(config => config.LinuxPipeWireRefreshTimeoutMs);
         set
         {
-            int clamped = Math.Clamp(value, 30, 5_000);
+            int clamped = Math.Clamp(value, 1, 5_000);
             bool updated = false;
             _configAccessor.UpdateConfig(config =>
             {

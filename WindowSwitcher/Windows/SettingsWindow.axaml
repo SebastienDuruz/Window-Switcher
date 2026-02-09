@@ -58,7 +58,7 @@
                                 <Slider Width="240"
                                         Minimum="1"
                                         Maximum="5000"
-                                        TickFrequency="10"
+                                        TickFrequency="1"
                                         IsSnapToTickEnabled="True"
                                         Value="{Binding LinuxPipeWireRefreshTimeoutMs, Mode=TwoWay}" />
                         </StackPanel>
