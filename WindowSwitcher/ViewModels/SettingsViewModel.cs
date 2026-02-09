@@ -213,25 +213,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         }
     }
 
-    public int LinuxPipeWireReconnectDelayMs
-    {
-        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireReconnectDelayMs);
-        set
-        {
-            int clamped = Math.Clamp(value, 100, 30_000);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.LinuxPipeWireReconnectDelayMs == clamped)
-                    return;
-                config.LinuxPipeWireReconnectDelayMs = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
     private static string ToConfigColorString(Color color)
     {
         // Keep a stable, human-friendly format in the config file.

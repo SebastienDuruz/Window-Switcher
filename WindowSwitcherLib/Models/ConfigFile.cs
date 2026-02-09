@@ -20,7 +20,6 @@ public class ConfigFile
     // Linux preview backend
     public int LinuxPipeWireFps { get; set; } = 15;
     public int LinuxPipeWireRefreshTimeoutMs { get; set; } = 100;
-    public int LinuxPipeWireReconnectDelayMs { get; set; } = 1000;
     public string LinuxPipeWireNodeId { get; set; } = string.Empty;
     
     // Prefix / Blacklist

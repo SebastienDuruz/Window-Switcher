@@ -13,6 +13,7 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 {
+    private const int PipeWireReconnectDelayMs = 300;
     private static readonly PwDumpWrapper PwDump = new();
     private static readonly GdbusWrapper Gdbus = new();
 
@@ -21,7 +22,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private readonly bool _activateLogs;
-    private readonly int _reconnectDelayMs;
     private readonly int _fps = 30;
     private readonly bool _isWaylandSession;
     private readonly bool _allowPortalFallback;
@@ -33,14 +33,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
         _fallbackProvider = new ScreenshotPreviewFrameProvider(accessor);
 
-        var config = ConfigFileAccessor.GetInstance().ReadConfig(value => new
-        {
-            value.ActivateLogs,
-            value.LinuxPipeWireReconnectDelayMs
-        });
-
-        _activateLogs = config.ActivateLogs;
-        _reconnectDelayMs = Math.Clamp(config.LinuxPipeWireReconnectDelayMs, 1, 30_000);
+        _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();
         _allowPortalFallback = ParseBooleanEnvironment("WINDOW_SWITCHER_PIPEWIRE_ALLOW_PORTAL");
 
@@ -202,16 +195,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (!needsRestart)
             return null;
 
-        if (_reconnectDelayMs > 0)
+        try
         {
-            try
-            {
-                await Task.Delay(Math.Min(_reconnectDelayMs, timeoutMs), cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return null;
-            }
+            await Task.Delay(Math.Min(PipeWireReconnectDelayMs, timeoutMs), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
 
         capture.Stream.Restart();

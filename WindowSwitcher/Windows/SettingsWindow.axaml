@@ -63,15 +63,6 @@
                                         Value="{Binding LinuxPipeWireRefreshTimeoutMs, Mode=TwoWay}" />
                         </StackPanel>
 
-                        <StackPanel Orientation="Vertical" Spacing="0" IsVisible="{Binding IsLinuxRuntime}">
-                                <TextBlock Text="{Binding LinuxPipeWireReconnectDelayMs, StringFormat=PipeWire reconnect (ms): {0}}" />
-                                <Slider Width="240"
-                                        Minimum="1"
-                                        Maximum="30000"
-                                        TickFrequency="100"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding LinuxPipeWireReconnectDelayMs, Mode=TwoWay}" />
-                        </StackPanel>
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">

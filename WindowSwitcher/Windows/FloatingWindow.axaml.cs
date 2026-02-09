@@ -24,9 +24,12 @@ public partial class FloatingWindow : Window
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     private volatile bool _isPointerInside;
     private volatile bool _isActivePreview;
+    private volatile bool _isClosing;
     
     private readonly CancellationTokenSource _cts = new();
+    private readonly SemaphoreSlim _previewUpdateSemaphore = new(1, 1);
     private Bitmap? _currentScreenshot;
+    private Bitmap? _previousScreenshot;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
     private WinAccessor WinAccessor { get; set; }
@@ -229,30 +232,60 @@ public partial class FloatingWindow : Window
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
     {
-        if (WindowConfig is null)
+        if (WindowConfig is null || _isClosing || cancellationToken.IsCancellationRequested)
             return;
 
-        int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-        int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
-        var request = new ScreenshotRequest(
-            MaxWidthPx: widthPx > 0 ? widthPx : null,
-            MaxHeightPx: heightPx > 0 ? heightPx : null,
-            TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000));
-
-        Bitmap? appScreenshot = await PreviewFrameProvider
-            .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (appScreenshot is null)
-            return;
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
+        bool lockTaken = false;
+        Bitmap? appScreenshot = null;
+        try
         {
-            Bitmap? previous = _currentScreenshot;
-            _currentScreenshot = appScreenshot;
-            WindowScreenshot.Source = appScreenshot;
-            previous?.Dispose();
-        });
+            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockTaken = true;
+
+            if (WindowConfig is null || _isClosing || cancellationToken.IsCancellationRequested)
+                return;
+
+            int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
+            int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
+            var request = new ScreenshotRequest(
+                MaxWidthPx: widthPx > 0 ? widthPx : null,
+                MaxHeightPx: heightPx > 0 ? heightPx : null,
+                TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000));
+
+            appScreenshot = await PreviewFrameProvider
+                .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (appScreenshot is null || _isClosing || cancellationToken.IsCancellationRequested)
+            {
+                appScreenshot?.Dispose();
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_isClosing || cancellationToken.IsCancellationRequested)
+                {
+                    appScreenshot.Dispose();
+                    return;
+                }
+
+                Bitmap? disposeNow = _previousScreenshot;
+                _previousScreenshot = _currentScreenshot;
+                _currentScreenshot = appScreenshot;
+                WindowScreenshot.Source = appScreenshot;
+                disposeNow?.Dispose();
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            appScreenshot?.Dispose();
+        }
+        finally
+        {
+            if (lockTaken)
+                _previewUpdateSemaphore.Release();
+        }
     }
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
@@ -280,11 +313,16 @@ public partial class FloatingWindow : Window
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
         {
+            _isClosing = true;
             PreviewFrameProvider.ForgetWindow(WindowConfig?.WindowId ?? string.Empty);
             _cts.Cancel();
             if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
                 DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
+            WindowScreenshot.Source = null;
             _currentScreenshot?.Dispose();
+            _previousScreenshot?.Dispose();
+            _currentScreenshot = null;
+            _previousScreenshot = null;
         }
     }
 
