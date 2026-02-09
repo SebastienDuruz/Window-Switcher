@@ -11,17 +11,11 @@
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12" ColumnDefinitions="Auto, *" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="App:" FontWeight="SemiBold"/>
-        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AppName}"/>
-
         <TextBlock Grid.Row="1" Grid.Column="0" Text="Version:" FontWeight="SemiBold"/>
         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AppVersion}"/>
 
         <TextBlock Grid.Row="2" Grid.Column="0" Text="UI backend:" FontWeight="SemiBold"/>
         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding UiBackend}"/>
-
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="Preview mode:" FontWeight="SemiBold"/>
-        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="4" Grid.Column="0" Text="OS:" FontWeight="SemiBold"/>
         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding OsDescription}" TextWrapping="Wrap"/>
@@ -35,6 +29,9 @@
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Config:" FontWeight="SemiBold"/>
         <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ConfigPath}" TextWrapping="Wrap"/>
 
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Preview mode:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
+        
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Deps:" FontWeight="SemiBold"/>
         <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding LinuxDependenciesStatus}" TextWrapping="Wrap"/>
 

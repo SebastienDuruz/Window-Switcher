@@ -15,6 +15,7 @@ public abstract class CommandBase(string command)
                 FileName = Command,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 CreateNoWindow = true
             }
         };

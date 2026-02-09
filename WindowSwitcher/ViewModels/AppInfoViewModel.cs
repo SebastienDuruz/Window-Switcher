@@ -13,15 +13,14 @@ namespace WindowSwitcher.ViewModels;
 
 public partial class AppInfoViewModel : ObservableObject
 {
-    [ObservableProperty] private string _appName = StaticData.AppName;
     [ObservableProperty] private string _appVersion = string.Empty;
     [ObservableProperty] private string _osDescription = RuntimeInformation.OSDescription;
     [ObservableProperty] private string _frameworkDescription = RuntimeInformation.FrameworkDescription;
     [ObservableProperty] private string _processArchitecture = RuntimeInformation.ProcessArchitecture.ToString();
     [ObservableProperty] private string _uiBackend = "Unknown";
     [ObservableProperty] private string _configPath = string.Empty;
-    [ObservableProperty] private string _linuxDependenciesStatus = string.Empty;
     [ObservableProperty] private string _previewMode = string.Empty;
+    [ObservableProperty] private string _linuxDependenciesStatus = string.Empty;
 
     public AppInfoViewModel()
     {
@@ -30,7 +29,6 @@ public partial class AppInfoViewModel : ObservableObject
 
     public void Refresh()
     {
-        AppName = StaticData.AppName;
         AppVersion = "0.6.1";
         OsDescription = RuntimeInformation.OSDescription;
         FrameworkDescription = RuntimeInformation.FrameworkDescription;
@@ -43,17 +41,25 @@ public partial class AppInfoViewModel : ObservableObject
 
     private static string GetUiBackend()
     {
-        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime)
             return "Unknown";
 
-        string? descriptor = desktop.MainWindow?.TryGetPlatformHandle()?.HandleDescriptor;
-        if (string.Equals(descriptor, "XID", StringComparison.OrdinalIgnoreCase))
-            return "X11 / XWayland (XID)";
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            string? sessionType = GetLinuxSessionType();
+            return sessionType is null ? "Unknown" : sessionType.ToUpperInvariant();
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return "Windows";
+        else
+            return "Unknown";
+    }
 
-        if (!string.IsNullOrWhiteSpace(descriptor))
-            return $"Wayland ({descriptor})";
-
-        return "Unknown";
+    private static string? GetLinuxSessionType()
+    {
+        var wrapper = new ShWrapper();
+        string output = wrapper.Execute("echo $XDG_SESSION_TYPE").Trim();
+        return string.IsNullOrWhiteSpace(output) ? null : output;
     }
 
     private static string GetLinuxDependencies()
@@ -77,7 +83,7 @@ public partial class AppInfoViewModel : ObservableObject
     private static string GetLinuxPreviewMode()
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return "N/A";
+            return "Desktop Window Manager (DWM)";
 
         return "Screenshots (import)";
     }
