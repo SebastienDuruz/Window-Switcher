@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data;
 
@@ -6,6 +5,9 @@ namespace WindowSwitcherLib.Data.Commands;
 
 public static class LinuxDependencies
 {
+    private static readonly WhichWrapper Which = new();
+    private static readonly GstInspectWrapper GstInspect = new();
+
     private static readonly object SyncRoot = new();
     private static readonly HashSet<string> ReportedMissing = new(StringComparer.OrdinalIgnoreCase);
     private static bool _wmctrlChecked;
@@ -83,24 +85,8 @@ public static class LinuxDependencies
 
     private static bool IsBinaryAvailable(string dependency)
     {
-        using Process process = new()
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "which",
-                Arguments = dependency,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        process.Start();
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-
-        return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output);
+        string output = Which.Execute(dependency);
+        return !string.IsNullOrWhiteSpace(output);
     }
 
     private static bool IsGstPipeWireSrcAvailableCore()
@@ -108,30 +94,7 @@ public static class LinuxDependencies
         if (!IsGstLaunchAvailable)
             return false;
 
-        using Process process = new()
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "gst-inspect-1.0",
-                Arguments = "pipewiresrc",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-            _ = process.StandardOutput.ReadToEnd();
-            _ = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            return process.ExitCode == 0;
-        }
-        catch
-        {
-            return false;
-        }
+        string output = GstInspect.Execute("pipewiresrc");
+        return !string.IsNullOrWhiteSpace(output);
     }
 }

@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
@@ -15,35 +14,28 @@ public static class PreviewProviderFactory
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new ScreenshotPreviewFrameProvider(accessor);
 
-        bool isWayland = IsWaylandSession();
-        bool wantsPipeWire = true;
-
-        if (!wantsPipeWire)
+        if (!EnsureLinuxDependency("gst-launch-1.0", LinuxDependencies.IsGstLaunchAvailable,
+                "PipeWire backend unavailable because `gst-launch-1.0` is missing. Falling back to screenshot backend."))
             return new ScreenshotPreviewFrameProvider(accessor);
-
-        if (!LinuxDependencies.IsGstLaunchAvailable)
-        {
-            LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
-            LogIfEnabled("PipeWire backend unavailable because `gst-launch-1.0` is missing. Falling back to screenshot backend.");
+        if (!EnsureLinuxDependency("gstreamer-pipewire", LinuxDependencies.IsGstPipeWireSrcAvailable,
+                "PipeWire backend unavailable because GStreamer `pipewiresrc` plugin is missing. Falling back to screenshot backend."))
             return new ScreenshotPreviewFrameProvider(accessor);
-        }
-
-        if (!LinuxDependencies.IsGstPipeWireSrcAvailable)
-        {
-            LinuxDependencies.ReportMissingOnce("gstreamer-pipewire");
-            LogIfEnabled("PipeWire backend unavailable because GStreamer `pipewiresrc` plugin is missing. Falling back to screenshot backend.");
+        if (!EnsureLinuxDependency("pw-dump", LinuxDependencies.IsPwDumpAvailable,
+                "PipeWire backend unavailable because `pw-dump` is missing. Falling back to screenshot backend."))
             return new ScreenshotPreviewFrameProvider(accessor);
-        }
-
-        if (!LinuxDependencies.IsPwDumpAvailable)
-        {
-            LinuxDependencies.ReportMissingOnce("pw-dump");
-            LogIfEnabled("PipeWire backend unavailable because `pw-dump` is missing. Falling back to screenshot backend.");
-            return new ScreenshotPreviewFrameProvider(accessor);
-        }
 
         LogIfEnabled("Using PipeWire preview backend (wmctrl window-id to PipeWire node matching).");
         return new PipeWireFrameProvider(accessor);
+    }
+
+    private static bool EnsureLinuxDependency(string dependencyName, bool isAvailable, string logWhenMissing)
+    {
+        if (isAvailable)
+            return true;
+
+        LinuxDependencies.ReportMissingOnce(dependencyName);
+        LogIfEnabled(logWhenMissing);
+        return false;
     }
 
     private static void LogIfEnabled(string message)
@@ -54,9 +46,4 @@ public static class PreviewProviderFactory
         AppLogger.Log($"[PreviewProviderFactory] {message}", StaticData.LogSeverity.WARN);
     }
 
-    private static bool IsWaylandSession()
-    {
-        string? sessionType = LinuxSessionDetector.GetSessionType();
-        return string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase);
-    }
 }

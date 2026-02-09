@@ -1,0 +1,26 @@
+namespace WindowSwitcherLib.Data.Commands;
+
+public sealed class GdbusWrapper() : CommandBase("gdbus"), ICommandWrapper
+{
+    public string Execute(string args)
+    {
+        if (!LinuxDependencies.IsGdbusAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("gdbus");
+            return string.Empty;
+        }
+
+        return ExecuteWithArguments(args, timeoutMs: 2_500);
+    }
+
+    public string Execute(IReadOnlyList<string> args, int timeoutMs)
+    {
+        if (!LinuxDependencies.IsGdbusAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("gdbus");
+            return string.Empty;
+        }
+
+        return ExecuteWithArgumentList(args, timeoutMs);
+    }
+}

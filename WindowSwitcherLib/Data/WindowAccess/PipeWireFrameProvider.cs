@@ -13,6 +13,9 @@ namespace WindowSwitcherLib.Data.WindowAccess;
 
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 {
+    private static readonly PwDumpWrapper PwDump = new();
+    private static readonly GdbusWrapper Gdbus = new();
+
     private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
     private readonly object _capturesSync = new();
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
@@ -21,7 +24,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly int _reconnectDelayMs;
     private readonly int _fps = 30;
     private readonly bool _isWaylandSession;
-    private readonly string? _configuredNodeId;
     private readonly bool _allowPortalFallback;
     private bool _disposed;
 
@@ -34,19 +36,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         var config = ConfigFileAccessor.GetInstance().ReadConfig(value => new
         {
             value.ActivateLogs,
-            value.LinuxPipeWireFps,
-            value.LinuxPipeWireReconnectDelayMs,
-            value.LinuxPipeWireNodeId
+            value.LinuxPipeWireReconnectDelayMs
         });
 
         _activateLogs = config.ActivateLogs;
         _reconnectDelayMs = Math.Clamp(config.LinuxPipeWireReconnectDelayMs, 1, 30_000);
-        _configuredNodeId = null;
         _isWaylandSession = IsWaylandSession();
         _allowPortalFallback = ParseBooleanEnvironment("WINDOW_SWITCHER_PIPEWIRE_ALLOW_PORTAL");
 
-        if (!string.IsNullOrWhiteSpace(_configuredNodeId))
-            LogWarn($"Using configured PipeWire node `{_configuredNodeId}`.");
         if (_allowPortalFallback)
             LogWarn("PipeWire portal fallback is enabled by environment variable.");
     }
@@ -165,18 +162,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         string? nodeId = null;
         string? portalSessionPath = null;
 
-        if (!string.IsNullOrWhiteSpace(_configuredNodeId))
+        nodeId = ResolveNodeIdFromPwDump(windowId);
+        if (string.IsNullOrWhiteSpace(nodeId) && _isWaylandSession && _allowPortalFallback)
         {
-            nodeId = _configuredNodeId;
-        }
-        else
-        {
-            nodeId = ResolveNodeIdFromPwDump(windowId);
-            if (string.IsNullOrWhiteSpace(nodeId) && _isWaylandSession && _allowPortalFallback)
-            {
-                LogWarn($"No wmctrl-matching PipeWire node found for `{windowId}`. Trying portal fallback.");
-                nodeId = TryStartPortalWindowScreencast(windowId, out portalSessionPath);
-            }
+            LogWarn($"No wmctrl-matching PipeWire node found for `{windowId}`. Trying portal fallback.");
+            nodeId = TryStartPortalWindowScreencast(windowId, out portalSessionPath);
         }
 
         if (string.IsNullOrWhiteSpace(nodeId))
@@ -457,7 +447,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
     private static List<NodeCandidate> GetPipeWireNodeCandidates()
     {
-        string output = RunCommand("pw-dump", string.Empty, 2_500);
+        string output = PwDump.Execute(timeoutMs: 2_500);
         if (string.IsNullOrWhiteSpace(output))
             return new List<NodeCandidate>();
 
@@ -522,14 +512,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         var parts = new List<string> { nodeId, nodeName, nodeDescription };
         foreach (JsonProperty property in propsElement.EnumerateObject())
         {
-            string value = property.Value.ValueKind switch
-            {
-                JsonValueKind.String => property.Value.GetString() ?? string.Empty,
-                JsonValueKind.Number => property.Value.ToString(),
-                JsonValueKind.True => "true",
-                JsonValueKind.False => "false",
-                _ => string.Empty
-            };
+            string value = GetJsonScalarString(property.Value);
 
             if (!string.IsNullOrWhiteSpace(value))
                 parts.Add(value);
@@ -543,14 +526,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (!propsElement.TryGetProperty(propertyName, out JsonElement value))
             return string.Empty;
 
-        return value.ValueKind switch
-        {
-            JsonValueKind.String => value.GetString() ?? string.Empty,
-            JsonValueKind.Number => value.ToString(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            _ => string.Empty
-        };
+        return GetJsonScalarString(value);
     }
 
     private static string RunPortalDesktopMethod(string method, IReadOnlyList<string> methodArguments, int timeoutMs)
@@ -568,7 +544,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         };
         args.AddRange(methodArguments);
 
-        return RunCommand("gdbus", args, timeoutMs);
+        return Gdbus.Execute(args, timeoutMs);
     }
 
     private static string RunPortalSessionMethod(string sessionPath, string method, IReadOnlyList<string> methodArguments, int timeoutMs)
@@ -586,7 +562,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         };
         args.AddRange(methodArguments);
 
-        return RunCommand("gdbus", args, timeoutMs);
+        return Gdbus.Execute(args, timeoutMs);
     }
 
     private static string? ExtractObjectPath(string value)
@@ -621,67 +597,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         _ = RunPortalSessionMethod(sessionPath, "org.freedesktop.portal.Session.Close", Array.Empty<string>(), timeoutMs: 2_000);
     }
 
-    private static string RunCommand(string fileName, string arguments, int timeoutMs)
-    {
-        using Process process = new();
-        process.StartInfo.FileName = fileName;
-        process.StartInfo.Arguments = arguments;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.CreateNoWindow = true;
-
-        try
-        {
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            _ = process.StandardError.ReadToEnd();
-            if (!process.WaitForExit(timeoutMs))
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                return string.Empty;
-            }
-
-            return process.ExitCode == 0 ? output : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private static string RunCommand(string fileName, IReadOnlyList<string> arguments, int timeoutMs)
-    {
-        using Process process = new();
-        process.StartInfo.FileName = fileName;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.CreateNoWindow = true;
-        process.StartInfo.Arguments = string.Empty;
-        process.StartInfo.ArgumentList.Clear();
-        foreach (string argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-
-        try
-        {
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            _ = process.StandardError.ReadToEnd();
-            if (!process.WaitForExit(timeoutMs))
-            {
-                try { process.Kill(entireProcessTree: true); } catch { }
-                return string.Empty;
-            }
-
-            return process.ExitCode == 0 ? output : string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
     private static bool IsWaylandSession()
     {
         string? sessionType = LinuxSessionDetector.GetSessionType();
@@ -694,6 +609,18 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             return;
 
         AppLogger.Log($"[PipeWireProvider] {message}", StaticData.LogSeverity.WARN);
+    }
+
+    private static string GetJsonScalarString(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.ToString(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => string.Empty
+        };
     }
 
     private readonly record struct NodeCandidate(string Id, int Score, string SearchText);
@@ -731,6 +658,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private sealed class PipeWireWindowStream : IDisposable
     {
         private const int MaxFrameBytes = 16 * 1024 * 1024;
+        private static readonly GstLaunchWrapper GstLaunch = new();
 
         private readonly string _nodeId;
         private readonly int _fps;
@@ -799,36 +727,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
             Stop();
 
-            var process = new Process();
-            process.StartInfo.FileName = "gst-launch-1.0";
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.ArgumentList.Add("-q");
-            process.StartInfo.ArgumentList.Add("pipewiresrc");
-            process.StartInfo.ArgumentList.Add($"path={_nodeId}");
-            process.StartInfo.ArgumentList.Add("do-timestamp=true");
-            process.StartInfo.ArgumentList.Add("!");
-            process.StartInfo.ArgumentList.Add("videorate");
-            process.StartInfo.ArgumentList.Add("!");
-            process.StartInfo.ArgumentList.Add($"video/x-raw,framerate={_fps}/1");
-            process.StartInfo.ArgumentList.Add("!");
-            process.StartInfo.ArgumentList.Add("videoconvert");
-            process.StartInfo.ArgumentList.Add("!");
-            process.StartInfo.ArgumentList.Add("jpegenc");
-            process.StartInfo.ArgumentList.Add("quality=80");
-            process.StartInfo.ArgumentList.Add("!");
-            process.StartInfo.ArgumentList.Add("fdsink");
-            process.StartInfo.ArgumentList.Add("fd=1");
-            process.StartInfo.ArgumentList.Add("sync=false");
-
+            Process? process = GstLaunch.StartPipeWireJpegStream(_nodeId, _fps);
             var cts = new CancellationTokenSource();
-            try
-            {
-                process.Start();
-            }
-            catch (Exception ex)
+            if (process is null)
             {
                 _faulted = true;
                 lock (_syncRoot)
@@ -837,9 +738,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                 }
 
                 if (_activateLogs)
-                    _logWarn($"Failed to start GStreamer PipeWire stream: {ex.Message}");
+                    _logWarn("Failed to start GStreamer PipeWire stream.");
 
-                process.Dispose();
                 cts.Dispose();
                 return;
             }

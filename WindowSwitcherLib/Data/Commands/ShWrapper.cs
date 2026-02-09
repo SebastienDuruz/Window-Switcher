@@ -1,6 +1,4 @@
 using System;
-using System.Diagnostics;
-
 namespace WindowSwitcherLib.Data.Commands;
 
 public class ShWrapper() : CommandBase("sh"), ICommandWrapper
@@ -9,15 +7,6 @@ public class ShWrapper() : CommandBase("sh"), ICommandWrapper
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        using Process process = CreateProcess();
-        process.StartInfo.ArgumentList.Clear();
-        process.StartInfo.ArgumentList.Add("-lc");
-        process.StartInfo.ArgumentList.Add(args);
-        
-        process.Start();
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-
-        return output;
+        return ExecuteWithArgumentList(["-lc", args], timeoutMs: 2_000);
     }
 }
