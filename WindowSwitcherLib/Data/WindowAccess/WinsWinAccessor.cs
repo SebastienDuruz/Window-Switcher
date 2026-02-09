@@ -11,7 +11,7 @@ using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public class WindowsWindowAccessor : WindowAccessor
+public class WinsWinAccessor : WinAccessor
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

@@ -11,7 +11,7 @@ using WindowSwitcherLib.Data.WindowAccess;
 
 namespace WindowSwitcher.ViewModels;
 
-public class SettingsViewModel : ObservableObject
+public class SettingsViewModel(Action applyAction) : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -21,12 +21,7 @@ public class SettingsViewModel : ObservableObject
 
     private static bool IsAvaloniaX11() => false;
 
-    public SettingsViewModel(Action applyAction)
-    {
-        ApplyCommand = new RelayCommand(applyAction);
-    }
-
-    public IRelayCommand ApplyCommand { get; }
+    public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
 
     public bool StartMinimized
     {

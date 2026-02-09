@@ -2,6 +2,7 @@ using System.Diagnostics;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Commands;
 

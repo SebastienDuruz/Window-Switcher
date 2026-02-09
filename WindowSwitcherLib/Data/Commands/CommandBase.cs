@@ -2,14 +2,9 @@ using System.Diagnostics;
 
 namespace WindowSwitcherLib.Data.Commands;
 
-public abstract class CommandBase
+public abstract class CommandBase(string command)
 {
-    protected string Command { get; }
-
-    protected CommandBase(string command)
-    {
-        Command = command;
-    }
+    protected string Command { get; } = command;
 
     protected Process CreateProcess()
     {

@@ -22,7 +22,7 @@ namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window
 {
-    private WindowAccessor WindowAccessor { get; } = WindowFactories.GetAccessor();
+    private WinAccessor WinAccessor { get; } = WinFactories.GetAccessor();
     private ScreenshotQueue ScreenshotQueue { get; }
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
@@ -42,9 +42,9 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
 
-        ScreenshotQueue = new ScreenshotQueue(WindowAccessor);
+        ScreenshotQueue = new ScreenshotQueue(WinAccessor);
 
-        ViewModel = new WindowListViewModel(WindowAccessor);
+        ViewModel = new WindowListViewModel(WinAccessor);
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
@@ -183,7 +183,7 @@ public partial class MainWindow : Window
         if (RenameWindow.IsUpdated)
         {
             RenameWindow.IsUpdated = false;
-            WindowAccessor.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
+            WinAccessor.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
             await Task.Delay(500); // Give time to windowTitle to be updated
             FloatingWindow window = FloatingWindows.First(x => x.WindowConfig!.WindowId == windowId);
             FloatingWindows.Remove(window);
@@ -252,7 +252,7 @@ public partial class MainWindow : Window
         foreach (WindowConfig window in windows)
         {
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, ScreenshotQueue, this));
+                FloatingWindows.Add(new FloatingWindow(window, WinAccessor, ScreenshotQueue, this));
         }
     }
 
@@ -270,7 +270,7 @@ public partial class MainWindow : Window
             foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
                 if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WindowAccessor, ScreenshotQueue, this));
+                    FloatingWindows.Add(new FloatingWindow(window, WinAccessor, ScreenshotQueue, this));
             }
         }
 

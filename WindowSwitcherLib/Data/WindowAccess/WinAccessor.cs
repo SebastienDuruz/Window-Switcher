@@ -6,7 +6,7 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public abstract class WindowAccessor
+public abstract class WinAccessor
 {
     /// <summary>
     /// Get the list of Window currently opened

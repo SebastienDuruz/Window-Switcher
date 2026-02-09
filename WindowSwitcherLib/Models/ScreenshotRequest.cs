@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Models;
 
 public readonly record struct ScreenshotRequest(
     int? MaxWidthPx = null,

@@ -21,13 +21,13 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
-    private WindowAccessor WindowAccessor { get; }
+    private WinAccessor WinAccessor { get; }
     public string LastSelectedItemId { get; } = "";
     public List<string> TempWindowIdsBlacklist { get; set; } = new ();
     
-    public WindowListViewModel(WindowAccessor windowAccessor)
+    public WindowListViewModel(WinAccessor winAccessor)
     {
-        WindowAccessor = windowAccessor;
+        WinAccessor = winAccessor;
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
     }
 
@@ -37,7 +37,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         {
             try
             {
-                ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
+                ObservableCollection<WindowConfig> fetchedWindows = WinAccessor.GetWindows();
                 await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
             }
             catch (Exception ex)
@@ -60,7 +60,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     
     public void FetchWindowsWithFilters()
     {
-        ApplyWindowsWithFilters(WindowAccessor.GetWindows());
+        ApplyWindowsWithFilters(WinAccessor.GetWindows());
     }
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)

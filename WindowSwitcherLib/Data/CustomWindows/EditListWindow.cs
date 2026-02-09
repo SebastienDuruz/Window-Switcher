@@ -2,14 +2,9 @@ using Avalonia.Controls;
 
 namespace WindowSwitcherLib.Data.CustomWindows;
 
-public class EditListWindow : Window
+public class EditListWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType)
+    : Window
 {
-    public List<string> ListToEdit { get; private set; }
-    public StaticData.PrefixWindowType PrefixWindowType { get; private set; }
-    
-    public EditListWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType)
-    {
-        ListToEdit = listToEdit;
-        PrefixWindowType = prefixWindowType;
-    }
+    public List<string> ListToEdit { get; private set; } = listToEdit;
+    public StaticData.PrefixWindowType PrefixWindowType { get; private set; } = prefixWindowType;
 }

@@ -10,7 +10,7 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public class LinuxX11WindowAccessor : WindowAccessor
+public class LinuxWinAccessor : WinAccessor
 {
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();

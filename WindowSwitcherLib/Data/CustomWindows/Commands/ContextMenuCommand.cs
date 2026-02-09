@@ -2,20 +2,11 @@ using System.Windows.Input;
 
 namespace WindowSwitcherLib.Data.CustomWindows.Commands;
 
-public class ContextMenuCommand : ICommand
+public class ContextMenuCommand(Action execute, Func<bool>? canExecute = null) : ICommand
 {
-    private readonly Action _execute;
-    private readonly Func<bool>? _canExecute;
+    public bool CanExecute(object? parameter) => canExecute?.Invoke() ?? true;
 
-    public ContextMenuCommand(Action execute, Func<bool>? canExecute = null)
-    {
-        _execute = execute;
-        _canExecute = canExecute;
-    }
-
-    public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
-
-    public void Execute(object? parameter) => _execute();
+    public void Execute(object? parameter) => execute();
 
     public event EventHandler? CanExecuteChanged;
 }

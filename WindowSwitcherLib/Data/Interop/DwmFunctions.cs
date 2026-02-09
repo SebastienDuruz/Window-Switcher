@@ -39,20 +39,12 @@ public static class DwmFunctions
         public int y;
     }
     
-    public struct Rect
+    public struct Rect(int left, int top, int right, int bottom)
     {
-        public Rect( int left, int top, int right, int bottom )
-        {
-            Left = left;
-            Top = top;
-            Right = right;
-            Bottom = bottom;
-        }
-
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
+        public int Left = left;
+        public int Top = top;
+        public int Right = right;
+        public int Bottom = bottom;
 
         public List<Rect> AsList() => new List<Rect> { this };
 

@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
@@ -19,7 +20,7 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         public ScreenshotRequest InFlightRequest;
     }
 
-    private readonly WindowAccessor _accessor;
+    private readonly WinAccessor _accessor;
     private readonly Channel<string> _channel;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _worker;
@@ -28,7 +29,7 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
     private readonly Dictionary<string, WindowEntry> _entries = new(StringComparer.Ordinal);
     private bool _disposed;
 
-    public ScreenshotQueue(WindowAccessor accessor)
+    public ScreenshotQueue(WinAccessor accessor)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         _accessor = accessor;

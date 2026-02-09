@@ -29,7 +29,7 @@ public partial class FloatingWindow : Window
     private Bitmap? _currentScreenshot;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
-    private WindowAccessor WindowAccessor { get; set; }
+    private WinAccessor WinAccessor { get; set; }
     private ScreenshotQueue ScreenshotQueue { get; }
 
     private int _targetScreenshotWidthPx;
@@ -37,14 +37,14 @@ public partial class FloatingWindow : Window
     
     public FloatingWindow(
         WindowConfig? windowConfig,
-        WindowAccessor windowAccessor,
+        WinAccessor winAccessor,
         ScreenshotQueue screenshotQueue,
         MainWindow mainWindow)
     {
         InitializeComponent();
 
         WindowConfig = windowConfig;
-        WindowAccessor = windowAccessor;
+        WinAccessor = winAccessor;
         ScreenshotQueue = screenshotQueue;
         MainWindow = mainWindow;
 
@@ -190,7 +190,7 @@ public partial class FloatingWindow : Window
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
+        WinAccessor.RaiseWindow(WindowConfig!.WindowId);
     }
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
@@ -210,7 +210,7 @@ public partial class FloatingWindow : Window
             return;
 
         MainWindow.SetActivePreview(this);
-        WindowAccessor.RaiseWindow(WindowConfig.WindowId);
+        WinAccessor.RaiseWindow(WindowConfig.WindowId);
     }
 
     private void CanvasPointerExited(object? sender, PointerEventArgs e)

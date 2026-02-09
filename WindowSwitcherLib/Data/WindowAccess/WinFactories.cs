@@ -2,14 +2,14 @@ using System.Runtime.InteropServices;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public class WindowFactories
+public class WinFactories
 {
-    public static WindowAccessor GetAccessor()
+    public static WinAccessor GetAccessor()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return new WindowsWindowAccessor();
+            return new WinsWinAccessor();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return new LinuxX11WindowAccessor();
+            return new LinuxWinAccessor();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             throw new PlatformNotSupportedException("Mac access is not supported on this software");
         
