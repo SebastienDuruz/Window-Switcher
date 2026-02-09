@@ -17,10 +17,6 @@ public class ConfigFile
     public bool ActivateWindowsPreview { get; set; } = true;
     public bool ActivateLogs { get; set; } = false;
     
-    // Screenshot methods
-    public int ScreenshotRefreshTimeoutMs { get; set; } = 1000;
-    public int ScreenshotQuality { get; set; } = 5;
-
     // Linux preview backend
     public string LinuxPreviewBackend { get; set; } = "Auto";
     public int LinuxPipeWireFps { get; set; } = 15;

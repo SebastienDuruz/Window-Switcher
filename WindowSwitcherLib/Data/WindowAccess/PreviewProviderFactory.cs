@@ -12,19 +12,11 @@ public static class PreviewProviderFactory
     {
         ArgumentNullException.ThrowIfNull(accessor);
 
-        LinuxPreviewBackend requestedBackend = ConfigFileAccessor.GetInstance()
-            .ReadConfig(config => ParseBackend(config.LinuxPreviewBackend));
-
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new ScreenshotPreviewFrameProvider(accessor);
 
         bool isWayland = IsWaylandSession();
-        bool wantsPipeWire = requestedBackend switch
-        {
-            LinuxPreviewBackend.PipeWire => true,
-            LinuxPreviewBackend.Auto => isWayland,
-            _ => false
-        };
+        bool wantsPipeWire = true;
 
         if (!wantsPipeWire)
             return new ScreenshotPreviewFrameProvider(accessor);
@@ -52,14 +44,6 @@ public static class PreviewProviderFactory
 
         LogIfEnabled("Using PipeWire preview backend (wmctrl window-id to PipeWire node matching).");
         return new PipeWireFrameProvider(accessor);
-    }
-
-    private static LinuxPreviewBackend ParseBackend(string? raw)
-    {
-        if (Enum.TryParse(raw, ignoreCase: true, out LinuxPreviewBackend parsed))
-            return parsed;
-
-        return LinuxPreviewBackend.Auto;
     }
 
     private static void LogIfEnabled(string message)

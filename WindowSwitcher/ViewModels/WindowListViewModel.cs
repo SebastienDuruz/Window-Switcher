@@ -47,13 +47,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
             }
             int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config =>
             {
-                if (!Enum.TryParse(config.LinuxPreviewBackend, ignoreCase: true, out LinuxPreviewBackend backend))
-                    backend = LinuxPreviewBackend.Auto;
-
-                if (backend == LinuxPreviewBackend.PipeWire)
-                    return Math.Clamp(config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
-
-                return Math.Clamp(config.ScreenshotRefreshTimeoutMs, 100, 10_000);
+                return Math.Clamp(config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
             });
             await Task.Delay(refreshTimeoutMs, cancellationToken);
         }

@@ -59,19 +59,6 @@ public class ConfigFileAccessor
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
-
-            // Backward-compat: migrate legacy 'RefreshTimeoutMs' (removed) to the new 'ScreenshotRefreshTimeoutMs'
-            // only when the new property is missing from the JSON.
-            if (rawConfig is not null
-                && !rawConfig.TryGetValue(nameof(ConfigFile.ScreenshotRefreshTimeoutMs), StringComparison.OrdinalIgnoreCase, out _)
-                && TryGetInt(rawConfig, "RefreshTimeoutMs", out int legacyRefresh))
-            {
-                _config.ScreenshotRefreshTimeoutMs = legacyRefresh;
-            }
-
-            _config.ScreenshotRefreshTimeoutMs = Math.Clamp(_config.ScreenshotRefreshTimeoutMs, 100, 10_000);
-            _config.ScreenshotQuality = Math.Clamp(_config.ScreenshotQuality, 1, 100);
-            _config.LinuxPreviewBackend = NormalizeLinuxPreviewBackend(_config.LinuxPreviewBackend);
             _config.LinuxPipeWireFps = Math.Clamp(_config.LinuxPipeWireFps, 1, 60);
             _config.LinuxPipeWireRefreshTimeoutMs = Math.Clamp(_config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
             _config.LinuxPipeWireReconnectDelayMs = Math.Clamp(_config.LinuxPipeWireReconnectDelayMs, 100, 30_000);
@@ -212,16 +199,5 @@ public class ConfigFileAccessor
     private static string NormalizeKeyPart(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
-    }
-
-    private static string NormalizeLinuxPreviewBackend(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return nameof(LinuxPreviewBackend.Auto);
-
-        if (Enum.TryParse(value, ignoreCase: true, out LinuxPreviewBackend backend))
-            return backend.ToString();
-
-        return nameof(LinuxPreviewBackend.Auto);
     }
 }

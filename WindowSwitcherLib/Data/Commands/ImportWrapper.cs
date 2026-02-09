@@ -31,7 +31,7 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
             return null;
         }
 
-        int quality = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotQuality);
+        int quality = 100;
 
         int timeoutMs = Math.Clamp(request.TimeoutMs, 100, 10_000);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

@@ -99,8 +99,8 @@ public class WinsWinAccessor : WinAccessor
                     PrintWindow(hwnd, hdc, 0);
                     g.ReleaseHdc(hdc);
                 }
-        
-                int quality = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotQuality);
+
+                int quality = 100;
                 using var encoderParameters = new EncoderParameters(1);
                 encoderParameters.Param[0] = new EncoderParameter(Quality, quality);
                 using var stream = new MemoryStream();

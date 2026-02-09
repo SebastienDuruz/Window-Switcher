@@ -89,27 +89,10 @@ public partial class AppInfoViewModel : ObservableObject
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return "Desktop Window Manager (DWM)";
 
-        LinuxPreviewBackend backend = ConfigFileAccessor.GetInstance()
-            .ReadConfig(config => ParseLinuxPreviewBackend(config.LinuxPreviewBackend));
-        bool waylandSession = string.Equals(GetLinuxSessionType(), "wayland", StringComparison.OrdinalIgnoreCase);
         bool pipeWireReady = LinuxDependencies.IsGstLaunchAvailable
                              && LinuxDependencies.IsGstPipeWireSrcAvailable
                              && LinuxDependencies.IsPwDumpAvailable;
 
-        if (backend == LinuxPreviewBackend.PipeWire)
-            return pipeWireReady ? "PipeWire stream (wmctrl/gstreamer)" : "PipeWire requested (not ready)";
-
-        if (backend == LinuxPreviewBackend.Auto && waylandSession)
-            return pipeWireReady ? "PipeWire stream (auto)" : "Screenshots (fallback)";
-
-        return "Screenshots (import)";
-    }
-
-    private static LinuxPreviewBackend ParseLinuxPreviewBackend(string? value)
-    {
-        if (Enum.TryParse(value, ignoreCase: true, out LinuxPreviewBackend backend))
-            return backend;
-
-        return LinuxPreviewBackend.Auto;
+        return pipeWireReady ? "PipeWire" : "PipeWire (not ready)";
     }
 }

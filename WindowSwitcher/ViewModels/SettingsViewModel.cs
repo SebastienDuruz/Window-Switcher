@@ -16,10 +16,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-    public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) && !IsPipeWireOnlyBackendSelected();
-    public bool LinuxScreenshotQualityVisible => LinuxScreenshotSettingsVisible;
-    public bool LinuxPipeWireSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-    public string[] LinuxPreviewBackendOptions => Enum.GetNames<LinuxPreviewBackend>();
 
     public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
 
@@ -198,67 +194,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         }
     }
 
-    public int ScreenshotQuality
-    {
-        get => _configAccessor.ReadConfig(config => config.ScreenshotQuality);
-        set
-        {
-            int clamped = Math.Clamp(value, 1, 100);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ScreenshotQuality == clamped)
-                    return;
-                config.ScreenshotQuality = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
-    public int ScreenshotRefreshTimeoutMs
-    {
-        get => _configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
-        set
-        {
-            int clamped = Math.Clamp(value, 100, 10_000);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ScreenshotRefreshTimeoutMs == clamped)
-                    return;
-                config.ScreenshotRefreshTimeoutMs = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
-    public string LinuxPreviewBackend
-    {
-        get => _configAccessor.ReadConfig(config => NormalizeLinuxPreviewBackend(config.LinuxPreviewBackend));
-        set
-        {
-            string normalized = NormalizeLinuxPreviewBackend(value);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (string.Equals(config.LinuxPreviewBackend, normalized, StringComparison.OrdinalIgnoreCase))
-                    return;
-                config.LinuxPreviewBackend = normalized;
-                updated = true;
-            });
-            if (updated)
-            {
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(LinuxScreenshotSettingsVisible));
-                OnPropertyChanged(nameof(LinuxScreenshotQualityVisible));
-            }
-        }
-    }
-
     public int LinuxPipeWireFps
     {
         get => _configAccessor.ReadConfig(config => config.LinuxPipeWireFps);
@@ -343,19 +278,5 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         return color.A == 0xFF
             ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
             : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-    }
-
-    private static string NormalizeLinuxPreviewBackend(string? value)
-    {
-        if (Enum.TryParse(value, ignoreCase: true, out WindowSwitcherLib.Models.LinuxPreviewBackend backend))
-            return backend.ToString();
-
-        return WindowSwitcherLib.Models.LinuxPreviewBackend.Auto.ToString();
-    }
-
-    private bool IsPipeWireOnlyBackendSelected()
-    {
-        string backend = _configAccessor.ReadConfig(config => NormalizeLinuxPreviewBackend(config.LinuxPreviewBackend));
-        return string.Equals(backend, WindowSwitcherLib.Models.LinuxPreviewBackend.PipeWire.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 }

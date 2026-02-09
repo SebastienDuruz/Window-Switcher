@@ -85,9 +85,7 @@ public partial class FloatingWindow : Window
                         bool isPipeWireProvider = PreviewFrameProvider is PipeWireFrameProvider;
                         var timing = configAccessor.ReadConfig(config => new
                         {
-                            RefreshMs = isPipeWireProvider
-                                ? config.LinuxPipeWireRefreshTimeoutMs
-                                : config.ScreenshotRefreshTimeoutMs
+                            RefreshMs = config.LinuxPipeWireRefreshTimeoutMs
                         });
                         int refreshTimeoutMs = isPipeWireProvider
                             ? Math.Clamp(timing.RefreshMs, 30, 5_000)
