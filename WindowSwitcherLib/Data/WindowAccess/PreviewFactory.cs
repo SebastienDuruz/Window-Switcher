@@ -7,7 +7,7 @@ using WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public static class PreviewProviderFactory
+public static class PreviewFactory
 {
     public static IPreviewFrameProvider Create(WinAccessorBase accessorBase)
     {

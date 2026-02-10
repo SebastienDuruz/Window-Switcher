@@ -24,7 +24,7 @@ namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window
 {
-    private WinAccessorBase WinAccessorBase { get; } = WinFactories.GetAccessor();
+    private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
@@ -44,7 +44,7 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
 
-        PreviewFrameProvider = PreviewProviderFactory.Create(WinAccessorBase);
+        PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
 
         ViewModel = new WindowListViewModel(WinAccessorBase);
         DataContext = ViewModel;

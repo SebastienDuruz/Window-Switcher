@@ -3,7 +3,7 @@ using WindowSwitcherLib.Data.WindowAccess.Accessors;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public abstract class WinFactories
+public abstract class AccessorFactory
 {
     public static WinAccessorBase GetAccessor()
     {
