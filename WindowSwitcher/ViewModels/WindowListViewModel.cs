@@ -17,6 +17,7 @@ namespace WindowSwitcher.ViewModels;
 
 public partial class WindowListViewModel : ObservableObject, IDisposable
 {
+    private const int WindowListRefreshIntervalMs = 250;
     private readonly CancellationTokenSource _cts = new ();
     [ObservableProperty] 
     private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
@@ -46,11 +47,8 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
                 if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
                     AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
             }
-            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            {
-                return Math.Clamp(config.LinuxPipeWireRefreshTimeoutMs, 1, 5_000);
-            });
-            await Task.Delay(refreshTimeoutMs, cancellationToken);
+
+            await Task.Delay(WindowListRefreshIntervalMs, cancellationToken);
         }
     }
 

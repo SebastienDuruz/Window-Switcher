@@ -59,7 +59,6 @@ public class ConfigFileAccessor
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
-            _config.LinuxPipeWireRefreshTimeoutMs = Math.Clamp(_config.LinuxPipeWireRefreshTimeoutMs, 30, 5_000);
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
             {
                 if (string.IsNullOrWhiteSpace(windowConfig.ConfigKey))

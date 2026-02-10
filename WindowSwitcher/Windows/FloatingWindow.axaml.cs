@@ -23,6 +23,9 @@ public partial class FloatingWindow : Window
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
+    private const int PreviewRefreshIntervalMsPipeWire = 100;
+    private const int PreviewRefreshIntervalMsScreenshot = 100;
+    private const int PreviewRequestTimeoutMsScreenshot = 1_500;
     private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     private volatile bool _isPointerInside;
     private volatile bool _isActivePreview;
@@ -88,22 +91,18 @@ public partial class FloatingWindow : Window
                     try
                     {
                         bool isPipeWireProvider = PreviewFrameProvider is PipeWireFrameProvider;
-                        var timing = configAccessor.ReadConfig(config => new
-                        {
-                            RefreshMs = config.LinuxPipeWireRefreshTimeoutMs
-                        });
-                        int refreshTimeoutMs = isPipeWireProvider
-                            ? Math.Clamp(timing.RefreshMs, 30, 5_000)
-                            : Math.Clamp(timing.RefreshMs, 100, 10_000);
+                        int pipeWireRequestTimeoutMs = 5000;
+                        int refreshIntervalMs = isPipeWireProvider
+                            ? PreviewRefreshIntervalMsPipeWire
+                            : PreviewRefreshIntervalMsScreenshot;
                         int requestTimeoutMs = isPipeWireProvider
-                            ? Math.Clamp(Math.Max(refreshTimeoutMs * 3, 1_500), 250, 10_000)
-                            : 1_500;
+                            ? pipeWireRequestTimeoutMs
+                            : PreviewRequestTimeoutMsScreenshot;
 
                         // Optimization: do not refresh the *active* preview window (usually the foreground app).
-                        if (!_isActivePreview)
-                            await UpdateScreenshot(requestTimeoutMs, cancellationToken);
+                        await UpdateScreenshot(requestTimeoutMs, cancellationToken);
 
-                        await Task.Delay(refreshTimeoutMs, cancellationToken);
+                        await Task.Delay(refreshIntervalMs, cancellationToken);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {

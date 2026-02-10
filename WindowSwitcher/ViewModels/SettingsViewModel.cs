@@ -194,25 +194,6 @@ public class SettingsViewModel(Action applyAction) : ObservableObject
         }
     }
 
-    public int LinuxPipeWireRefreshTimeoutMs
-    {
-        get => _configAccessor.ReadConfig(config => config.LinuxPipeWireRefreshTimeoutMs);
-        set
-        {
-            int clamped = Math.Clamp(value, 1, 5_000);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.LinuxPipeWireRefreshTimeoutMs == clamped)
-                    return;
-                config.LinuxPipeWireRefreshTimeoutMs = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
     private static string ToConfigColorString(Color color)
     {
         // Keep a stable, human-friendly format in the config file.

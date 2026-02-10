@@ -17,9 +17,6 @@ public class ConfigFile
     public bool ActivateWindowsPreview { get; set; } = true;
     public bool ActivateLogs { get; set; } = false;
     
-    // Linux preview backend
-    public int LinuxPipeWireRefreshTimeoutMs { get; set; } = 100;
-    
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();
     public List<string> BlacklistPrefixes { get; set; } = new List<string>();

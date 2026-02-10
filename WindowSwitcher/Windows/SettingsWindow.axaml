@@ -53,16 +53,6 @@
                                                          IsAlphaVisible="False" />
                         </Grid>
 
-                        <StackPanel Orientation="Vertical" Spacing="0" IsVisible="{Binding IsLinuxRuntime}">
-                                <TextBlock Text="{Binding LinuxPipeWireRefreshTimeoutMs, StringFormat=PipeWire refresh (ms): {0}}" />
-                                <Slider Width="240"
-                                        Minimum="1"
-                                        Maximum="5000"
-                                        TickFrequency="1"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding LinuxPipeWireRefreshTimeoutMs, Mode=TwoWay}" />
-                        </StackPanel>
-
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">

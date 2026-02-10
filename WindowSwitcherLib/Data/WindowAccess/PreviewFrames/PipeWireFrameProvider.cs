@@ -22,7 +22,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private readonly bool _activateLogs;
-    private readonly int _fps = 20;
+    private readonly int _fps = 30;
     private readonly bool _isWaylandSession;
     private readonly bool _allowPortalFallback;
     private bool _disposed;
