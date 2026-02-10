@@ -26,7 +26,7 @@ public partial class AppInfoViewModel : ObservableObject
 
     public void Refresh()
     {
-        AppVersion = "0.6.1";
+        AppVersion = "0.6.3";
         OsDescription = RuntimeInformation.OSDescription;
         FrameworkDescription = RuntimeInformation.FrameworkDescription;
         ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString();
