@@ -1,6 +1,6 @@
 namespace WindowSwitcherLib.Data.Commands;
 
-public sealed class PwDumpWrapper() : CommandBase("pw-dump"), ICommandWrapper
+public sealed class PwDumpWrapper() : CommandBase("pw-dump"), IPwDumpWrapper
 {
     public string Execute(string args)
     {

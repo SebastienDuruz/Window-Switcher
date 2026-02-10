@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace WindowSwitcherLib.Data.Commands;
 
-public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), ICommandWrapper
+public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaunchWrapper
 {
     public string Execute(string args)
     {

@@ -1,6 +1,6 @@
 namespace WindowSwitcherLib.Data.Commands;
 
-public sealed class GdbusWrapper() : CommandBase("gdbus"), ICommandWrapper
+public sealed class GdbusWrapper() : CommandBase("gdbus"), IGdbusWrapper
 {
     public string Execute(string args)
     {

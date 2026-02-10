@@ -14,10 +14,11 @@ namespace WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 {
     private const int PipeWireReconnectDelayMs = 300;
-    private static readonly PwDumpWrapper PwDump = new();
-    private static readonly GdbusWrapper Gdbus = new();
 
     private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
+    private readonly IPwDumpWrapper _pwDump;
+    private readonly IGdbusWrapper _gdbus;
+    private readonly IGstLaunchWrapper _gstLaunch;
     private readonly object _capturesSync = new();
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
@@ -27,11 +28,18 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly bool _allowPortalFallback;
     private bool _disposed;
 
-    public PipeWireFrameProvider(WinAccessorBase accessorBase)
+    public PipeWireFrameProvider(
+        WinAccessorBase accessorBase,
+        IPwDumpWrapper? pwDump = null,
+        IGdbusWrapper? gdbus = null,
+        IGstLaunchWrapper? gstLaunch = null)
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
 
         _fallbackProvider = new ScreenshotPreviewFrameProvider(accessorBase);
+        _pwDump = pwDump ?? new PwDumpWrapper();
+        _gdbus = gdbus ?? new GdbusWrapper();
+        _gstLaunch = gstLaunch ?? new GstLaunchWrapper();
 
         _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();
@@ -169,7 +177,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         }
 
         LogWarn($"PipeWire node `{nodeId}` assigned to window `{windowId}`.");
-        var stream = new PipeWireWindowStream(nodeId, _fps, _activateLogs, LogWarn);
+        var stream = new PipeWireWindowStream(nodeId, _fps, _activateLogs, _gstLaunch, LogWarn);
         return new WindowCaptureContext(windowId, nodeId, portalSessionPath, stream);
     }
 
@@ -303,7 +311,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return null;
     }
 
-    private static string? WaitForNewPipeWireNodeId(
+    private string? WaitForNewPipeWireNodeId(
         HashSet<string> baselineIds,
         TimeSpan timeout,
         string windowId)
@@ -435,9 +443,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return await _fallbackProvider.RequestAsync(windowId, safeRequest, cancellationToken).ConfigureAwait(false);
     }
 
-    private static List<NodeCandidate> GetPipeWireNodeCandidates()
+    private List<NodeCandidate> GetPipeWireNodeCandidates()
     {
-        string output = PwDump.Execute(timeoutMs: 2_500);
+        string output = _pwDump.Execute(timeoutMs: 2_500);
         if (string.IsNullOrWhiteSpace(output))
             return new List<NodeCandidate>();
 
@@ -519,7 +527,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return GetJsonScalarString(value);
     }
 
-    private static string RunPortalDesktopMethod(string method, IReadOnlyList<string> methodArguments, int timeoutMs)
+    private string RunPortalDesktopMethod(string method, IReadOnlyList<string> methodArguments, int timeoutMs)
     {
         var args = new List<string>
         {
@@ -534,10 +542,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         };
         args.AddRange(methodArguments);
 
-        return Gdbus.Execute(args, timeoutMs);
+        return _gdbus.Execute(args, timeoutMs);
     }
 
-    private static string RunPortalSessionMethod(string sessionPath, string method, IReadOnlyList<string> methodArguments, int timeoutMs)
+    private string RunPortalSessionMethod(string sessionPath, string method, IReadOnlyList<string> methodArguments, int timeoutMs)
     {
         var args = new List<string>
         {
@@ -552,7 +560,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         };
         args.AddRange(methodArguments);
 
-        return Gdbus.Execute(args, timeoutMs);
+        return _gdbus.Execute(args, timeoutMs);
     }
 
     private static string? ExtractObjectPath(string value)
@@ -579,7 +587,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return parts[^2];
     }
 
-    private static void ClosePortalSession(string sessionPath)
+    private void ClosePortalSession(string sessionPath)
     {
         if (string.IsNullOrWhiteSpace(sessionPath))
             return;
@@ -648,11 +656,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private sealed class PipeWireWindowStream : IDisposable
     {
         private const int MaxFrameBytes = 16 * 1024 * 1024;
-        private static readonly GstLaunchWrapper GstLaunch = new();
 
         private readonly string _nodeId;
         private readonly int _fps;
         private readonly bool _activateLogs;
+        private readonly IGstLaunchWrapper _gstLaunch;
         private readonly Action<string> _logWarn;
         private readonly object _syncRoot = new();
 
@@ -665,11 +673,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         private bool _faulted;
         private bool _restartInProgress;
 
-        public PipeWireWindowStream(string nodeId, int fps, bool activateLogs, Action<string> logWarn)
+        public PipeWireWindowStream(
+            string nodeId,
+            int fps,
+            bool activateLogs,
+            IGstLaunchWrapper gstLaunch,
+            Action<string> logWarn)
         {
+            ArgumentNullException.ThrowIfNull(gstLaunch);
+            ArgumentNullException.ThrowIfNull(logWarn);
             _nodeId = nodeId;
             _fps = fps;
             _activateLogs = activateLogs;
+            _gstLaunch = gstLaunch;
             _logWarn = logWarn;
         }
 
@@ -717,7 +733,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
             Stop();
 
-            Process? process = GstLaunch.StartPipeWireJpegStream(_nodeId, _fps);
+            Process? process = _gstLaunch.StartPipeWireJpegStream(_nodeId, _fps);
             var cts = new CancellationTokenSource();
             if (process is null)
             {
