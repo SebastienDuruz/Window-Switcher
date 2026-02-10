@@ -93,6 +93,6 @@ public partial class AppInfoViewModel : ObservableObject
                              && LinuxDependencies.IsGstPipeWireSrcAvailable
                              && LinuxDependencies.IsPwDumpAvailable;
 
-        return pipeWireReady ? "PipeWire" : "PipeWire (not ready)";
+        return pipeWireReady ? "PipeWire" : "Screenshots";
     }
 }

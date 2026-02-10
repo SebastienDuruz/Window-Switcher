@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace WindowSwitcherLib.Data.WindowAccess;
 
-public class WinFactories
+public abstract class WinFactories
 {
     public static WinAccessor GetAccessor()
     {

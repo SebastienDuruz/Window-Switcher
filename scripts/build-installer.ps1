@@ -1,7 +1,7 @@
 param(
     [string] $Configuration = "Release",
     [string] $Runtime = "win-x64",
-    [string] $Version = "0.6.1",
+    [string] $Version = "0.6.2",
     [switch] $SelfContained,
     [string] $PublishDir = (Join-Path $PSScriptRoot "..\\artifacts\\publish\\$Runtime"),
     [string] $OutDir = (Join-Path $PSScriptRoot "..\\artifacts\\installer")

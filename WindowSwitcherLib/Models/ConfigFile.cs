@@ -18,9 +18,7 @@ public class ConfigFile
     public bool ActivateLogs { get; set; } = false;
     
     // Linux preview backend
-    public int LinuxPipeWireFps { get; set; } = 15;
     public int LinuxPipeWireRefreshTimeoutMs { get; set; } = 100;
-    public string LinuxPipeWireNodeId { get; set; } = string.Empty;
     
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();
