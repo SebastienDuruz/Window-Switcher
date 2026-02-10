@@ -91,7 +91,7 @@ public partial class FloatingWindow : Window
                     try
                     {
                         bool isPipeWireProvider = PreviewFrameProvider is PipeWireFrameProvider;
-                        int pipeWireRequestTimeoutMs = 5000;
+                        int pipeWireRequestTimeoutMs = 500;
                         int refreshIntervalMs = isPipeWireProvider
                             ? PreviewRefreshIntervalMsPipeWire
                             : PreviewRefreshIntervalMsScreenshot;

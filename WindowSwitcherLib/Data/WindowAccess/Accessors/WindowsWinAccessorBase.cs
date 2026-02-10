@@ -99,7 +99,7 @@ public class WindowsWinAccessorBase : WinAccessorBase
                     g.ReleaseHdc(hdc);
                 }
 
-                int quality = 100;
+                int quality = 80;
                 using var encoderParameters = new EncoderParameters(1);
                 encoderParameters.Param[0] = new EncoderParameter(Quality, quality);
                 using var stream = new MemoryStream();
