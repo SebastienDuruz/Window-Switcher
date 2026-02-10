@@ -3,15 +3,14 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Models;
-using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
+using WindowSwitcherLib.Models;
 using static System.Drawing.Imaging.Encoder;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.Accessors;
 
-public class WinsWinAccessor : WinAccessor
+public class WindowsWinAccessorBase : WinAccessorBase
 {
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

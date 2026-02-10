@@ -1,12 +1,10 @@
-using System.Threading;
-using System.Threading.Tasks;
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.Accessors;
 
-public abstract class WinAccessor
+public abstract class WinAccessorBase
 {
     /// <summary>
     /// Get the list of Window currently opened

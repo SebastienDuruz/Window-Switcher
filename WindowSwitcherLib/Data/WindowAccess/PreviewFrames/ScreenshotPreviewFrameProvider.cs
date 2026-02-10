@@ -1,16 +1,17 @@
 using Avalonia.Media.Imaging;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 
 public sealed class ScreenshotPreviewFrameProvider : IPreviewFrameProvider
 {
     private readonly ScreenshotQueue _screenshotQueue;
 
-    public ScreenshotPreviewFrameProvider(WinAccessor accessor)
+    public ScreenshotPreviewFrameProvider(WinAccessorBase accessorBase)
     {
-        ArgumentNullException.ThrowIfNull(accessor);
-        _screenshotQueue = new ScreenshotQueue(accessor);
+        ArgumentNullException.ThrowIfNull(accessorBase);
+        _screenshotQueue = new ScreenshotQueue(accessorBase);
     }
 
     public Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)

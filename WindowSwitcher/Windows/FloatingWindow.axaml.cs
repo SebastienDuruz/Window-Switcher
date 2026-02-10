@@ -12,6 +12,8 @@ using WindowSwitcherLib.Data.CustomWindows.Commands;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
 using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
+using WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Models;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
@@ -32,7 +34,7 @@ public partial class FloatingWindow : Window
     private Bitmap? _previousScreenshot;
     public WindowConfig? WindowConfig { get; set; }
     private MainWindow MainWindow { get; set; }
-    private WinAccessor WinAccessor { get; set; }
+    private WinAccessorBase WinAccessorBase { get; set; }
     private IPreviewFrameProvider PreviewFrameProvider { get; }
 
     private int _targetScreenshotWidthPx;
@@ -40,14 +42,14 @@ public partial class FloatingWindow : Window
     
     public FloatingWindow(
         WindowConfig? windowConfig,
-        WinAccessor winAccessor,
+        WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
         MainWindow mainWindow)
     {
         InitializeComponent();
 
         WindowConfig = windowConfig;
-        WinAccessor = winAccessor;
+        WinAccessorBase = winAccessorBase;
         PreviewFrameProvider = previewFrameProvider;
         MainWindow = mainWindow;
 
@@ -202,7 +204,7 @@ public partial class FloatingWindow : Window
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WinAccessor.RaiseWindow(WindowConfig!.WindowId);
+        WinAccessorBase.RaiseWindow(WindowConfig!.WindowId);
     }
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
@@ -222,7 +224,7 @@ public partial class FloatingWindow : Window
             return;
 
         MainWindow.SetActivePreview(this);
-        WinAccessor.RaiseWindow(WindowConfig.WindowId);
+        WinAccessorBase.RaiseWindow(WindowConfig.WindowId);
     }
 
     private void CanvasPointerExited(object? sender, PointerEventArgs e)

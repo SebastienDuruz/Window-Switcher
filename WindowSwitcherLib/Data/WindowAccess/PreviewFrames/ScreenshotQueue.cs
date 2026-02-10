@@ -1,11 +1,9 @@
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 
 public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
 {
@@ -20,7 +18,7 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         public ScreenshotRequest InFlightRequest;
     }
 
-    private readonly WinAccessor _accessor;
+    private readonly WinAccessorBase _accessorBase;
     private readonly Channel<string> _channel;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _worker;
@@ -29,10 +27,10 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
     private readonly Dictionary<string, WindowEntry> _entries = new(StringComparer.Ordinal);
     private bool _disposed;
 
-    public ScreenshotQueue(WinAccessor accessor)
+    public ScreenshotQueue(WinAccessorBase accessorBase)
     {
-        ArgumentNullException.ThrowIfNull(accessor);
-        _accessor = accessor;
+        ArgumentNullException.ThrowIfNull(accessorBase);
+        _accessorBase = accessorBase;
 
         _channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
         {
@@ -182,7 +180,7 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
                     Bitmap? bitmap = null;
                     try
                     {
-                        bitmap = await _accessor
+                        bitmap = await _accessorBase
                             .TakeScreenshotAsync(windowId, request, _cts.Token)
                             .ConfigureAwait(false);
                     }

@@ -7,7 +7,7 @@ namespace WindowSwitcherLib.Data.FileAccess;
 public static class AppLogger
 {
     private static readonly SemaphoreSlim LogLock = new(1, 1);
-    public static string LogFilePath => Path.Combine(DataFolders.LogsFolder, $"{DateTime.Now:yyyy-MM-dd}.txt");
+    public static string LogFilePath => Path.Combine(StaticData.LogsFolder, $"{DateTime.Now:yyyy-MM-dd}.txt");
     public static string LastLogMessage { get; private set; } = string.Empty;
 
     public static void Log(string message, StaticData.LogSeverity severity)
@@ -22,7 +22,7 @@ public static class AppLogger
         bool lockTaken = false;
         try
         {
-            DataFolders.CheckFolders();
+            StaticData.CheckFolders();
             await LogLock.WaitAsync().ConfigureAwait(false);
             lockTaken = true;
             await File.AppendAllTextAsync(LogFilePath, message).ConfigureAwait(false);

@@ -14,8 +14,8 @@ public class ConfigFileAccessor
     
     private ConfigFileAccessor()
     {
-        DataFolders.CheckFolders();
-        _filePath = Path.Combine(DataFolders.DataFolder, "config.json");
+        StaticData.CheckFolders();
+        _filePath = Path.Combine(StaticData.DataFolder, "config.json");
         _config = new ConfigFile();
         ReadUserSettings();
     }

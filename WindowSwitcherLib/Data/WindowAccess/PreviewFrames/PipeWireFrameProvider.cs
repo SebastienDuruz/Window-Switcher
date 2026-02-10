@@ -4,12 +4,12 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 {
@@ -27,11 +27,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly bool _allowPortalFallback;
     private bool _disposed;
 
-    public PipeWireFrameProvider(WinAccessor accessor)
+    public PipeWireFrameProvider(WinAccessorBase accessorBase)
     {
-        ArgumentNullException.ThrowIfNull(accessor);
+        ArgumentNullException.ThrowIfNull(accessorBase);
 
-        _fallbackProvider = new ScreenshotPreviewFrameProvider(accessor);
+        _fallbackProvider = new ScreenshotPreviewFrameProvider(accessorBase);
 
         _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();

@@ -1,7 +1,7 @@
 using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 
 public interface IPreviewFrameProvider : IDisposable, IAsyncDisposable
 {

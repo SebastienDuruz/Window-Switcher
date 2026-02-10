@@ -16,13 +16,15 @@ using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
+using WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
 using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window
 {
-    private WinAccessor WinAccessor { get; } = WinFactories.GetAccessor();
+    private WinAccessorBase WinAccessorBase { get; } = WinFactories.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private static List<FloatingWindow> FloatingWindows { get; } = new();
     private PrefixesWindow PrefixesWindow { get; }
@@ -42,9 +44,9 @@ public partial class MainWindow : Window
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
 
-        PreviewFrameProvider = PreviewProviderFactory.Create(WinAccessor);
+        PreviewFrameProvider = PreviewProviderFactory.Create(WinAccessorBase);
 
-        ViewModel = new WindowListViewModel(WinAccessor);
+        ViewModel = new WindowListViewModel(WinAccessorBase);
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
@@ -90,7 +92,7 @@ public partial class MainWindow : Window
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = DataFolders.DataFolder,
+            FileName = StaticData.DataFolder,
             UseShellExecute = true
         });
     }
@@ -183,7 +185,7 @@ public partial class MainWindow : Window
         if (RenameWindow.IsUpdated)
         {
             RenameWindow.IsUpdated = false;
-            WinAccessor.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
+            WinAccessorBase.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
             await Task.Delay(500); // Give time to windowTitle to be updated
             FloatingWindow window = FloatingWindows.First(x => x.WindowConfig!.WindowId == windowId);
             FloatingWindows.Remove(window);
@@ -252,7 +254,7 @@ public partial class MainWindow : Window
         foreach (WindowConfig window in windows)
         {
             if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                FloatingWindows.Add(new FloatingWindow(window, WinAccessor, PreviewFrameProvider, this));
+                FloatingWindows.Add(new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this));
         }
     }
 
@@ -270,7 +272,7 @@ public partial class MainWindow : Window
             foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
                 if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WinAccessor, PreviewFrameProvider, this));
+                    FloatingWindows.Add(new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this));
             }
         }
 

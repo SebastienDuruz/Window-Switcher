@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Data.WindowAccess.Accessors;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
@@ -21,13 +22,13 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
-    private WinAccessor WinAccessor { get; }
+    private WinAccessorBase WinAccessorBase { get; }
     public string LastSelectedItemId { get; } = "";
     public List<string> TempWindowIdsBlacklist { get; set; } = new ();
     
-    public WindowListViewModel(WinAccessor winAccessor)
+    public WindowListViewModel(WinAccessorBase winAccessorBase)
     {
-        WinAccessor = winAccessor;
+        WinAccessorBase = winAccessorBase;
         Task.Run(async () => await RunPeriodicTask(_cts.Token));
     }
 
@@ -37,7 +38,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         {
             try
             {
-                ObservableCollection<WindowConfig> fetchedWindows = WinAccessor.GetWindows();
+                ObservableCollection<WindowConfig> fetchedWindows = WinAccessorBase.GetWindows();
                 await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
             }
             catch (Exception ex)
@@ -63,7 +64,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     
     public void FetchWindowsWithFilters()
     {
-        ApplyWindowsWithFilters(WinAccessor.GetWindows());
+        ApplyWindowsWithFilters(WinAccessorBase.GetWindows());
     }
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)

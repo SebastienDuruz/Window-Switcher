@@ -1,16 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Commands;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.WindowAccess;
+namespace WindowSwitcherLib.Data.WindowAccess.Accessors;
 
-public class LinuxWinAccessor : WinAccessor
+public class LinuxWinAccessorBase : WinAccessorBase
 {
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();

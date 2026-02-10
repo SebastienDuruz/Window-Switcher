@@ -6,6 +6,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using WindowSwitcher.Theming;
 using WindowSwitcher.ViewModels;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.WindowAccess;
 
@@ -22,7 +23,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        DataFolders.CheckFolders();
+        StaticData.CheckFolders();
         ApplyAccentColorFromConfig();
         
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
