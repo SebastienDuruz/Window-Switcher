@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using WindowSwitcherLib.Data.FileAccess;
 using WindowSwitcherLib.Data.Interop;
 using WindowSwitcherLib.Models;
 using static System.Drawing.Imaging.Encoder;
@@ -40,24 +41,33 @@ public class WindowsWinAccessorBase : WinAccessorBase
     public override ObservableCollection<WindowConfig> GetWindows()
     {
         Windows.Clear();
-        
+
         foreach (Process process in Process.GetProcesses())
         {
-            if (string.IsNullOrWhiteSpace(process.MainWindowTitle))
-                continue;
-            if(process.MainWindowTitle.ToLower() == StaticData.AppName.ToLower())
-                continue;
-            if (process.HasExited)
-                continue;
-
-            Windows.Add(new WindowConfig()
+            try
             {
-                WindowTitle = process.MainWindowTitle, 
-                WindowId = process.MainWindowHandle.ToString(), 
-                ProcessName = process.ProcessName
-            });    
+                if (process.HasExited || string.IsNullOrWhiteSpace(process.MainWindowTitle))
+                    continue;
+                if (process.MainWindowTitle.Equals(StaticData.AppName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Windows.Add(new WindowConfig
+                {
+                    WindowTitle = process.MainWindowTitle,
+                    WindowId = process.MainWindowHandle.ToString(),
+                    ProcessName = process.ProcessName
+                });
+            }
+            catch
+            {
+                // Ignore processes we cannot inspect.
+            }
+            finally
+            {
+                process.Dispose();
+            }
         }
-        
+
         return Windows;
     }
 
@@ -69,7 +79,8 @@ public class WindowsWinAccessorBase : WinAccessorBase
         }
         catch (Exception ex)
         {
-            // TODO : Log            
+            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                AppLogger.Log($"RaiseWindow failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
         }
     }
 
@@ -110,6 +121,8 @@ public class WindowsWinAccessorBase : WinAccessorBase
         }
         catch (Exception ex)
         {
+            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                AppLogger.Log($"Windows screenshot failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
             return null;
         }
     }
@@ -122,7 +135,8 @@ public class WindowsWinAccessorBase : WinAccessorBase
         }
         catch (Exception ex)
         {
-            // TODO : Log
+            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
+                AppLogger.Log($"RenameWindowTitle failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
         }
     }
 }

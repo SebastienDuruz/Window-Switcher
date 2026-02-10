@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using WindowSwitcherLib.Data.WindowAccess;
 using WindowSwitcherLib.Models;
 
@@ -34,14 +33,12 @@ public class ConfigFileAccessor
     {
         lock (_syncRoot)
         {
-            JObject? rawConfig = null;
             if (File.Exists(_filePath))
             {
                 try
                 {
                     string fileContents = File.ReadAllText(_filePath);
                     _config = JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
-                    rawConfig = JsonConvert.DeserializeObject<JObject>(fileContents);
                 }
                 catch (Exception)
                 {
@@ -65,31 +62,6 @@ public class ConfigFileAccessor
                     windowConfig.ConfigKey = CreateConfigKey(windowConfig);
             }
         }
-    }
-
-    private static bool TryGetInt(JObject raw, string propertyName, out int value)
-    {
-        value = default;
-        if (!raw.TryGetValue(propertyName, StringComparison.OrdinalIgnoreCase, out JToken? token))
-            return false;
-
-        try
-        {
-            if (token.Type == JTokenType.Integer)
-            {
-                value = token.Value<int>();
-                return true;
-            }
-
-            if (token.Type == JTokenType.String && int.TryParse(token.Value<string>(), out value))
-                return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-
-        return false;
     }
 
     public void WriteUserSettings()

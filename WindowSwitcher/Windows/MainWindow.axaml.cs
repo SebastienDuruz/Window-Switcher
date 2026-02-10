@@ -26,13 +26,12 @@ public partial class MainWindow : Window
 {
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
-    private static List<FloatingWindow> FloatingWindows { get; } = new();
+    private readonly Dictionary<string, FloatingWindow> _floatingWindows = new(StringComparer.Ordinal);
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
-    private static bool RefreshButtonEnabled { get; set; } = true;
     private FloatingWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
     private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
@@ -81,8 +80,9 @@ public partial class MainWindow : Window
         SettingsWindow.Close();
         AppInfoWindow.Close();
         RenameWindow.Close();
-        foreach(FloatingWindow floatingWindow in FloatingWindows)
+        foreach (FloatingWindow floatingWindow in _floatingWindows.Values.ToList())
             floatingWindow.Close();
+        _floatingWindows.Clear();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
         ViewModel.Dispose();
         base.OnClosing(e);
@@ -132,24 +132,18 @@ public partial class MainWindow : Window
 
     public void AddToBlacklist(string windowTitle)
     {
-        if (RefreshButtonEnabled)
-        {
-            windowTitle = windowTitle.ToLower();
-            if (!BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle)))
-            {
-                BlacklistWindow.ListToEdit.Add(windowTitle);
-                BlacklistWindow.AddPrefixToList(windowTitle);
-            
-                ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
-            }
-        }
+        windowTitle = windowTitle.ToLowerInvariant();
+        if (BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle, StringComparison.Ordinal)))
+            return;
+
+        BlacklistWindow.ListToEdit.Add(windowTitle);
+        BlacklistWindow.AddPrefixToList(windowTitle);
+        ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
     }
 
     public void AddToTempBlacklist(string windowId)
     {
-        if (RefreshButtonEnabled)
-            if (ViewModel.TempWindowIdsBlacklist.All(x => x != windowId))
-                ViewModel.TempWindowIdsBlacklist.Add(windowId);
+        ViewModel.TempWindowIdsBlacklist.Add(windowId);
     }
 
     public void SetActivePreview(FloatingWindow floatingWindow)
@@ -171,28 +165,19 @@ public partial class MainWindow : Window
         _activePreviewWindow = null;
     }
 
-    /// <summary>
-    /// TODO : Optimise this method for better user experience (lag in some cases)
-    /// </summary>
-    /// <param name="windowId"></param>
-    /// <returns></returns>
     public async Task RenameWindowTitle(string windowId)
     {
-        RenameWindow.Show();
-        while (RenameWindow.IsVisible)
-            await Task.Delay(500);
+        if (!_floatingWindows.TryGetValue(windowId, out FloatingWindow? floatingWindow))
+            return;
+        if (floatingWindow.WindowConfig is null)
+            return;
 
-        if (RenameWindow.IsUpdated)
-        {
-            RenameWindow.IsUpdated = false;
-            WinAccessorBase.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
-            await Task.Delay(500); // Give time to windowTitle to be updated
-            FloatingWindow window = FloatingWindows.First(x => x.WindowConfig!.WindowId == windowId);
-            FloatingWindows.Remove(window);
-            StaticData.AppClosing = true;
-            window.Close();
-            StaticData.AppClosing = false;
-        }
+        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(floatingWindow.WindowConfig.WindowTitle);
+        if (!isUpdated)
+            return;
+
+        WinAccessorBase.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
+        ApplySettings();
     }
 
     private void ShowPreviouslyReportedDependencies()
@@ -253,8 +238,10 @@ public partial class MainWindow : Window
     {
         foreach (WindowConfig window in windows)
         {
-            if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                FloatingWindows.Add(new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this));
+            if (_floatingWindows.ContainsKey(window.WindowId))
+                continue;
+
+            _floatingWindows[window.WindowId] = new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this);
         }
     }
 
@@ -271,8 +258,10 @@ public partial class MainWindow : Window
         {
             foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
             {
-                if (FloatingWindows.All(x => x.WindowConfig!.WindowId != window.WindowId))
-                    FloatingWindows.Add(new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this));
+                if (_floatingWindows.ContainsKey(window.WindowId))
+                    continue;
+
+                _floatingWindows[window.WindowId] = new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this);
             }
         }
 
@@ -285,25 +274,20 @@ public partial class MainWindow : Window
 
     private void CloseAllFloatingWindows()
     {
-        StaticData.AppClosing = true;
-        foreach (FloatingWindow window in FloatingWindows.ToList())
+        ExecuteWithAppClosingFlag(() =>
         {
-            window.Close();
-            FloatingWindows.Remove(window);
-        }
-        StaticData.AppClosing = false;
+            foreach (FloatingWindow window in _floatingWindows.Values.ToList())
+                window.Close();
+            _floatingWindows.Clear();
+        });
     }
 
     private void CloseFloatingWindow(string windowId)
     {
-        FloatingWindow? window = FloatingWindows.FirstOrDefault(x => x.WindowConfig?.WindowId == windowId);
-        if (window is null)
+        if (!_floatingWindows.Remove(windowId, out FloatingWindow? window))
             return;
 
-        StaticData.AppClosing = true;
-        window.Close();
-        StaticData.AppClosing = false;
-        FloatingWindows.Remove(window);
+        ExecuteWithAppClosingFlag(window.Close);
     }
 
     private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
@@ -320,5 +304,20 @@ public partial class MainWindow : Window
     {
         ViewModel.WindowsConfigs.Clear();
         ViewModel.FetchWindowsWithFilters();
+    }
+
+    private static void ExecuteWithAppClosingFlag(Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        bool previousAppClosingState = StaticData.AppClosing;
+        StaticData.AppClosing = true;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            StaticData.AppClosing = previousAppClosingState;
+        }
     }
 }

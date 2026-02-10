@@ -133,7 +133,7 @@ public class LinuxWinAccessorBase : WinAccessorBase
             int titleStartIndex = windowInfo.IndexOf(parts[4], StringComparison.Ordinal);
             windowTitle = titleStartIndex >= 0 ? windowInfo[titleStartIndex..].Trim() : string.Join(' ', parts.Skip(4));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // TODO : Log
             return false;
