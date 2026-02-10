@@ -7,6 +7,8 @@ namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 
 public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
 {
+    private static readonly Task<Bitmap?> NullBitmapTask = Task.FromResult<Bitmap?>(null);
+
     private sealed class WindowEntry
     {
         public bool Queued;
@@ -44,58 +46,28 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
     public Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(windowId))
-            return Task.FromResult<Bitmap?>(null);
+            return NullBitmapTask;
         if (cancellationToken.IsCancellationRequested)
-            return Task.FromResult<Bitmap?>(null);
+            return NullBitmapTask;
 
-        Task<Bitmap?> task;
+        Task<Bitmap?> requestTask;
         lock (_sync)
         {
             if (_disposed)
-                return Task.FromResult<Bitmap?>(null);
+                return NullBitmapTask;
 
-            if (!_entries.TryGetValue(windowId, out WindowEntry? entry))
-            {
-                entry = new WindowEntry();
-                _entries[windowId] = entry;
-            }
+            WindowEntry entry = GetOrCreateEntry(windowId);
 
             if (entry.Forgotten)
                 entry.Forgotten = false;
 
-            if (entry.InFlight)
-            {
-                if (entry.PendingTcs is not null)
-                {
-                    entry.PendingRequest = request;
-                    task = entry.PendingTcs.Task;
-                }
-                else if (entry.InFlightTcs is not null && entry.InFlightRequest == request)
-                {
-                    task = entry.InFlightTcs.Task;
-                }
-                else
-                {
-                    entry.PendingRequest = request;
-                    entry.PendingTcs ??= NewTcs();
-                    task = entry.PendingTcs.Task;
-                }
-            }
-            else
-            {
-                entry.PendingRequest = request;
-                entry.PendingTcs ??= NewTcs();
-                task = entry.PendingTcs.Task;
-
-                if (!entry.Queued)
-                {
-                    entry.Queued = true;
-                    _ = _channel.Writer.TryWrite(windowId);
-                }
-            }
+            requestTask = QueueOrAttachRequest(windowId, request, entry);
         }
 
-        return WaitOrNullAsync(task, cancellationToken);
+        if (!cancellationToken.CanBeCanceled)
+            return requestTask;
+
+        return WaitOrNullAsync(requestTask, cancellationToken);
     }
 
     public void ForgetWindow(string windowId)
@@ -150,32 +122,8 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
             {
                 while (_channel.Reader.TryRead(out string? windowId))
                 {
-                    WindowEntry? entry;
-                    ScreenshotRequest request;
-                    TaskCompletionSource<Bitmap?> tcs;
-
-                    lock (_sync)
-                    {
-                        if (!_entries.TryGetValue(windowId, out entry))
-                            continue;
-
-                        entry.Queued = false;
-
-                        if (entry.InFlight)
-                            continue;
-
-                        if (entry.PendingTcs is null)
-                            continue;
-
-                        entry.InFlight = true;
-                        entry.InFlightRequest = entry.PendingRequest;
-                        entry.InFlightTcs = entry.PendingTcs;
-
-                        entry.PendingTcs = null;
-
-                        request = entry.InFlightRequest;
-                        tcs = entry.InFlightTcs;
-                    }
+                    if (!TryBeginInFlight(windowId, out WindowEntry? entry, out ScreenshotRequest request, out TaskCompletionSource<Bitmap?> tcs))
+                        continue;
 
                     Bitmap? bitmap = null;
                     try
@@ -193,41 +141,7 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
                         // WindowAccessor handles expected errors/logging.
                     }
 
-                    bool shouldRequeue;
-                    bool forgotten;
-                    lock (_sync)
-                    {
-                        if (entry is not null)
-                        {
-                            entry.InFlight = false;
-                            entry.InFlightTcs = null;
-                            forgotten = entry.Forgotten;
-                            shouldRequeue = !forgotten && entry.PendingTcs is not null && !entry.Queued;
-                            if (shouldRequeue)
-                                entry.Queued = true;
-
-                            if (forgotten)
-                                _entries.Remove(windowId);
-                        }
-                        else
-                        {
-                            shouldRequeue = false;
-                            forgotten = false;
-                        }
-                    }
-
-                    if (forgotten)
-                    {
-                        bitmap?.Dispose();
-                        tcs.TrySetResult(null);
-                    }
-                    else
-                    {
-                        tcs.TrySetResult(bitmap);
-                    }
-
-                    if (shouldRequeue)
-                        _ = _channel.Writer.TryWrite(windowId);
+                    FinalizeInFlight(windowId, entry!, bitmap, tcs);
                 }
             }
         }
@@ -255,14 +169,120 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         }
     }
 
+    private WindowEntry GetOrCreateEntry(string windowId)
+    {
+        if (_entries.TryGetValue(windowId, out WindowEntry? entry))
+            return entry;
+
+        entry = new WindowEntry();
+        _entries[windowId] = entry;
+        return entry;
+    }
+
+    private Task<Bitmap?> QueueOrAttachRequest(string windowId, ScreenshotRequest request, WindowEntry entry)
+    {
+        if (entry.InFlight)
+        {
+            if (entry.PendingTcs is null &&
+                entry.InFlightTcs is not null &&
+                entry.InFlightRequest == request)
+            {
+                return entry.InFlightTcs.Task;
+            }
+
+            entry.PendingRequest = request;
+            entry.PendingTcs ??= NewTcs();
+            return entry.PendingTcs.Task;
+        }
+
+        entry.PendingRequest = request;
+        entry.PendingTcs ??= NewTcs();
+
+        if (!entry.Queued)
+        {
+            entry.Queued = true;
+            _ = _channel.Writer.TryWrite(windowId);
+        }
+
+        return entry.PendingTcs.Task;
+    }
+
+    private bool TryBeginInFlight(
+        string windowId,
+        out WindowEntry? entry,
+        out ScreenshotRequest request,
+        out TaskCompletionSource<Bitmap?> tcs)
+    {
+        lock (_sync)
+        {
+            if (!_entries.TryGetValue(windowId, out entry))
+            {
+                request = default;
+                tcs = null!;
+                return false;
+            }
+
+            entry.Queued = false;
+            if (entry.InFlight || entry.PendingTcs is null)
+            {
+                request = default;
+                tcs = null!;
+                return false;
+            }
+
+            entry.InFlight = true;
+            entry.InFlightRequest = entry.PendingRequest;
+            entry.InFlightTcs = entry.PendingTcs;
+            entry.PendingTcs = null;
+
+            request = entry.InFlightRequest;
+            tcs = entry.InFlightTcs;
+            return true;
+        }
+    }
+
+    private void FinalizeInFlight(
+        string windowId,
+        WindowEntry entry,
+        Bitmap? bitmap,
+        TaskCompletionSource<Bitmap?> inFlightTcs)
+    {
+        bool forgotten;
+        bool shouldRequeue;
+
+        lock (_sync)
+        {
+            entry.InFlight = false;
+            entry.InFlightTcs = null;
+            forgotten = entry.Forgotten;
+
+            shouldRequeue = !forgotten && entry.PendingTcs is not null && !entry.Queued;
+            if (shouldRequeue)
+                entry.Queued = true;
+
+            if (forgotten)
+                _entries.Remove(windowId);
+        }
+
+        if (forgotten)
+        {
+            bitmap?.Dispose();
+            inFlightTcs.TrySetResult(null);
+        }
+        else
+        {
+            inFlightTcs.TrySetResult(bitmap);
+        }
+
+        if (shouldRequeue)
+            _ = _channel.Writer.TryWrite(windowId);
+    }
+
     private static TaskCompletionSource<Bitmap?> NewTcs()
         => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static async Task<Bitmap?> WaitOrNullAsync(Task<Bitmap?> task, CancellationToken cancellationToken)
     {
-        if (!cancellationToken.CanBeCanceled)
-            return await task.ConfigureAwait(false);
-
         try
         {
             return await task.WaitAsync(cancellationToken).ConfigureAwait(false);

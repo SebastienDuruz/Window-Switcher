@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia.Media.Imaging;
@@ -19,16 +20,26 @@ namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 {
     private const int PipeWireReconnectDelayMs = 300;
+    private const int PipeWireNodePollIntervalMs = 300;
+    private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
+    private const int PipeWireNodeCacheTtlMs = 500;
+    private const int DefaultPipeWireFps = 60;
+    private const int MinPipeWireFps = 15;
+    private const int MaxPipeWireFps = 120;
+    private static readonly Regex ObjectPathRegex = new(@"'(/org/[^']+)'", RegexOptions.Compiled);
 
     private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
     private readonly IPwDumpWrapper _pwDump;
     private readonly IGdbusWrapper _gdbus;
     private readonly IGstLaunchWrapper _gstLaunch;
     private readonly object _capturesSync = new();
+    private readonly object _nodeCacheSync = new();
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
+    private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
+    private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private readonly bool _activateLogs;
-    private readonly int _fps = 30;
+    private readonly int _fps;
     private readonly bool _isWaylandSession;
     private readonly bool _allowPortalFallback;
     private bool _disposed;
@@ -49,9 +60,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();
         _allowPortalFallback = ParseBooleanEnvironment("WINDOW_SWITCHER_PIPEWIRE_ALLOW_PORTAL");
+        _fps = ResolvePipeWireFps();
 
         if (_allowPortalFallback)
             LogWarn("PipeWire portal fallback is enabled by environment variable.");
+        LogWarn($"PipeWire stream target FPS: {_fps}");
     }
 
     public async Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
@@ -245,7 +258,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (!LinuxDependencies.IsGdbusAvailable || !LinuxDependencies.IsPwDumpAvailable)
             return null;
 
-        List<NodeCandidate> baseline = GetPipeWireNodeCandidates();
+        IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
         HashSet<string> baselineIds = baseline.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
 
         string sessionToken = $"ws_session_{Guid.NewGuid():N}";
@@ -287,7 +300,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             [sessionPath, string.Empty, startOptions],
             timeoutMs: 5_000);
 
-        string? nodeId = WaitForNewPipeWireNodeId(baselineIds, TimeSpan.FromSeconds(20), windowId);
+        string? nodeId = WaitForNewPipeWireNodeId(
+            baselineIds,
+            TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+            windowId);
         if (!string.IsNullOrWhiteSpace(nodeId))
             return nodeId;
 
@@ -301,19 +317,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (!LinuxDependencies.IsPwDumpAvailable)
             return null;
 
-        List<NodeCandidate> nodes = GetPipeWireNodeCandidates();
+        IReadOnlyList<NodeCandidate> nodes = GetPipeWireNodeCandidates();
         IReadOnlyCollection<string> normalizedWindowIds = BuildWindowIdPatterns(windowId);
         if (normalizedWindowIds.Count == 0)
             return null;
 
-        NodeCandidate? matching = nodes
-            .Where(candidate => MatchesWindowId(candidate, normalizedWindowIds))
-            .OrderByDescending(candidate => candidate.Score)
-            .FirstOrDefault();
-        if (matching is not null)
-            return matching.Value.Id;
+        NodeCandidate? matching = FindBestMatchingNode(nodes, normalizedWindowIds);
+        if (matching is null)
+            return null;
 
-        return null;
+        return matching.Value.Id;
     }
 
     private string? WaitForNewPipeWireNodeId(
@@ -327,40 +340,28 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
         while (DateTime.UtcNow < deadline)
         {
-            List<NodeCandidate> current = GetPipeWireNodeCandidates();
-            List<NodeCandidate> newCandidates = current
-                .Where(candidate => !baselineIds.Contains(candidate.Id))
-                .ToList();
-
-            NodeCandidate? matchingNew = newCandidates
-                .Where(candidate => MatchesWindowId(candidate, normalizedWindowIds))
-                .OrderByDescending(candidate => candidate.Score)
-                .FirstOrDefault();
+            IReadOnlyList<NodeCandidate> current = GetPipeWireNodeCandidates(forceRefresh: true);
+            NodeCandidate? matchingNew = FindBestNewMatchingNode(current, baselineIds, normalizedWindowIds);
             if (matchingNew is not null)
                 return matchingNew.Value.Id;
 
-            NodeCandidate? bestThisRound = newCandidates
-                .OrderByDescending(candidate => candidate.Score)
-                .FirstOrDefault();
-
+            NodeCandidate? bestThisRound = FindBestNewNode(current, baselineIds);
             if (bestThisRound is not null && (bestNewCandidate is null || bestThisRound.Value.Score > bestNewCandidate.Value.Score))
                 bestNewCandidate = bestThisRound;
 
-            Thread.Sleep(300);
+            Thread.Sleep(PipeWireNodePollIntervalMs);
         }
 
         if (bestNewCandidate is not null)
             return bestNewCandidate.Value.Id;
 
-        List<NodeCandidate> fallback = GetPipeWireNodeCandidates();
-        NodeCandidate? matchingFallback = fallback
-            .Where(candidate => MatchesWindowId(candidate, normalizedWindowIds))
-            .OrderByDescending(candidate => candidate.Score)
-            .FirstOrDefault();
+        IReadOnlyList<NodeCandidate> fallback = GetPipeWireNodeCandidates(forceRefresh: true);
+        NodeCandidate? matchingFallback = FindBestMatchingNode(fallback, normalizedWindowIds);
         if (matchingFallback is not null)
             return matchingFallback.Value.Id;
 
-        return fallback.OrderByDescending(candidate => candidate.Score).Select(candidate => candidate.Id).FirstOrDefault();
+        NodeCandidate? bestFallback = FindBestNode(fallback);
+        return bestFallback?.Id;
     }
 
     private static bool MatchesWindowId(NodeCandidate candidate, IReadOnlyCollection<string> normalizedWindowIds)
@@ -368,10 +369,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (normalizedWindowIds.Count == 0)
             return false;
 
-        string normalizedSearch = NormalizeForSearch(candidate.SearchText);
         foreach (string normalizedWindowId in normalizedWindowIds)
         {
-            if (normalizedSearch.Contains(normalizedWindowId, StringComparison.Ordinal))
+            if (candidate.NormalizedSearchText.Contains(normalizedWindowId, StringComparison.Ordinal))
                 return true;
         }
 
@@ -383,7 +383,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (string.IsNullOrWhiteSpace(value))
             return string.Empty;
 
-        return Regex.Replace(value.ToLowerInvariant(), @"[^a-z0-9x]+", string.Empty);
+        var builder = new StringBuilder(value.Length);
+        foreach (char character in value)
+        {
+            char normalized = char.ToLowerInvariant(character);
+            bool isAsciiAlphaNumeric = (normalized >= 'a' && normalized <= 'z') || (normalized >= '0' && normalized <= '9');
+            if (isAsciiAlphaNumeric || normalized == 'x')
+                builder.Append(normalized);
+        }
+
+        return builder.ToString();
     }
 
     private static IReadOnlyCollection<string> BuildWindowIdPatterns(string? windowId)
@@ -425,17 +434,26 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (string.IsNullOrWhiteSpace(raw))
             return false;
 
-        return raw.Trim() switch
+        return raw.Trim().ToLowerInvariant() switch
         {
             "1" => true,
             "true" => true,
-            "TRUE" => true,
             "yes" => true,
-            "YES" => true,
             "on" => true,
-            "ON" => true,
             _ => false
         };
+    }
+
+    private int ResolvePipeWireFps()
+    {
+        string? rawFps = Environment.GetEnvironmentVariable("WINDOW_SWITCHER_PIPEWIRE_FPS");
+        if (string.IsNullOrWhiteSpace(rawFps))
+            return DefaultPipeWireFps;
+
+        if (!int.TryParse(rawFps.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedFps))
+            return DefaultPipeWireFps;
+
+        return Math.Clamp(parsedFps, MinPipeWireFps, MaxPipeWireFps);
     }
 
     private async Task<Bitmap?> RequestFallbackAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken)
@@ -448,14 +466,103 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return await _fallbackProvider.RequestAsync(windowId, safeRequest, cancellationToken).ConfigureAwait(false);
     }
 
-    private List<NodeCandidate> GetPipeWireNodeCandidates()
+    private static NodeCandidate? FindBestMatchingNode(
+        IReadOnlyList<NodeCandidate> candidates,
+        IReadOnlyCollection<string> normalizedWindowIds)
+    {
+        NodeCandidate? bestMatch = null;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            NodeCandidate candidate = candidates[index];
+            if (!MatchesWindowId(candidate, normalizedWindowIds))
+                continue;
+
+            if (bestMatch is null || candidate.Score > bestMatch.Value.Score)
+                bestMatch = candidate;
+        }
+
+        return bestMatch;
+    }
+
+    private static NodeCandidate? FindBestNode(IReadOnlyList<NodeCandidate> candidates)
+    {
+        NodeCandidate? best = null;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            NodeCandidate candidate = candidates[index];
+            if (best is null || candidate.Score > best.Value.Score)
+                best = candidate;
+        }
+
+        return best;
+    }
+
+    private static NodeCandidate? FindBestNewNode(IReadOnlyList<NodeCandidate> candidates, HashSet<string> baselineIds)
+    {
+        NodeCandidate? best = null;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            NodeCandidate candidate = candidates[index];
+            if (baselineIds.Contains(candidate.Id))
+                continue;
+            if (best is null || candidate.Score > best.Value.Score)
+                best = candidate;
+        }
+
+        return best;
+    }
+
+    private static NodeCandidate? FindBestNewMatchingNode(
+        IReadOnlyList<NodeCandidate> candidates,
+        HashSet<string> baselineIds,
+        IReadOnlyCollection<string> normalizedWindowIds)
+    {
+        NodeCandidate? best = null;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            NodeCandidate candidate = candidates[index];
+            if (baselineIds.Contains(candidate.Id))
+                continue;
+            if (!MatchesWindowId(candidate, normalizedWindowIds))
+                continue;
+
+            if (best is null || candidate.Score > best.Value.Score)
+                best = candidate;
+        }
+
+        return best;
+    }
+
+    private IReadOnlyList<NodeCandidate> GetPipeWireNodeCandidates(bool forceRefresh = false)
+    {
+        if (!forceRefresh)
+        {
+            lock (_nodeCacheSync)
+            {
+                if (_cachedNodeCandidates.Count > 0 &&
+                    DateTime.UtcNow - _nodeCandidatesCachedAtUtc < TimeSpan.FromMilliseconds(PipeWireNodeCacheTtlMs))
+                {
+                    return _cachedNodeCandidates;
+                }
+            }
+        }
+
+        IReadOnlyList<NodeCandidate> freshCandidates = LoadPipeWireNodeCandidates();
+        lock (_nodeCacheSync)
+        {
+            _cachedNodeCandidates = freshCandidates;
+            _nodeCandidatesCachedAtUtc = DateTime.UtcNow;
+            return _cachedNodeCandidates;
+        }
+    }
+
+    private IReadOnlyList<NodeCandidate> LoadPipeWireNodeCandidates()
     {
         string output = _pwDump.Execute(timeoutMs: 2_500);
         if (string.IsNullOrWhiteSpace(output))
-            return new List<NodeCandidate>();
+            return Array.Empty<NodeCandidate>();
 
-        var candidates = new List<NodeCandidate>();
-
+        var candidates = new List<NodeCandidate>(capacity: 16);
         try
         {
             using JsonDocument document = JsonDocument.Parse(output);
@@ -499,12 +606,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                 }
 
                 if (score > 0)
-                    candidates.Add(new NodeCandidate(nodeId, score, searchText));
+                {
+                    string normalizedSearchText = NormalizeForSearch(searchText);
+                    if (!string.IsNullOrWhiteSpace(normalizedSearchText))
+                        candidates.Add(new NodeCandidate(nodeId, score, normalizedSearchText));
+                }
             }
         }
         catch
         {
-            return new List<NodeCandidate>();
+            return Array.Empty<NodeCandidate>();
         }
 
         return candidates;
@@ -573,7 +684,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        Match match = Regex.Match(value, @"'(/org/[^']+)'");
+        Match match = ObjectPathRegex.Match(value);
         if (!match.Success)
             return null;
 
@@ -626,7 +737,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         };
     }
 
-    private readonly record struct NodeCandidate(string Id, int Score, string SearchText);
+    private readonly record struct NodeCandidate(string Id, int Score, string NormalizedSearchText);
 
     private sealed class WindowCaptureContext
     {
@@ -668,6 +779,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         private readonly IGstLaunchWrapper _gstLaunch;
         private readonly Action<string> _logWarn;
         private readonly object _syncRoot = new();
+        private readonly SemaphoreSlim _frameReadySignal = new(initialCount: 0, maxCount: 1);
 
         private Process? _process;
         private CancellationTokenSource? _cts;
@@ -742,9 +854,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             var cts = new CancellationTokenSource();
             if (process is null)
             {
-                _faulted = true;
                 lock (_syncRoot)
                 {
+                    _faulted = true;
                     _restartInProgress = false;
                 }
 
@@ -765,6 +877,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                 _ = Task.Run(() => DrainErrors(process, cts.Token));
                 _restartInProgress = false;
             }
+
+            DrainFrameSignal();
         }
 
         public async Task<Bitmap?> GetFrameAsync(int timeoutMs, CancellationToken cancellationToken)
@@ -775,7 +889,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
             while (!token.IsCancellationRequested)
             {
-                byte[]? bytes = GetLatestFrameBytes();
+                byte[]? bytes = GetLatestFrameBytesSnapshot();
                 if (bytes is not null)
                 {
                     try
@@ -789,14 +903,18 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                     }
                 }
 
-                if (_faulted)
+                if (IsFaulted())
                     return null;
 
                 try
                 {
-                    await Task.Delay(40, token).ConfigureAwait(false);
+                    await _frameReadySignal.WaitAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
+                {
+                    return null;
+                }
+                catch (ObjectDisposedException)
                 {
                     return null;
                 }
@@ -805,16 +923,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             return null;
         }
 
-        private byte[]? GetLatestFrameBytes()
+        private byte[]? GetLatestFrameBytesSnapshot()
         {
             lock (_syncRoot)
             {
-                if (_latestFrameBytes is null)
-                    return null;
+                return _latestFrameBytes;
+            }
+        }
 
-                byte[] clone = new byte[_latestFrameBytes.Length];
-                Buffer.BlockCopy(_latestFrameBytes, 0, clone, 0, _latestFrameBytes.Length);
-                return clone;
+        private bool IsFaulted()
+        {
+            lock (_syncRoot)
+            {
+                return _faulted;
             }
         }
 
@@ -884,6 +1005,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                                 _latestFrameBytes = frame;
                                 _hasReceivedFrame = true;
                             }
+                            SignalFrameReady();
 
                             inFrame = false;
                             frameBuffer.Clear();
@@ -900,7 +1022,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             }
             finally
             {
-                _faulted = true;
+                lock (_syncRoot)
+                    _faulted = true;
+                SignalFrameReady();
             }
         }
 
@@ -920,7 +1044,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                 _readerTask = null;
                 _latestFrameBytes = null;
                 _hasReceivedFrame = false;
+                _faulted = true;
             }
+
+            SignalFrameReady();
+            DrainFrameSignal();
 
             if (cts is not null)
             {
@@ -954,6 +1082,34 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
             _disposed = true;
             Stop();
+            _frameReadySignal.Dispose();
+        }
+
+        private void SignalFrameReady()
+        {
+            try
+            {
+                if (_frameReadySignal.CurrentCount == 0)
+                    _frameReadySignal.Release();
+            }
+            catch
+            {
+                // Dispose/shutdown path.
+            }
+        }
+
+        private void DrainFrameSignal()
+        {
+            try
+            {
+                while (_frameReadySignal.Wait(0))
+                {
+                }
+            }
+            catch
+            {
+                // Dispose/shutdown path.
+            }
         }
     }
 }
