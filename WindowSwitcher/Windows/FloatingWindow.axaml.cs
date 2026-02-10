@@ -22,7 +22,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private volatile bool _isPointerInside;
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
-    private readonly FloatingWindowPreviewSession _previewSession;
+    private readonly FloatingWindowService _service;
     public WindowConfig WindowConfig { get; private set; }
 
     public FloatingWindow(
@@ -44,11 +44,11 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         SetInitialWindowSettings();
 
-        _previewSession = new FloatingWindowPreviewSession(this, WindowConfig, previewFrameProvider, WindowScreenshot, PreviewBorder);
+        _service = new FloatingWindowService(this, WindowConfig, previewFrameProvider, WindowScreenshot, PreviewBorder);
 
         Show();
-        _previewSession.UpdateLayout();
-        _previewSession.Start();
+        _service.UpdateLayout();
+        _service.Start();
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -171,7 +171,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
         bool activateWindowsPreview = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview);
-        _previewSession.OnWindowResized(activateWindowsPreview);
+        _service.OnWindowResized(activateWindowsPreview);
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -186,7 +186,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _floatingWindowHost.ClearActivePreview(this);
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
-            _previewSession.Stop(WindowConfig.WindowId);
+            _service.Stop(WindowConfig.WindowId);
     }
 
     private async Task RenameWindowTitleAsync()
@@ -196,6 +196,6 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     public void SetPreviewHighlight(bool isSelected)
     {
-        _previewSession.SetPreviewHighlight(isSelected);
+        _service.SetPreviewHighlight(isSelected);
     }
 }

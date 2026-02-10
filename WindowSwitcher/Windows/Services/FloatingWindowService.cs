@@ -17,7 +17,7 @@ using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows.Services;
 
-internal sealed class FloatingWindowPreviewSession
+internal sealed class FloatingWindowService
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
@@ -39,7 +39,7 @@ internal sealed class FloatingWindowPreviewSession
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
 
-    public FloatingWindowPreviewSession(
+    public FloatingWindowService(
         Window ownerWindow,
         WindowConfig windowConfig,
         IPreviewFrameProvider previewFrameProvider,

@@ -1,13 +1,14 @@
 using System;
 using Avalonia.Controls;
 using WindowSwitcher.ViewModels;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Common;
+using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Windows;
 
 public partial class SettingsWindow : Window
 {
+    private readonly UtilityWindowService _windowLifecycle = new();
+
     public SettingsWindow(Action applyAction)
     {
         InitializeComponent();
@@ -17,8 +18,7 @@ public partial class SettingsWindow : Window
     
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = !StaticData.AppClosing;
-        Hide();
+        _windowLifecycle.HandleClosing(this, e, hideWhenCanceled: true, hideWhenAllowed: true);
     }
 
 }

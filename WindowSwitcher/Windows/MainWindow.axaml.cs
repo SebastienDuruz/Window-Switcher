@@ -134,12 +134,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void AddToBlacklist(string windowTitle)
     {
         windowTitle = windowTitle.ToLowerInvariant();
-        if (BlacklistWindow.ListToEdit.Any(x => x.StartsWith(windowTitle, StringComparison.Ordinal)))
+        if (BlacklistWindow.HasPrefixStartingWith(windowTitle))
             return;
 
-        BlacklistWindow.ListToEdit.Add(windowTitle);
-        BlacklistWindow.AddPrefixToList(windowTitle);
-        ConfigFileAccessor.GetInstance().SaveBlacklist(BlacklistWindow.ListToEdit);
+        _ = BlacklistWindow.TryAddPrefix(windowTitle);
     }
 
     public void AddToTempBlacklist(string windowId)

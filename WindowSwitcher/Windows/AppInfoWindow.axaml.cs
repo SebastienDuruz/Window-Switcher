@@ -1,13 +1,12 @@
-using System;
 using Avalonia.Controls;
 using WindowSwitcher.ViewModels;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Common;
+using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Windows;
 
 public partial class AppInfoWindow : Window
 {
+    private readonly UtilityWindowService _windowLifecycle = new();
     private AppInfoViewModel ViewModel { get; }
 
     public AppInfoWindow()
@@ -30,8 +29,6 @@ public partial class AppInfoWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = !StaticData.AppClosing;
-        if (e.Cancel)
-            Hide();
+        _windowLifecycle.HandleClosing(this, e);
     }
 }
