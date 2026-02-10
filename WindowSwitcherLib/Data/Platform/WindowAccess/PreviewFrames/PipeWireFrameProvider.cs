@@ -23,9 +23,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private const int PipeWireNodePollIntervalMs = 300;
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int PipeWireNodeCacheTtlMs = 500;
-    private const int DefaultPipeWireFps = 60;
-    private const int MinPipeWireFps = 15;
-    private const int MaxPipeWireFps = 120;
+    private const int PipeWireFps = 60;
+    private const bool EnablePortalFallback = false;
     private static readonly Regex ObjectPathRegex = new(@"'(/org/[^']+)'", RegexOptions.Compiled);
 
     private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
@@ -39,9 +38,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private readonly bool _activateLogs;
-    private readonly int _fps;
     private readonly bool _isWaylandSession;
-    private readonly bool _allowPortalFallback;
     private bool _disposed;
 
     public PipeWireFrameProvider(
@@ -59,12 +56,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
         _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();
-        _allowPortalFallback = ParseBooleanEnvironment("WINDOW_SWITCHER_PIPEWIRE_ALLOW_PORTAL");
-        _fps = ResolvePipeWireFps();
-
-        if (_allowPortalFallback)
-            LogWarn("PipeWire portal fallback is enabled by environment variable.");
-        LogWarn($"PipeWire stream target FPS: {_fps}");
+        LogWarn($"PipeWire stream target FPS: {PipeWireFps}");
     }
 
     public async Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
@@ -182,7 +174,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         string? portalSessionPath = null;
 
         nodeId = ResolveNodeIdFromPwDump(windowId);
-        if (string.IsNullOrWhiteSpace(nodeId) && _isWaylandSession && _allowPortalFallback)
+        if (string.IsNullOrWhiteSpace(nodeId) && _isWaylandSession && EnablePortalFallback)
         {
             LogWarn($"No wmctrl-matching PipeWire node found for `{windowId}`. Trying portal fallback.");
             nodeId = TryStartPortalWindowScreencast(windowId, out portalSessionPath);
@@ -195,7 +187,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         }
 
         LogWarn($"PipeWire node `{nodeId}` assigned to window `{windowId}`.");
-        var stream = new PipeWireWindowStream(nodeId, _fps, _activateLogs, _gstLaunch, LogWarn);
+        var stream = new PipeWireWindowStream(nodeId, PipeWireFps, _activateLogs, _gstLaunch, LogWarn);
         return new WindowCaptureContext(windowId, nodeId, portalSessionPath, stream);
     }
 
@@ -426,34 +418,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         string normalized = NormalizeForSearch(value);
         if (!string.IsNullOrWhiteSpace(normalized))
             patterns.Add(normalized);
-    }
-
-    private static bool ParseBooleanEnvironment(string variableName)
-    {
-        string? raw = Environment.GetEnvironmentVariable(variableName);
-        if (string.IsNullOrWhiteSpace(raw))
-            return false;
-
-        return raw.Trim().ToLowerInvariant() switch
-        {
-            "1" => true,
-            "true" => true,
-            "yes" => true,
-            "on" => true,
-            _ => false
-        };
-    }
-
-    private int ResolvePipeWireFps()
-    {
-        string? rawFps = Environment.GetEnvironmentVariable("WINDOW_SWITCHER_PIPEWIRE_FPS");
-        if (string.IsNullOrWhiteSpace(rawFps))
-            return DefaultPipeWireFps;
-
-        if (!int.TryParse(rawFps.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedFps))
-            return DefaultPipeWireFps;
-
-        return Math.Clamp(parsedFps, MinPipeWireFps, MaxPipeWireFps);
     }
 
     private async Task<Bitmap?> RequestFallbackAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken)
