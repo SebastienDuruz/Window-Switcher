@@ -1,66 +1,61 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Threading;
 using WindowSwitcher.Controls;
+using WindowSwitcher.Windows.Abstractions;
+using WindowSwitcher.Windows.Services;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Logging;
 using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Domain.Models;
-using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows;
 
-public partial class FloatingWindow : Window
+public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
-    private const double TitleReservedHeight = 12;
-    private const double PreviewBorderThickness = 2;
-    private const int PreviewRefreshIntervalMsPipeWire = 100;
-    private const int PreviewRefreshIntervalMsScreenshot = 100;
-    private const int PreviewRequestTimeoutMsScreenshot = 1_500;
-    private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
     private volatile bool _isPointerInside;
-    private volatile bool _isActivePreview;
-    private volatile bool _isClosing;
-    
-    private readonly CancellationTokenSource _cts = new();
-    private readonly SemaphoreSlim _previewUpdateSemaphore = new(1, 1);
-    private Bitmap? _currentScreenshot;
-    private Bitmap? _previousScreenshot;
-    public WindowConfig? WindowConfig { get; set; }
-    private MainWindow MainWindow { get; set; }
-    private WinAccessorBase WinAccessorBase { get; set; }
-    private IPreviewFrameProvider PreviewFrameProvider { get; }
+    private readonly IFloatingWindowHost _floatingWindowHost;
+    private readonly WinAccessorBase _winAccessorBase;
+    private readonly FloatingWindowPreviewSession _previewSession;
+    public WindowConfig WindowConfig { get; private set; }
 
-    private int _targetScreenshotWidthPx;
-    private int _targetScreenshotHeightPx;
-    
     public FloatingWindow(
-        WindowConfig? windowConfig,
+        WindowConfig windowConfig,
         WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
-        MainWindow mainWindow)
+        IFloatingWindowHost floatingWindowHost)
     {
+        ArgumentNullException.ThrowIfNull(windowConfig);
+        ArgumentNullException.ThrowIfNull(winAccessorBase);
+        ArgumentNullException.ThrowIfNull(previewFrameProvider);
+        ArgumentNullException.ThrowIfNull(floatingWindowHost);
+
         InitializeComponent();
 
         WindowConfig = windowConfig;
-        WinAccessorBase = winAccessorBase;
-        PreviewFrameProvider = previewFrameProvider;
-        MainWindow = mainWindow;
+        _winAccessorBase = winAccessorBase;
+        _floatingWindowHost = floatingWindowHost;
 
         SetInitialWindowSettings();
-        Show();
 
-        StartBackgroundTask();
+        _previewSession = new FloatingWindowPreviewSession(this, WindowConfig, previewFrameProvider, WindowScreenshot, PreviewBorder);
+
+        Show();
+        _previewSession.UpdateLayout();
+        _previewSession.Start();
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var platformHandle = TryGetPlatformHandle();
+            if (platformHandle is not null)
+                User32Functions.HideFromAltTab(platformHandle.Handle);
+        }
     }
 
     public sealed override void Show()
@@ -68,62 +63,9 @@ public partial class FloatingWindow : Window
         base.Show();
     }
 
-    private void StartBackgroundTask()
-    {
-        Task.Run(async () => await RunPeriodicTask(_cts.Token));
-    }
-
-    private async Task RunPeriodicTask(CancellationToken cancellationToken)
-    {
-        var configAccessor = ConfigFileAccessor.GetInstance();
-        if (configAccessor.ReadConfig(config => config.ActivateWindowsPreview))
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) // Windows DWM Thumbnails
-            {
-                RegisterWindowThumbnail();
-            }
-            else // Screenshot
-            {
-                // Spread initial captures across floating windows to reduce spikes on Linux.
-                await Task.Delay(Random.Shared.Next(0, 400), cancellationToken);
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        bool isPipeWireProvider = PreviewFrameProvider is PipeWireFrameProvider;
-                        int pipeWireRequestTimeoutMs = 500;
-                        int refreshIntervalMs = isPipeWireProvider
-                            ? PreviewRefreshIntervalMsPipeWire
-                            : PreviewRefreshIntervalMsScreenshot;
-                        int requestTimeoutMs = isPipeWireProvider
-                            ? pipeWireRequestTimeoutMs
-                            : PreviewRequestTimeoutMsScreenshot;
-
-                        // Optimization: do not refresh the *active* preview window (usually the foreground app).
-                        await UpdateScreenshot(requestTimeoutMs, cancellationToken);
-
-                        await Task.Delay(refreshIntervalMs, cancellationToken);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        // Shutdown path.
-                    }
-                    catch (Exception ex)
-                    {
-                        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                            AppLogger.Log($"Preview screenshot loop failed: {ex.Message}", StaticData.LogSeverity.WARN);
-
-                        await Task.Delay(500, cancellationToken);
-                    }
-                }
-            }
-        }
-    }
-
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig!);
+        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -131,27 +73,24 @@ public partial class FloatingWindow : Window
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
-        
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
-        WindowLabel.Content = WindowConfig!.ShortWindowTitle;
+        WindowLabel.Content = WindowConfig.ShortWindowTitle;
 
         WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to blacklist",
-            Command = new ContextMenuCommand(() => MainWindow.AddToBlacklist(WindowConfig.WindowTitle))
+            Command = new ContextMenuCommand(() => _floatingWindowHost.AddToBlacklist(WindowConfig.WindowTitle))
         });
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to temp blacklist",
-            Command = new ContextMenuCommand(() => MainWindow.AddToTempBlacklist(WindowConfig.WindowId))
+            Command = new ContextMenuCommand(() => _floatingWindowHost.AddToTempBlacklist(WindowConfig.WindowId))
         });
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Rename window",
-            Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
+            Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync())
         });
         
         var configSnapshot = ConfigFileAccessor.GetInstance().ReadConfig(config => new
@@ -191,20 +130,18 @@ public partial class FloatingWindow : Window
         {
             PreviewBorder.BorderBrush = WindowLabel.Foreground;
         }
-
-        UpdatePreviewLayout();
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        MainWindow.SetActivePreview(this);
+        _floatingWindowHost.SetActivePreview(this);
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows))
             BeginMoveDrag(e);
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WinAccessorBase.RaiseWindow(WindowConfig!.WindowId);
+        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
     }
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
@@ -216,15 +153,12 @@ public partial class FloatingWindow : Window
         if (!ConfigFileAccessor.GetInstance().ReadConfig(config => config.FocusOnHover))
             return;
 
-        if (WindowConfig is null)
-            return;
-
         PointerPoint point = e.GetCurrentPoint(this);
         if (point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
             return;
 
-        MainWindow.SetActivePreview(this);
-        WinAccessorBase.RaiseWindow(WindowConfig.WindowId);
+        _floatingWindowHost.SetActivePreview(this);
+        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
     }
 
     private void CanvasPointerExited(object? sender, PointerEventArgs e)
@@ -232,197 +166,36 @@ public partial class FloatingWindow : Window
         _isPointerInside = false;
     }
 
-    private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
-    {
-        if (WindowConfig is null || _isClosing || cancellationToken.IsCancellationRequested)
-            return;
-
-        bool lockTaken = false;
-        Bitmap? appScreenshot = null;
-        try
-        {
-            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lockTaken = true;
-
-            if (WindowConfig is null || _isClosing || cancellationToken.IsCancellationRequested)
-                return;
-
-            int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-            int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
-            var request = new ScreenshotRequest(
-                MaxWidthPx: widthPx > 0 ? widthPx : null,
-                MaxHeightPx: heightPx > 0 ? heightPx : null,
-                TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000));
-
-            appScreenshot = await PreviewFrameProvider
-                .RequestAsync(WindowConfig.WindowId, request, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (appScreenshot is null || _isClosing || cancellationToken.IsCancellationRequested)
-            {
-                appScreenshot?.Dispose();
-                return;
-            }
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (_isClosing || cancellationToken.IsCancellationRequested)
-                {
-                    appScreenshot.Dispose();
-                    return;
-                }
-
-                Bitmap? disposeNow = _previousScreenshot;
-                _previousScreenshot = _currentScreenshot;
-                _currentScreenshot = appScreenshot;
-                WindowScreenshot.Source = appScreenshot;
-                disposeNow?.Dispose();
-            });
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            appScreenshot?.Dispose();
-        }
-        finally
-        {
-            if (lockTaken)
-                _previewUpdateSemaphore.Release();
-        }
-    }
-
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        WindowConfig!.WindowHeight = Height;
+        WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
-        UpdatePreviewLayout();
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
-            ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview))
-            RegisterWindowThumbnail();    
+        bool activateWindowsPreview = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview);
+        _previewSession.OnWindowResized(activateWindowsPreview);
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowConfig!.WindowLeft = Position.X;
+        WindowConfig.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
     }
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (WindowConfig is not null)
-            ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
-        MainWindow.ClearActivePreview(this);
+        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+        _floatingWindowHost.ClearActivePreview(this);
         e.Cancel = !StaticData.AppClosing;
         if (!e.Cancel)
-        {
-            _isClosing = true;
-            PreviewFrameProvider.ForgetWindow(WindowConfig?.WindowId ?? string.Empty);
-            _cts.Cancel();
-            if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
-            WindowScreenshot.Source = null;
-            _currentScreenshot?.Dispose();
-            _previousScreenshot?.Dispose();
-            _currentScreenshot = null;
-            _previousScreenshot = null;
-        }
+            _previewSession.Stop(WindowConfig.WindowId);
     }
 
-    private void RegisterWindowThumbnail()
+    private async Task RenameWindowTitleAsync()
     {
-        if (ThumbnailHandle != IntPtr.Zero)
-            DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
-        
-        IntPtr windowHandle = TryGetPlatformHandle()!.Handle;
-        IntPtr srcHandle = IntPtr.Parse(WindowConfig!.WindowId);
-        int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
-        if (res == 0) // all good !
-        {
-            ThumbnailHandle = thumbnail;
-            
-            DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
-            double scale = Screens.Primary!.Scaling;
-            int inset = (int)Math.Round(PreviewBorderThickness * scale);
-            DwmFunctions.Rect dest = new()
-            {
-                Left = inset,
-                Top = (int)(TitleReservedHeight * scale) + inset,
-                Right = (int)(WindowConfig.WindowWidth * scale) - inset,
-                Bottom = (int)(WindowConfig.WindowHeight * scale) - inset,
-            };
-
-            DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
-
-            props.dwFlags =
-                DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
-                DwmFunctions.DWM_TNP_VISIBLE |
-                DwmFunctions.DWM_TNP_OPACITY |
-                DwmFunctions.DWM_TNP_RECTDESTINATION;
-
-            props.fSourceClientAreaOnly = false;
-            props.fVisible = true;
-            props.opacity = 255;
-            props.rcDestination = dest;
-
-            DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
-        }
-    }
-
-    private async Task RenameWindowTitle()
-    {
-        await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
+        await _floatingWindowHost.RenameWindowTitleAsync(WindowConfig.WindowId);
     }
 
     public void SetPreviewHighlight(bool isSelected)
     {
-        _isActivePreview = isSelected;
-        PreviewBorder.IsVisible = isSelected;
-        if (!isSelected && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            _ = UpdateScreenshot(1_500, _cts.Token);
+        _previewSession.SetPreviewHighlight(isSelected);
     }
-
-    private void UpdatePreviewLayout()
-    {
-        double topOffset = TitleReservedHeight;
-        double previewWidth = Math.Max(0, Width);
-        double previewHeight = Math.Max(0, Height - topOffset);
-        double left = 0;
-        double top = topOffset;
-
-        left = RoundToPixel(left);
-        top = RoundToPixel(top);
-        previewWidth = RoundToPixel(previewWidth);
-        previewHeight = RoundToPixel(previewHeight);
-
-        Canvas.SetLeft(PreviewBorder, left);
-        Canvas.SetTop(PreviewBorder, top);
-        PreviewBorder.Width = previewWidth;
-        PreviewBorder.Height = previewHeight;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return;
-
-        Canvas.SetLeft(WindowScreenshot, left);
-        Canvas.SetTop(WindowScreenshot, top);
-        WindowScreenshot.Width = previewWidth;
-        WindowScreenshot.Height = previewHeight;
-
-        double scale = RenderScaling;
-        if (scale <= 0)
-            scale = 1;
-        int widthPx = (int)Math.Clamp(Math.Round(previewWidth * scale), 1, 8192);
-        int heightPx = (int)Math.Clamp(Math.Round(previewHeight * scale), 1, 8192);
-        Volatile.Write(ref _targetScreenshotWidthPx, widthPx);
-        Volatile.Write(ref _targetScreenshotHeightPx, heightPx);
-    }
-
-    private double RoundToPixel(double value)
-    {
-        double scale = RenderScaling;
-        if (scale <= 0)
-            scale = 1;
-        return Math.Round(value * scale) / scale;
-    }
-
-    
 }

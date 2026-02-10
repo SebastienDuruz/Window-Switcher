@@ -12,6 +12,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
+using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Configuration;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
@@ -22,7 +23,7 @@ using WindowConfig = WindowSwitcherLib.Domain.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IFloatingWindowHost
 {
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
@@ -32,7 +33,7 @@ public partial class MainWindow : Window
     private SettingsWindow SettingsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
-    private FloatingWindow? _activePreviewWindow;
+    private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
     private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
     
@@ -146,7 +147,7 @@ public partial class MainWindow : Window
         ViewModel.TempWindowIdsBlacklist.Add(windowId);
     }
 
-    public void SetActivePreview(FloatingWindow floatingWindow)
+    public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         if (_activePreviewWindow == floatingWindow)
             return;
@@ -156,7 +157,7 @@ public partial class MainWindow : Window
         _activePreviewWindow.SetPreviewHighlight(true);
     }
 
-    public void ClearActivePreview(FloatingWindow floatingWindow)
+    public void ClearActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         if (_activePreviewWindow != floatingWindow)
             return;
@@ -165,11 +166,9 @@ public partial class MainWindow : Window
         _activePreviewWindow = null;
     }
 
-    public async Task RenameWindowTitle(string windowId)
+    public async Task RenameWindowTitleAsync(string windowId)
     {
         if (!_floatingWindows.TryGetValue(windowId, out FloatingWindow? floatingWindow))
-            return;
-        if (floatingWindow.WindowConfig is null)
             return;
 
         bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(floatingWindow.WindowConfig.WindowTitle);
