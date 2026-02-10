@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
-using WindowSwitcherLib.Data.WindowAccess.Accessors;
-using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.Common;
+using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data.Logging;
+using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcherLib.Domain.Models;
 
 namespace WindowSwitcher.ViewModels;
 

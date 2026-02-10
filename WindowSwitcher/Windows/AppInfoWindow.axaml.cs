@@ -2,6 +2,7 @@ using System;
 using Avalonia.Controls;
 using WindowSwitcher.ViewModels;
 using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Common;
 
 namespace WindowSwitcher.Windows;
 

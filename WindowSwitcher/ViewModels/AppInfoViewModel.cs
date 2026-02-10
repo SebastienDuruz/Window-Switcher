@@ -1,14 +1,10 @@
-using System;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Commands;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 
 namespace WindowSwitcher.ViewModels;
 

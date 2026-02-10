@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Models;
+namespace WindowSwitcherLib.Domain.Models;
 
 public class ConfigFile
 {

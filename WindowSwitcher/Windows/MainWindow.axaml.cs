@@ -12,13 +12,13 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.ViewModels;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Commands;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
-using WindowSwitcherLib.Data.WindowAccess.Accessors;
-using WindowSwitcherLib.Data.WindowAccess.PreviewFrames;
-using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
+using WindowSwitcherLib.Data.Common;
+using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
+using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowConfig = WindowSwitcherLib.Domain.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows;
 

@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Common;
 
 namespace WindowSwitcher.Windows;
 

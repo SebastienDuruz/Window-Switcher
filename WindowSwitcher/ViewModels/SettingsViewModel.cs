@@ -1,14 +1,10 @@
 using System;
 using System.Runtime.InteropServices;
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
-using WindowSwitcherLib.Models;
+using WindowSwitcherLib.Data.Configuration;
 
 namespace WindowSwitcher.ViewModels;
 
