@@ -1,0 +1,66 @@
+using Microsoft.Extensions.Logging;
+using WindowSwitcherLib.Application.Platform;
+
+namespace WindowSwitcherLib.Application.Services;
+
+/// <summary>
+/// Application service consuming <see cref="ICommandRunner"/> without OS branches.
+/// </summary>
+public sealed class SystemInfoService
+{
+    private readonly ICommandRunner _commandRunner;
+    private readonly ILogger<SystemInfoService> _logger;
+
+    public SystemInfoService(ICommandRunner commandRunner, ILogger<SystemInfoService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(commandRunner);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        _commandRunner = commandRunner;
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Returns the current user using a shell command supported by both adapters.
+    /// </summary>
+    public async Task<string> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        CommandResult result = await _commandRunner
+            .RunAsync(CommandRequest.ForShell("whoami") with { Timeout = TimeSpan.FromSeconds(2) }, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!result.IsSuccess)
+        {
+            _logger.LogWarning(
+                "Could not resolve current user. ExitCode={ExitCode}, TimedOut={TimedOut}, Stderr={StandardError}",
+                result.ExitCode,
+                result.TimedOut,
+                result.StandardError);
+            return string.Empty;
+        }
+
+        return result.StandardOutput.Trim();
+    }
+
+    /// <summary>
+    /// Returns installed .NET SDK runtime version when available.
+    /// </summary>
+    public async Task<string> GetDotnetVersionAsync(CancellationToken cancellationToken = default)
+    {
+        CommandResult result = await _commandRunner
+            .RunAsync(CommandRequest.ForExecutable("dotnet", "--version") with { Timeout = TimeSpan.FromSeconds(2) }, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!result.IsSuccess)
+        {
+            _logger.LogWarning(
+                "Could not resolve dotnet version. ExitCode={ExitCode}, TimedOut={TimedOut}, Stderr={StandardError}",
+                result.ExitCode,
+                result.TimedOut,
+                result.StandardError);
+            return string.Empty;
+        }
+
+        return result.StandardOutput.Trim();
+    }
+}

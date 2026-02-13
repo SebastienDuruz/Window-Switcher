@@ -1,9 +1,9 @@
 ﻿using Avalonia;
 using System;
-using System.Runtime.InteropServices;
 using System.Threading;
 using Avalonia.Skia;
 using Avalonia.X11;
+using WindowSwitcher.Hosting;
 
 namespace WindowSwitcher;
 
@@ -17,6 +17,8 @@ static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        AppServiceProvider.Initialize();
+
         // Only one instance of the app running !
         if (mutex.WaitOne(TimeSpan.Zero, true))
         {
@@ -32,7 +34,7 @@ static class Program
             .UseSkia()
             .UsePlatformDetect();
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (OperatingSystem.IsLinux())
         {
             builder = builder.With(new X11PlatformOptions
             {
