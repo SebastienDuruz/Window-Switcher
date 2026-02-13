@@ -21,9 +21,8 @@ internal sealed class FloatingWindowService
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
-    private const int PreviewRefreshIntervalMsPipeWire = 10;
-    private const int PreviewRefreshIntervalMsScreenshot = 100;
-    private const int PreviewRequestTimeoutMsScreenshot = 1_500;
+    private const int PreviewRefreshIntervalMs = 100;
+    private const int PreviewRequestTimeoutMs = 1_500;
 
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
@@ -76,7 +75,7 @@ internal sealed class FloatingWindowService
     {
         _previewBorder.IsVisible = isSelected;
         if (!isSelected && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            _ = UpdateScreenshot(PreviewRequestTimeoutMsScreenshot, _cts.Token);
+            _ = UpdateScreenshot(PreviewRequestTimeoutMs, _cts.Token);
     }
 
     public void UpdateLayout()
@@ -152,16 +151,8 @@ internal sealed class FloatingWindowService
         {
             try
             {
-                bool isPipeWireProvider = _previewFrameProvider is PipeWireFrameProvider;
-                int refreshIntervalMs = isPipeWireProvider
-                    ? PreviewRefreshIntervalMsPipeWire
-                    : PreviewRefreshIntervalMsScreenshot;
-                int requestTimeoutMs = isPipeWireProvider
-                    ? 500
-                    : PreviewRequestTimeoutMsScreenshot;
-
-                await UpdateScreenshot(requestTimeoutMs, cancellationToken);
-                await Task.Delay(refreshIntervalMs, cancellationToken);
+                await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken);
+                await Task.Delay(PreviewRefreshIntervalMs, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

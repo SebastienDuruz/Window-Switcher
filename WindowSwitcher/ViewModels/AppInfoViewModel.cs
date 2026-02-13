@@ -43,19 +43,13 @@ public partial class AppInfoViewModel : ObservableObject
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
-            string? sessionType = GetLinuxSessionType();
+            string? sessionType = LinuxSessionDetector.GetSessionType();
             return sessionType is null ? "Unknown" : sessionType.ToUpperInvariant();
         }
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return "Windows";
         else
             return "Unknown";
-    }
-
-    private static string? GetLinuxSessionType()
-    {
-        string? sessionType = LinuxSessionDetector.GetSessionType();
-        return string.IsNullOrWhiteSpace(sessionType) ? null : sessionType;
     }
 
     private static string GetLinuxDependencies()
