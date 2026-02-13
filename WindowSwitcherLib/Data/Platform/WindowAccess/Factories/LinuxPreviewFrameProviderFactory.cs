@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
@@ -10,9 +9,9 @@ using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
 
 /// <summary>
-/// Default preview provider factory selected from runtime capabilities.
+/// Linux preview provider factory selected from Linux runtime capabilities.
 /// </summary>
-public sealed class RuntimePreviewFrameProviderFactory(ILinuxDependencyRegistry? linuxDependencies = null)
+public sealed class LinuxPreviewFrameProviderFactory(ILinuxDependencyRegistry? linuxDependencies = null)
     : IPreviewFrameProviderFactory
 {
     private readonly ILinuxDependencyRegistry _linuxDependencies = linuxDependencies ?? LinuxDependencies.Instance;
@@ -22,22 +21,12 @@ public sealed class RuntimePreviewFrameProviderFactory(ILinuxDependencyRegistry?
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
 
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
-
-        if (!EnsureLinuxDependency(
-                dependencyName: "gst-launch-1.0",
-                isAvailable: _linuxDependencies.IsGstLaunchAvailable,
-                logWhenMissing: "PipeWire backend unavailable because `gst-launch-1.0` is missing. Falling back to screenshot backend."))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (!EnsureLinuxDependency(
-                dependencyName: "gstreamer-pipewire",
-                isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable,
-                logWhenMissing: "PipeWire backend unavailable because GStreamer `pipewiresrc` plugin is missing. Falling back to screenshot backend."))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (!EnsureLinuxDependency(
-                dependencyName: "pw-dump",
-                isAvailable: _linuxDependencies.IsPwDumpAvailable,
+        if (
+            !EnsureLinuxDependency( dependencyName: "gst-launch-1.0", isAvailable: _linuxDependencies.IsGstLaunchAvailable,
+                logWhenMissing: "PipeWire backend unavailable because `gst-launch-1.0` is missing. Falling back to screenshot backend.") 
+            || !EnsureLinuxDependency( dependencyName: "gstreamer-pipewire", isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable,
+                logWhenMissing: "PipeWire backend unavailable because GStreamer `pipewiresrc` plugin is missing. Falling back to screenshot backend.") 
+            || !EnsureLinuxDependency( dependencyName: "pw-dump", isAvailable: _linuxDependencies.IsPwDumpAvailable,
                 logWhenMissing: "PipeWire backend unavailable because `pw-dump` is missing. Falling back to screenshot backend."))
             return new ScreenshotPreviewFrameProvider(accessorBase);
 

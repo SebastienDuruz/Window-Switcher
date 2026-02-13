@@ -1,11 +1,11 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using WindowSwitcherLib.Application.Platform;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Configuration;
 using WindowSwitcherLib.Data.Logging;
@@ -27,6 +27,7 @@ internal sealed class FloatingWindowService
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
+    private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
     private readonly Image _windowScreenshot;
     private readonly Border _previewBorder;
     private readonly CancellationTokenSource _cts = new();
@@ -42,18 +43,21 @@ internal sealed class FloatingWindowService
         Window ownerWindow,
         WindowConfig windowConfig,
         IPreviewFrameProvider previewFrameProvider,
+        IFloatingPreviewPolicy floatingPreviewPolicy,
         Image windowScreenshot,
         Border previewBorder)
     {
         ArgumentNullException.ThrowIfNull(ownerWindow);
         ArgumentNullException.ThrowIfNull(windowConfig);
         ArgumentNullException.ThrowIfNull(previewFrameProvider);
+        ArgumentNullException.ThrowIfNull(floatingPreviewPolicy);
         ArgumentNullException.ThrowIfNull(windowScreenshot);
         ArgumentNullException.ThrowIfNull(previewBorder);
 
         _ownerWindow = ownerWindow;
         _windowConfig = windowConfig;
         _previewFrameProvider = previewFrameProvider;
+        _floatingPreviewPolicy = floatingPreviewPolicy;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
     }
@@ -67,14 +71,14 @@ internal sealed class FloatingWindowService
     {
         UpdateLayout();
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && activateWindowsPreview)
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && activateWindowsPreview)
             RegisterWindowThumbnail();
     }
 
     public void SetPreviewHighlight(bool isSelected)
     {
         _previewBorder.IsVisible = isSelected;
-        if (!isSelected && !RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!isSelected && _floatingPreviewPolicy.RefreshScreenshotWhenDeselected)
             _ = UpdateScreenshot(PreviewRequestTimeoutMs, _cts.Token);
     }
 
@@ -94,7 +98,7 @@ internal sealed class FloatingWindowService
         _previewBorder.Width = previewWidth;
         _previewBorder.Height = previewHeight;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!_floatingPreviewPolicy.ShowScreenshotControl)
             return;
 
         Canvas.SetLeft(_windowScreenshot, left);
@@ -120,7 +124,7 @@ internal sealed class FloatingWindowService
         _previewFrameProvider.ForgetWindow(windowId);
         _cts.Cancel();
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && _thumbnailHandle != IntPtr.Zero)
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && _thumbnailHandle != IntPtr.Zero)
         {
             DwmFunctions.DwmUnregisterThumbnail(_thumbnailHandle);
             _thumbnailHandle = IntPtr.Zero;
@@ -139,7 +143,7 @@ internal sealed class FloatingWindowService
         if (!configAccessor.ReadConfig(config => config.ActivateWindowsPreview))
             return;
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
         {
             RegisterWindowThumbnail();
             return;

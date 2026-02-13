@@ -1,6 +1,8 @@
 using System;
 using Avalonia.Controls;
+using WindowSwitcher.Hosting;
 using WindowSwitcher.ViewModels;
+using WindowSwitcherLib.Application.Platform;
 using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Windows;
@@ -12,7 +14,8 @@ public partial class SettingsWindow : Window
     public SettingsWindow(Action applyAction)
     {
         InitializeComponent();
-        DataContext = new SettingsViewModel(applyAction);
+        ISettingsPlatformPolicy settingsPlatformPolicy = AppServiceProvider.GetRequiredService<ISettingsPlatformPolicy>();
+        DataContext = new SettingsViewModel(applyAction, settingsPlatformPolicy);
         Closing += OnClosing;
     }
     

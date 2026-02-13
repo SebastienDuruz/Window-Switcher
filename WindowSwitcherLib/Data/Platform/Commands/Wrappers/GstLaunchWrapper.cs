@@ -8,13 +8,10 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
 {
     public string Execute(string args)
     {
-        if (!LinuxDependencies.IsGstLaunchAvailable)
-        {
-            LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
-            return string.Empty;
-        }
+        if (LinuxDependencies.IsGstLaunchAvailable) return ExecuteWithArguments(args, timeoutMs: 2_500);
+        LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
+        return string.Empty;
 
-        return ExecuteWithArguments(args, timeoutMs: 2_500);
     }
 
     public Process? StartPipeWireJpegStream(string nodeId, int fps)

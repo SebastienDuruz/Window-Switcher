@@ -1,16 +1,16 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using WindowSwitcher.Controls;
+using WindowSwitcher.Hosting;
 using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcher.Windows.Services;
+using WindowSwitcherLib.Application.Platform;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Domain.Models;
@@ -22,6 +22,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private volatile bool _isPointerInside;
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
+    private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
+    private readonly IFloatingWindowHandleConfigurator _floatingWindowHandleConfigurator;
     private readonly FloatingWindowService _service;
     public WindowConfig WindowConfig { get; private set; }
 
@@ -41,21 +43,26 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WindowConfig = windowConfig;
         _winAccessorBase = winAccessorBase;
         _floatingWindowHost = floatingWindowHost;
+        _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
+        _floatingWindowHandleConfigurator = AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
 
-        _service = new FloatingWindowService(this, WindowConfig, previewFrameProvider, WindowScreenshot, PreviewBorder);
+        _service = new FloatingWindowService(
+            this,
+            WindowConfig,
+            previewFrameProvider,
+            _floatingPreviewPolicy,
+            WindowScreenshot,
+            PreviewBorder);
 
         Show();
         _service.UpdateLayout();
         _service.Start();
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            var platformHandle = TryGetPlatformHandle();
-            if (platformHandle is not null)
-                User32Functions.HideFromAltTab(platformHandle.Handle);
-        }
+        var platformHandle = TryGetPlatformHandle();
+        if (platformHandle is not null)
+            _floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
     }
 
     public sealed override void Show()
@@ -76,7 +83,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
 
-        WindowScreenshot.IsVisible = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        WindowScreenshot.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
         FloatingWindowContextMenu.Items.Add(new MenuItem()
         {
             Header = "Add to blacklist",

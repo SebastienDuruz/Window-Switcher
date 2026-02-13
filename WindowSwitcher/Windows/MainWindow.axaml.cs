@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -11,11 +10,12 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using WindowSwitcher.Hosting;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Abstractions;
+using WindowSwitcherLib.Application.Platform;
 using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
@@ -35,14 +35,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private RenameWindow RenameWindow { get; }
     private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
+    private readonly IDependencyNotificationService _dependencyNotificationService;
     private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
     
     public MainWindow()
     {
         InitializeComponent();
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            LinuxDependencies.DependencyMissing += OnDependencyMissing;
+        _dependencyNotificationService = AppServiceProvider.GetRequiredService<IDependencyNotificationService>();
+        _dependencyNotificationService.DependencyMissing += OnDependencyMissing;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
 
@@ -72,8 +72,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            LinuxDependencies.DependencyMissing -= OnDependencyMissing;
+        _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         PreviewFrameProvider.Dispose();
         PrefixesWindow.Close();
@@ -179,10 +178,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void ShowPreviouslyReportedDependencies()
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return;
-
-        foreach (string dependency in LinuxDependencies.GetReportedMissing())
+        foreach (string dependency in _dependencyNotificationService.GetReportedMissing())
             OnDependencyMissing(dependency);
     }
 

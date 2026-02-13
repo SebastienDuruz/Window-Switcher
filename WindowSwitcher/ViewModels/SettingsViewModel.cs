@@ -1,19 +1,29 @@
 using System;
-using System.Runtime.InteropServices;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using WindowSwitcherLib.Application.Platform;
 using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data.Configuration;
 
 namespace WindowSwitcher.ViewModels;
 
-public class SettingsViewModel(Action applyAction) : ObservableObject
+public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
-    public bool IsLinuxRuntime => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    private readonly ISettingsPlatformPolicy _settingsPlatformPolicy;
+    public IRelayCommand ApplyCommand { get; }
 
-    public IRelayCommand ApplyCommand { get; } = new RelayCommand(applyAction);
+    public SettingsViewModel(Action applyAction, ISettingsPlatformPolicy settingsPlatformPolicy)
+    {
+        ArgumentNullException.ThrowIfNull(applyAction);
+        ArgumentNullException.ThrowIfNull(settingsPlatformPolicy);
+
+        _settingsPlatformPolicy = settingsPlatformPolicy;
+        ApplyCommand = new RelayCommand(applyAction);
+    }
+
+    public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
 
     public bool StartMinimized
     {

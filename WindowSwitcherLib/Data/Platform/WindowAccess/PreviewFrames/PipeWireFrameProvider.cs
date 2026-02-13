@@ -703,23 +703,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
     private readonly record struct NodeCandidate(string Id, int Score, string NormalizedSearchText);
 
-    private sealed class WindowCaptureContext
+    private sealed class WindowCaptureContext(
+        string windowId,
+        string nodeId,
+        string? portalSessionPath,
+        PipeWireWindowStream stream)
     {
-        public string WindowId { get; }
-        public string NodeId { get; }
-        public string? PortalSessionPath { get; }
-        public PipeWireWindowStream Stream { get; }
+        public string WindowId { get; } = windowId;
+        public string NodeId { get; } = nodeId;
+        public string? PortalSessionPath { get; } = portalSessionPath;
+        public PipeWireWindowStream Stream { get; } = stream;
         public int ConsecutiveFailures { get; set; }
         public bool ForceFallback { get; set; }
         public bool IsDisposed { get; private set; }
-
-        public WindowCaptureContext(string windowId, string nodeId, string? portalSessionPath, PipeWireWindowStream stream)
-        {
-            WindowId = windowId;
-            NodeId = nodeId;
-            PortalSessionPath = portalSessionPath;
-            Stream = stream;
-        }
 
         public void Dispose(Action<string> closePortalSession)
         {

@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using WindowSwitcher.Hosting;
 using WindowSwitcher.ViewModels;
+using WindowSwitcherLib.Application.Platform.Diagnostics;
 using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Windows;
@@ -12,7 +14,8 @@ public partial class AppInfoWindow : Window
     public AppInfoWindow()
     {
         InitializeComponent();
-        ViewModel = new AppInfoViewModel();
+        IPlatformAppInfoProvider appInfoProvider = AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>();
+        ViewModel = new AppInfoViewModel(appInfoProvider);
         DataContext = ViewModel;
         Closing += OnClosing;
     }

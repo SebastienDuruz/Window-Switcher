@@ -5,7 +5,10 @@ using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 
 namespace WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 
-public sealed class LinuxDependencyRegistry : ILinuxDependencyRegistry
+public sealed class LinuxDependencyRegistry(
+    ICommandWrapper? whichWrapper = null,
+    ICommandWrapper? gstInspectWrapper = null)
+    : ILinuxDependencyRegistry
 {
     private const string WmctrlBinary = "wmctrl";
     private const string ImportBinary = "import";
@@ -17,19 +20,11 @@ public sealed class LinuxDependencyRegistry : ILinuxDependencyRegistry
     private readonly object _syncRoot = new();
     private readonly HashSet<string> _reportedMissing = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, bool> _binaryAvailabilityCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ICommandWrapper _whichWrapper;
-    private readonly ICommandWrapper _gstInspectWrapper;
+    private readonly ICommandWrapper _whichWrapper = whichWrapper ?? new WhichWrapper();
+    private readonly ICommandWrapper _gstInspectWrapper = gstInspectWrapper ?? new GstInspectWrapper();
 
     private bool _gstPipeWireSrcChecked;
     private bool _gstPipeWireSrcAvailable;
-
-    public LinuxDependencyRegistry(
-        ICommandWrapper? whichWrapper = null,
-        ICommandWrapper? gstInspectWrapper = null)
-    {
-        _whichWrapper = whichWrapper ?? new WhichWrapper();
-        _gstInspectWrapper = gstInspectWrapper ?? new GstInspectWrapper();
-    }
 
     public event Action<string>? DependencyMissing;
 
