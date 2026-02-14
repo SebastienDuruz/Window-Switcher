@@ -30,6 +30,7 @@ public class LinuxWinAccessor : WinAccessorBase
             return new ObservableCollection<WindowConfig>();
         
         ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
+        var processNameByPid = new Dictionary<int, string>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
             if (!String.IsNullOrWhiteSpace(line))
@@ -41,11 +42,18 @@ public class LinuxWinAccessor : WinAccessorBase
                 if (pid == currentPid)
                     continue;
 
+                if (!processNameByPid.TryGetValue(pid, out string? processName))
+                {
+                    processName = TryReadProcessName(pid);
+                    processNameByPid[pid] = processName;
+                }
+
                 windows.Add(new WindowConfig()
                 {
                     WindowId = windowId!,
                     WindowTitle = windowName,
-                    ShortWindowTitle = windowName.Length > 40 ? $"{windowName[..40]}..." : windowName
+                    ShortWindowTitle = windowName.Length > 40 ? $"{windowName[..40]}..." : windowName,
+                    ProcessName = processName
                 });
             }
                 
@@ -137,5 +145,24 @@ public class LinuxWinAccessor : WinAccessorBase
         }
         
         return !string.IsNullOrWhiteSpace(windowId);
+    }
+
+    private static string TryReadProcessName(int pid)
+    {
+        if (pid <= 0)
+            return string.Empty;
+
+        try
+        {
+            string commPath = $"/proc/{pid}/comm";
+            if (File.Exists(commPath))
+                return (File.ReadAllText(commPath) ?? string.Empty).Trim();
+        }
+        catch
+        {
+            // Best effort only.
+        }
+
+        return string.Empty;
     }
 }
