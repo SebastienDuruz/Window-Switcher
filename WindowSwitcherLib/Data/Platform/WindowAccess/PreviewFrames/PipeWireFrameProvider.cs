@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -28,8 +29,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private const string PortalDesktopDestination = "org.freedesktop.portal.Desktop";
     private const string KdePortalBackendDestination = "org.freedesktop.impl.portal.desktop.kde";
     private const string KdePortalScreenCastInterface = "org.freedesktop.impl.portal.ScreenCast";
-    private const string KdePortalSessionInterface = "org.freedesktop.impl.portal.Session";
-    private const string PortalSessionInterface = "org.freedesktop.portal.Session";
+    private const string KdePortalAppId = "windowswitcher";
     private static readonly Regex ObjectPathRegex = new(@"'(/org/[^']+)'", RegexOptions.Compiled);
     private static readonly Regex PortalCallReplyCodeRegex =
         new(@"\(\s*uint32\s+(?<code>\d+)\s*,", RegexOptions.Compiled | RegexOptions.Singleline);
@@ -57,6 +57,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private readonly bool _isWaylandSession;
+    private readonly bool _isKdeDesktopSession;
     private Connection? _sessionBusConnection;
     private bool _disposed;
 
@@ -74,6 +75,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         _gstLaunch = gstLaunch ?? new GstLaunchWrapper();
 
         _isWaylandSession = IsWaylandSession();
+        _isKdeDesktopSession = IsKdeDesktopSession() || IsKdePortalBackendAvailable();
     }
 
     public async Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
@@ -298,45 +300,87 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     {
         string? nodeId = null;
         string? portalSessionPath = null;
+        string? portalSessionDestination = null;
         CloseSafeHandle? pipeWireRemoteHandle = null;
         IReadOnlyCollection<string> excludedNodeIds = SnapshotExcludedNodeIds(windowId);
 
         if (_isWaylandSession)
         {
-            PortalCaptureBootstrap? started = await TryStartWaylandPortalWindowScreencastAsync(
+            PortalCaptureBootstrap? started = null;
+
+            if (_isKdeDesktopSession)
+            {
+                started = await TryStartKdeBackendWindowScreencastAsync(
                     windowId,
                     excludedNodeIds,
-                    cancellationToken)
-                .ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(false);
+            }
+
             if (started is null && excludedNodeIds.Count > 0)
             {
                 ClearExcludedNodes(windowId);
-                started = await TryStartWaylandPortalWindowScreencastAsync(
+                if (_isKdeDesktopSession)
+                {
+                    started = await TryStartKdeBackendWindowScreencastAsync(
                         windowId,
                         Array.Empty<string>(),
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (!_isKdeDesktopSession)
+            {
+                started ??= await TryStartWaylandPortalWindowScreencastAsync(
+                        windowId,
+                        excludedNodeIds,
                         cancellationToken)
                     .ConfigureAwait(false);
+
+                if (started is null && excludedNodeIds.Count > 0)
+                {
+                    ClearExcludedNodes(windowId);
+                    started = await TryStartWaylandPortalWindowScreencastAsync(
+                            windowId,
+                            Array.Empty<string>(),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
             }
+
             if (started is null)
+            {
+                if (_isKdeDesktopSession)
+                    PipeWireTrace.Write($"WaylandKdeBackend no capture available windowId={windowId} (no portal-desktop fallback)");
                 return null;
+            }
 
             nodeId = started.Value.NodeId;
             portalSessionPath = started.Value.SessionPath;
+            portalSessionDestination = started.Value.SessionDestination;
             pipeWireRemoteHandle = started.Value.PipeWireRemoteHandle;
-            PipeWireTrace.Write($"CreateCaptureAsync wayland bootstrap ok windowId={windowId} nodeId={nodeId} sessionPath={portalSessionPath}");
+            PipeWireTrace.Write(
+                $"CreateCaptureAsync wayland bootstrap ok windowId={windowId} nodeId={nodeId} sessionPath={portalSessionPath} destination={portalSessionDestination ?? "null"}");
         }
         else
         {
             nodeId = ResolveNodeIdFromPwDump(windowId, excludedNodeIds, allowBestCandidate: false);
             if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
+            {
                 nodeId = TryStartPortalWindowScreencast(windowId, excludedNodeIds, out portalSessionPath);
+                if (!string.IsNullOrWhiteSpace(portalSessionPath))
+                    portalSessionDestination = PortalDesktopDestination;
+            }
 
             if (string.IsNullOrWhiteSpace(nodeId) && excludedNodeIds.Count > 0)
             {
                 ClearExcludedNodes(windowId);
                 nodeId = ResolveNodeIdFromPwDump(windowId, Array.Empty<string>(), allowBestCandidate: false);
                 if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
+                {
                     nodeId = TryStartPortalWindowScreencast(windowId, Array.Empty<string>(), out portalSessionPath);
+                    if (!string.IsNullOrWhiteSpace(portalSessionPath))
+                        portalSessionDestination = PortalDesktopDestination;
+                }
             }
         }
 
@@ -346,7 +390,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         double configuredFps = GetConfiguredLinuxPreviewRefreshRateFps();
         PreviewRefreshRateSettings.ToFraction(configuredFps, out int fpsNumerator, out int fpsDenominator);
         var stream = new PipeWireWindowStream(nodeId, fpsNumerator, fpsDenominator, _gstLaunch, pipeWireRemoteHandle);
-        return new WindowCaptureContext(windowId, nodeId, portalSessionPath, stream);
+        return new WindowCaptureContext(windowId, nodeId, portalSessionPath, portalSessionDestination, stream);
     }
 
     private static double GetConfiguredLinuxPreviewRefreshRateFps()
@@ -424,6 +468,67 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             for (int index = 0; index < restoreKeys.Count; index++)
                 config.LinuxWaylandScreenCastRestoreTokensByWindowId[restoreKeys[index]] = normalizedToken;
             config.LinuxWaylandScreenCastRestoreToken = normalizedToken;
+        });
+        configAccessor.WriteUserSettings();
+    }
+
+    private string? GetStoredWaylandScreenCastRestoreData(string windowId)
+    {
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0)
+            return null;
+
+        string? configuredValue = ConfigFileAccessor.GetInstance()
+            .ReadConfig(config =>
+            {
+                for (int index = 0; index < restoreKeys.Count; index++)
+                {
+                    string key = restoreKeys[index];
+                    if (!config.LinuxWaylandScreenCastRestoreDataByWindowId.TryGetValue(key, out string? value))
+                        continue;
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+                    return value;
+                }
+
+                return null;
+            });
+
+        if (string.IsNullOrWhiteSpace(configuredValue))
+            return null;
+
+        return configuredValue.Trim();
+    }
+
+    private void SaveStoredWaylandScreenCastRestoreData(string windowId, string serializedRestoreData)
+    {
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0 || string.IsNullOrWhiteSpace(serializedRestoreData))
+            return;
+
+        string normalizedValue = serializedRestoreData.Trim();
+        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
+        bool needsUpdate = configAccessor.ReadConfig(config =>
+        {
+            for (int index = 0; index < restoreKeys.Count; index++)
+            {
+                string key = restoreKeys[index];
+                if (!config.LinuxWaylandScreenCastRestoreDataByWindowId.TryGetValue(key, out string? existing) ||
+                    !string.Equals(existing, normalizedValue, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+        if (!needsUpdate)
+            return;
+
+        configAccessor.UpdateConfig(config =>
+        {
+            for (int index = 0; index < restoreKeys.Count; index++)
+                config.LinuxWaylandScreenCastRestoreDataByWindowId[restoreKeys[index]] = normalizedValue;
         });
         configAccessor.WriteUserSettings();
     }
@@ -820,7 +925,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             SetPendingNodeId(windowId, nodeId);
             PipeWireTrace.Write($"WaylandPortal remote fd={pipeWireRemoteHandle.DangerousGetHandle().ToInt64()}");
-            return new PortalCaptureBootstrap(nodeId, sessionPath, pipeWireRemoteHandle);
+            return new PortalCaptureBootstrap(nodeId, sessionPath, PortalDesktopDestination, pipeWireRemoteHandle);
         }
         catch (TimeoutException)
         {
@@ -943,6 +1048,96 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return text.Trim();
     }
 
+    private static PortalRestoreData? ExtractPortalRestoreData(IDictionary<string, object> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        if (!results.TryGetValue("restore_data", out object? value))
+            return null;
+
+        return TryDecodePortalRestoreData(value, out PortalRestoreData restoreData)
+            ? restoreData
+            : null;
+    }
+
+    private static bool TryDecodePortalRestoreData(object? value, out PortalRestoreData restoreData)
+    {
+        restoreData = default;
+        value = UnwrapVariantLike(value);
+        if (value is null)
+            return false;
+
+        if (value is ValueTuple<string, uint, byte[]> typedTuple)
+        {
+            if (string.IsNullOrWhiteSpace(typedTuple.Item1) || typedTuple.Item3.Length == 0)
+                return false;
+            restoreData = new PortalRestoreData(typedTuple.Item1.Trim(), typedTuple.Item2, typedTuple.Item3.ToArray());
+            return true;
+        }
+
+        if (value is ValueTuple<string, int, byte[]> signedTuple &&
+            signedTuple.Item2 >= 0 &&
+            !string.IsNullOrWhiteSpace(signedTuple.Item1) &&
+            signedTuple.Item3.Length > 0)
+        {
+            restoreData = new PortalRestoreData(signedTuple.Item1.Trim(), (uint)signedTuple.Item2, signedTuple.Item3.ToArray());
+            return true;
+        }
+
+        if (value is not ITuple tuple || tuple.Length < 3)
+            return false;
+
+        string? provider = TryExtractScalarString(tuple[0]);
+        if (string.IsNullOrWhiteSpace(provider))
+            return false;
+        if (!TryConvertToUInt32(tuple[1], out uint version))
+            return false;
+        if (!TryExtractByteArray(tuple[2], out byte[] bytes))
+            return false;
+
+        restoreData = new PortalRestoreData(provider.Trim(), version, bytes);
+        return true;
+    }
+
+    private static string SerializePortalRestoreData(PortalRestoreData restoreData)
+    {
+        string base64Bytes = Convert.ToBase64String(restoreData.Bytes);
+        return $"{restoreData.Provider}|{restoreData.Version.ToString(CultureInfo.InvariantCulture)}|{base64Bytes}";
+    }
+
+    private static bool TryDeserializePortalRestoreData(string serializedRestoreData, out PortalRestoreData restoreData)
+    {
+        restoreData = default;
+        if (string.IsNullOrWhiteSpace(serializedRestoreData))
+            return false;
+
+        string[] parts = serializedRestoreData.Split('|', 3, StringSplitOptions.None);
+        if (parts.Length != 3)
+            return false;
+
+        string provider = parts[0].Trim();
+        if (string.IsNullOrWhiteSpace(provider))
+            return false;
+        if (!uint.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint version))
+            return false;
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(parts[2].Trim());
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (bytes.Length == 0)
+            return false;
+
+        restoreData = new PortalRestoreData(provider, version, bytes);
+        return true;
+    }
+
     private static string? BuildSessionPathFromRequest(ObjectPath requestPath, string sessionToken)
     {
         if (string.IsNullOrWhiteSpace(sessionToken))
@@ -954,6 +1149,26 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         string sender = parts[^2];
         return $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
+    }
+
+    private static string DescribePortalResultKeys(IDictionary<string, object> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+
+        if (results.Count == 0)
+            return "none";
+
+        return string.Join(
+            ",",
+            results.Select(entry =>
+            {
+                object? value = UnwrapVariantLike(entry.Value);
+                string typeName = value?.GetType().Name ?? "null";
+                string preview = TryExtractScalarString(value) ?? value?.ToString() ?? string.Empty;
+                if (preview.Length > 64)
+                    preview = preview[..64];
+                return $"{entry.Key}:{typeName}:{preview}";
+            }));
     }
 
     private string? SelectPortalStreamNodeId(
@@ -1180,6 +1395,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private static bool TryConvertToUInt32(object? value, out uint result)
     {
+        value = UnwrapVariantLike(value);
         result = 0;
         switch (value)
         {
@@ -1206,8 +1422,105 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
+    private static bool TryExtractByteArray(object? value, out byte[] bytes)
+    {
+        value = UnwrapVariantLike(value);
+        bytes = Array.Empty<byte>();
+        switch (value)
+        {
+            case null:
+                return false;
+            case byte[] typedBytes:
+                bytes = typedBytes.ToArray();
+                return bytes.Length > 0;
+            case string base64Text:
+                try
+                {
+                    bytes = Convert.FromBase64String(base64Text);
+                    return bytes.Length > 0;
+                }
+                catch (FormatException)
+                {
+                    return false;
+                }
+            case JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.Array:
+            {
+                var buffer = new byte[jsonElement.GetArrayLength()];
+                int index = 0;
+                foreach (JsonElement element in jsonElement.EnumerateArray())
+                {
+                    if (!element.TryGetByte(out byte item))
+                        return false;
+                    buffer[index++] = item;
+                }
+
+                bytes = buffer;
+                return bytes.Length > 0;
+            }
+            case Array array:
+            {
+                var buffer = new byte[array.Length];
+                for (int index = 0; index < array.Length; index++)
+                {
+                    if (!TryConvertToUInt32(array.GetValue(index), out uint parsed) || parsed > byte.MaxValue)
+                        return false;
+                    buffer[index] = (byte)parsed;
+                }
+
+                bytes = buffer;
+                return bytes.Length > 0;
+            }
+            case System.Collections.IEnumerable enumerable:
+            {
+                var buffer = new List<byte>();
+                foreach (object? item in enumerable)
+                {
+                    if (!TryConvertToUInt32(item, out uint parsed) || parsed > byte.MaxValue)
+                        return false;
+                    buffer.Add((byte)parsed);
+                }
+
+                bytes = buffer.ToArray();
+                return bytes.Length > 0;
+            }
+            default:
+                return false;
+        }
+    }
+
+    private static object? UnwrapVariantLike(object? value)
+    {
+        object? current = value;
+        int guard = 0;
+        while (current is not null && guard++ < 8)
+        {
+            Type type = current.GetType();
+            PropertyInfo? valueProperty = type.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance);
+            if (valueProperty is null || valueProperty.GetIndexParameters().Length != 0)
+                break;
+
+            object? next;
+            try
+            {
+                next = valueProperty.GetValue(current);
+            }
+            catch
+            {
+                break;
+            }
+
+            if (next is null || ReferenceEquals(next, current))
+                break;
+
+            current = next;
+        }
+
+        return current;
+    }
+
     private static string? TryExtractObjectPathString(object? value)
     {
+        value = UnwrapVariantLike(value);
         return value switch
         {
             null => null,
@@ -1219,90 +1532,235 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private static string? TryExtractScalarString(object? value)
     {
+        value = UnwrapVariantLike(value);
         return value switch
         {
             null => null,
             string text => text,
+            ObjectPath objectPath => objectPath.ToString(),
             JsonElement jsonElement when jsonElement.ValueKind == JsonValueKind.String => jsonElement.GetString(),
-            _ => null
+            _ => value.ToString()
         };
     }
 
-    private string? TryStartKdeBackendWindowScreencast(
+    private async Task<PortalCaptureBootstrap?> TryStartKdeBackendWindowScreencastAsync(
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds,
-        out string? sessionPath)
+        CancellationToken cancellationToken)
     {
-        sessionPath = null;
-
-        if (!LinuxDependencies.IsGdbusAvailable || !LinuxDependencies.IsPwDumpAvailable)
+        if (!LinuxDependencies.IsPwDumpAvailable)
             return null;
 
-        string requestToken = Guid.NewGuid().ToString("N");
-        string appId = "window.switcher";
-        string createHandlePath = $"/org/freedesktop/portal/desktop/request/ws_create_{requestToken}";
-        string selectHandlePath = $"/org/freedesktop/portal/desktop/request/ws_select_{requestToken}";
-        string startHandlePath = $"/org/freedesktop/portal/desktop/request/ws_start_{requestToken}";
-        sessionPath = $"/org/freedesktop/portal/desktop/session/ws_session_{requestToken}";
-
-        IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
-        HashSet<string> baselineIds = baseline.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
-
-        string createResult = RunPortalDesktopMethod(
-            $"{KdePortalScreenCastInterface}.CreateSession",
-            [createHandlePath, sessionPath, appId, "{}"],
-            timeoutMs: 5_000,
-            destination: KdePortalBackendDestination);
-        if (!IsPortalCallSuccessful(createResult))
+        await _waylandPortalSessionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        string? sessionPath = null;
+        try
         {
-            sessionPath = null;
+            Connection? connection = await EnsureSessionBusConnectionAsync(cancellationToken).ConfigureAwait(false);
+            if (connection is null)
+                return null;
+
+            PipeWireTrace.Write($"WaylandKdeBackend begin windowId={windowId}");
+
+            string requestToken = Guid.NewGuid().ToString("N");
+            string senderPathSegment = $"1_{Environment.ProcessId}";
+            string createHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_create_{requestToken}";
+            string selectHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_select_{requestToken}";
+            string startHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_start_{requestToken}";
+            sessionPath = $"/org/freedesktop/portal/desktop/session/{senderPathSegment}/ws_session_{requestToken}";
+
+            IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
+            HashSet<string> baselineIds = baseline.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
+
+            IKdePortalScreenCast screenCast = connection.CreateProxy<IKdePortalScreenCast>(
+                KdePortalBackendDestination,
+                new ObjectPath("/org/freedesktop/portal/desktop"));
+
+            (uint createResponseCode, IDictionary<string, object> _) = await screenCast.CreateSessionAsync(
+                    new ObjectPath(createHandlePath),
+                    new ObjectPath(sessionPath),
+                    KdePortalAppId,
+                    new Dictionary<string, object>())
+                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
+                .ConfigureAwait(false);
+            PipeWireTrace.Write($"WaylandKdeBackend create response={createResponseCode} windowId={windowId}");
+            if (createResponseCode != 0)
+                return null;
+
+            PortalRestoreData? storedRestoreData = null;
+            string? storedRestoreDataValue = GetStoredWaylandScreenCastRestoreData(windowId);
+            if (!string.IsNullOrWhiteSpace(storedRestoreDataValue))
+            {
+                if (TryDeserializePortalRestoreData(storedRestoreDataValue, out PortalRestoreData parsedRestoreData))
+                {
+                    storedRestoreData = parsedRestoreData;
+                    PipeWireTrace.Write(
+                        $"WaylandKdeBackend using stored restore data windowId={windowId} provider={parsedRestoreData.Provider} version={parsedRestoreData.Version}");
+                }
+                else
+                {
+                    PipeWireTrace.Write($"WaylandKdeBackend stored restore data invalid format windowId={windowId}");
+                }
+            }
+
+            string? restoreToken = GetStoredWaylandScreenCastRestoreToken(windowId);
+            if (storedRestoreData is null && string.IsNullOrWhiteSpace(restoreToken))
+            {
+                PipeWireTrace.Write($"WaylandKdeBackend missing restore data/token windowId={windowId}");
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
+            }
+
+            if (storedRestoreData is null)
+                PipeWireTrace.Write($"WaylandKdeBackend using stored restore token windowId={windowId}");
+
+            var selectOptions = new Dictionary<string, object>
+            {
+                ["types"] = (uint)2,
+                ["multiple"] = false,
+                ["cursor_mode"] = (uint)2,
+                ["persist_mode"] = (uint)2
+            };
+            if (storedRestoreData is PortalRestoreData restoreData)
+            {
+                selectOptions["restore_data"] = ValueTuple.Create(
+                    restoreData.Provider,
+                    restoreData.Version,
+                    restoreData.Bytes);
+            }
+            else if (!string.IsNullOrWhiteSpace(restoreToken))
+            {
+                selectOptions["restore_token"] = restoreToken.Trim();
+            }
+
+            (uint selectResponseCode, IDictionary<string, object> _) = await screenCast.SelectSourcesAsync(
+                    new ObjectPath(selectHandlePath),
+                    new ObjectPath(sessionPath),
+                    KdePortalAppId,
+                    selectOptions)
+                .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
+                .ConfigureAwait(false);
+            PipeWireTrace.Write($"WaylandKdeBackend select response={selectResponseCode} windowId={windowId}");
+            if (selectResponseCode != 0)
+            {
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
+            }
+
+            (uint startResponseCode, IDictionary<string, object> startResults) = await screenCast.StartAsync(
+                    new ObjectPath(startHandlePath),
+                    new ObjectPath(sessionPath),
+                    KdePortalAppId,
+                    string.Empty,
+                    new Dictionary<string, object>())
+                .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
+                .ConfigureAwait(false);
+            PipeWireTrace.Write($"WaylandKdeBackend start response={startResponseCode} windowId={windowId}");
+            if (startResponseCode != 0)
+            {
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
+            }
+
+            PortalRestoreData? newRestoreData = ExtractPortalRestoreData(startResults);
+            PipeWireTrace.Write(
+                $"WaylandKdeBackend restore data from start={(newRestoreData is null ? "null" : "present")} windowId={windowId}");
+            if (newRestoreData is PortalRestoreData startRestoreData)
+            {
+                SaveStoredWaylandScreenCastRestoreData(windowId, SerializePortalRestoreData(startRestoreData));
+                PipeWireTrace.Write($"WaylandKdeBackend stored updated restore data windowId={windowId}");
+            }
+
+            string? newRestoreToken = ExtractPortalRestoreToken(startResults);
+            if (!string.IsNullOrWhiteSpace(newRestoreToken))
+            {
+                SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
+                PipeWireTrace.Write($"WaylandKdeBackend stored updated restore token windowId={windowId}");
+            }
+            if (newRestoreData is null && string.IsNullOrWhiteSpace(newRestoreToken))
+            {
+                PipeWireTrace.Write(
+                    $"WaylandKdeBackend start result keys windowId={windowId} keys={DescribePortalResultKeys(startResults)}");
+            }
+
+            string? nodeId = SelectPortalStreamNodeId(
+                windowId,
+                startResults,
+                excludedNodeIds,
+                out string? selectedStreamStableId,
+                out bool shouldPersistSelectedStreamStableId);
+            IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(startResults);
+            string extractedSummary = string.Join(
+                ',',
+                extractedStreams.Select(stream =>
+                    string.IsNullOrWhiteSpace(stream.StableId)
+                        ? stream.NodeId
+                        : $"{stream.NodeId}({stream.StableId})"));
+            PipeWireTrace.Write(
+                $"WaylandKdeBackend streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}");
+
+            if (shouldPersistSelectedStreamStableId && !string.IsNullOrWhiteSpace(selectedStreamStableId))
+                SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
+
+            if (!string.IsNullOrWhiteSpace(nodeId))
+            {
+                SetPendingNodeId(windowId, nodeId);
+                return new PortalCaptureBootstrap(
+                    nodeId,
+                    sessionPath,
+                    KdePortalBackendDestination,
+                    PipeWireRemoteHandle: null);
+            }
+
+            var allExcludedNodeIds = new HashSet<string>(excludedNodeIds, StringComparer.Ordinal);
+            foreach (string activeNodeId in SnapshotActiveNodeIds())
+                _ = allExcludedNodeIds.Add(activeNodeId);
+
+            string? discoveredNodeId = WaitForNewPipeWireNodeId(
+                baselineIds,
+                TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+                windowId,
+                allExcludedNodeIds);
+            if (!string.IsNullOrWhiteSpace(discoveredNodeId))
+            {
+                SetPendingNodeId(windowId, discoveredNodeId);
+                PipeWireTrace.Write($"WaylandKdeBackend selected={discoveredNodeId} discovered=true windowId={windowId}");
+                return new PortalCaptureBootstrap(
+                    discoveredNodeId,
+                    sessionPath,
+                    KdePortalBackendDestination,
+                    PipeWireRemoteHandle: null);
+            }
+
+            PipeWireTrace.Write(
+                $"WaylandKdeBackend all stream candidates excluded windowId={windowId} candidates={extractedSummary}");
+            ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
         }
-
-        string selectOptions = "{'types': <uint32 2>, 'multiple': <false>, 'cursor_mode': <uint32 2>}";
-        string selectResult = RunPortalDesktopMethod(
-            $"{KdePortalScreenCastInterface}.SelectSources",
-            [selectHandlePath, sessionPath, appId, selectOptions],
-            timeoutMs: 30_000,
-            destination: KdePortalBackendDestination);
-        if (!IsPortalCallSuccessful(selectResult))
+        catch (TimeoutException)
         {
-            ClosePortalSession(sessionPath);
-            sessionPath = null;
+            PipeWireTrace.Write($"WaylandKdeBackend timeout windowId={windowId}");
+            if (!string.IsNullOrWhiteSpace(sessionPath))
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
         }
-
-        string startResult = RunPortalDesktopMethod(
-            $"{KdePortalScreenCastInterface}.Start",
-            [startHandlePath, sessionPath, appId, string.Empty, "{}"],
-            timeoutMs: 120_000,
-            destination: KdePortalBackendDestination);
-        if (!IsPortalCallSuccessful(startResult))
+        catch (OperationCanceledException)
         {
-            ClosePortalSession(sessionPath);
-            sessionPath = null;
+            PipeWireTrace.Write($"WaylandKdeBackend cancelled windowId={windowId}");
+            if (!string.IsNullOrWhiteSpace(sessionPath))
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
         }
-
-        IReadOnlyList<string> streamNodeIds = ExtractStreamNodeIds(startResult);
-        for (int index = 0; index < streamNodeIds.Count; index++)
+        catch (Exception exception)
         {
-            string streamNodeId = streamNodeIds[index];
-            if (!excludedNodeIds.Contains(streamNodeId))
-                return streamNodeId;
+            PipeWireTrace.Write($"WaylandKdeBackend exception {exception.GetType().FullName}: {exception.Message}");
+            if (!string.IsNullOrWhiteSpace(sessionPath))
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+            return null;
         }
-
-        string? discoveredNodeId = WaitForNewPipeWireNodeId(
-            baselineIds,
-            TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-            windowId,
-            excludedNodeIds);
-        if (!string.IsNullOrWhiteSpace(discoveredNodeId))
-            return discoveredNodeId;
-
-        ClosePortalSession(sessionPath);
-        sessionPath = null;
-        return null;
+        finally
+        {
+            _waylandPortalSessionGate.Release();
+        }
     }
 
     private string? TryStartPortalWindowScreencast(
@@ -2109,29 +2567,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return _gdbus.Execute(args, timeoutMs);
     }
 
-    private string RunPortalSessionMethod(
-        string sessionPath,
-        string method,
-        IReadOnlyList<string> methodArguments,
-        int timeoutMs,
-        string destination = PortalDesktopDestination)
-    {
-        var args = new List<string>
-        {
-            "call",
-            "--session",
-            "--dest",
-            destination,
-            "--object-path",
-            sessionPath,
-            "--method",
-            method
-        };
-        args.AddRange(methodArguments);
-
-        return _gdbus.Execute(args, timeoutMs);
-    }
-
     private static string? ExtractObjectPath(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -2156,7 +2591,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return parts[^2];
     }
 
-    private void ClosePortalSession(string sessionPath)
+    private void ClosePortalSession(string sessionPath, string? sessionDestination = null)
     {
         if (string.IsNullOrWhiteSpace(sessionPath))
             return;
@@ -2164,7 +2599,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         try
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            ClosePortalSessionAsync(sessionPath, timeoutCts.Token).GetAwaiter().GetResult();
+            ClosePortalSessionAsync(sessionPath, sessionDestination, timeoutCts.Token).GetAwaiter().GetResult();
         }
         catch
         {
@@ -2174,8 +2609,20 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task ClosePortalSessionAsync(string sessionPath, CancellationToken cancellationToken)
     {
+        await ClosePortalSessionAsync(sessionPath, PortalDesktopDestination, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ClosePortalSessionAsync(
+        string sessionPath,
+        string? sessionDestination,
+        CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(sessionPath))
             return;
+
+        string destination = string.IsNullOrWhiteSpace(sessionDestination)
+            ? PortalDesktopDestination
+            : sessionDestination;
 
         Connection? connection = await EnsureSessionBusConnectionAsync(cancellationToken).ConfigureAwait(false);
         if (connection is null)
@@ -2183,6 +2630,18 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         try
         {
+            if (!string.Equals(destination, PortalDesktopDestination, StringComparison.Ordinal))
+            {
+                IKdePortalSession kdeSession = connection.CreateProxy<IKdePortalSession>(
+                    destination,
+                    new ObjectPath(sessionPath));
+
+                await kdeSession.CloseAsync()
+                    .WaitAsync(TimeSpan.FromSeconds(2), cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             IPipeWirePortalSession session = connection.CreateProxy<IPipeWirePortalSession>(
                 PortalDesktopDestination,
                 new ObjectPath(sessionPath));
@@ -2203,6 +2662,54 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsKdeDesktopSession()
+    {
+        string?[] candidates =
+        [
+            Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+            Environment.GetEnvironmentVariable("XDG_SESSION_DESKTOP"),
+            Environment.GetEnvironmentVariable("DESKTOP_SESSION")
+        ];
+
+        for (int index = 0; index < candidates.Length; index++)
+        {
+            string candidate = candidates[index] ?? string.Empty;
+            if (candidate.Contains("kde", StringComparison.OrdinalIgnoreCase) ||
+                candidate.Contains("plasma", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        string kdeFullSession = Environment.GetEnvironmentVariable("KDE_FULL_SESSION") ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(kdeFullSession);
+    }
+
+    private bool IsKdePortalBackendAvailable()
+    {
+        if (!LinuxDependencies.IsGdbusAvailable)
+            return false;
+
+        try
+        {
+            string output = _gdbus.Execute(
+                [
+                    "introspect",
+                    "--session",
+                    "--dest",
+                    KdePortalBackendDestination,
+                    "--object-path",
+                    "/org/freedesktop/portal/desktop"
+                ],
+                timeoutMs: 1_500);
+            return output.Contains("org.freedesktop.impl.portal.ScreenCast", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string GetJsonScalarString(JsonElement value)
     {
         return value.ValueKind switch
@@ -2218,11 +2725,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly record struct PortalCaptureBootstrap(
         string NodeId,
         string SessionPath,
-        CloseSafeHandle PipeWireRemoteHandle);
+        string SessionDestination,
+        CloseSafeHandle? PipeWireRemoteHandle);
 
     private readonly record struct PortalRequestResponse(
         uint ResponseCode,
         IDictionary<string, object> Results);
+
+    private readonly record struct PortalRestoreData(string Provider, uint Version, byte[] Bytes);
 
     private readonly record struct PortalStreamDescriptor(string NodeId, string? StableId);
 
@@ -2232,11 +2742,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         string windowId,
         string nodeId,
         string? portalSessionPath,
+        string? portalSessionDestination,
         PipeWireWindowStream stream)
     {
         public string WindowId { get; } = windowId;
         public string NodeId { get; } = nodeId;
         public string? PortalSessionPath { get; } = portalSessionPath;
+        public string? PortalSessionDestination { get; } = portalSessionDestination;
         public PipeWireWindowStream Stream { get; } = stream;
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
@@ -2244,7 +2756,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public bool FirstDeliveredFrameLogged { get; set; }
         public bool IsDisposed { get; private set; }
 
-        public void Dispose(Action<string> closePortalSession)
+        public void Dispose(Action<string, string?> closePortalSession)
         {
             if (IsDisposed)
                 return;
@@ -2252,7 +2764,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             IsDisposed = true;
             Stream.Dispose();
             if (!string.IsNullOrWhiteSpace(PortalSessionPath))
-                closePortalSession(PortalSessionPath);
+                closePortalSession(PortalSessionPath, PortalSessionDestination);
         }
     }
 

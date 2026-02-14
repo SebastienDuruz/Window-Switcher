@@ -98,44 +98,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             Header = "Rename window",
             Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync())
         });
-        
-        var configSnapshot = ConfigFileAccessor.GetInstance().ReadConfig(config => new
-        {
-            config.ResizeWindows,
-            config.UseFixedWindowSize,
-            config.WindowWidth,
-            config.WindowHeight,
-            config.ShowWindowDecorations,
-            config.PreviewHighlightColor
-        });
 
-        CanResize = configSnapshot.ResizeWindows;
-        if (configSnapshot.UseFixedWindowSize)
-        {
-            CanResize = false;
-            Width = configSnapshot.WindowWidth;
-            Height = configSnapshot.WindowHeight; 
-        }
-        else
-        {
-            Width = WindowConfig.WindowWidth;
-            Height = WindowConfig.WindowHeight;
-        }
-        
-        SystemDecorations = configSnapshot.ShowWindowDecorations
-            ? SystemDecorations.Full
-            : SystemDecorations.BorderOnly;
-
-        if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
-        {
-            var highlightBrush = new SolidColorBrush(highlightColor);
-            WindowLabel.Foreground = highlightBrush;
-            PreviewBorder.BorderBrush = highlightBrush;
-        }
-        else
-        {
-            PreviewBorder.BorderBrush = WindowLabel.Foreground;
-        }
+        ApplySettingsCore(refreshPreviewPipeline: false);
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -212,5 +176,54 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         WindowConfig.WindowTitle = newTitle;
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
+    }
+
+    public void ApplySettings()
+    {
+        ApplySettingsCore(refreshPreviewPipeline: true);
+    }
+
+    private void ApplySettingsCore(bool refreshPreviewPipeline)
+    {
+        var configSnapshot = ConfigFileAccessor.GetInstance().ReadConfig(config => new
+        {
+            config.ResizeWindows,
+            config.UseFixedWindowSize,
+            config.WindowWidth,
+            config.WindowHeight,
+            config.ShowWindowDecorations,
+            config.PreviewHighlightColor
+        });
+
+        CanResize = configSnapshot.ResizeWindows;
+        if (configSnapshot.UseFixedWindowSize)
+        {
+            CanResize = false;
+            Width = configSnapshot.WindowWidth;
+            Height = configSnapshot.WindowHeight;
+        }
+        else
+        {
+            Width = WindowConfig.WindowWidth;
+            Height = WindowConfig.WindowHeight;
+        }
+
+        SystemDecorations = configSnapshot.ShowWindowDecorations
+            ? SystemDecorations.Full
+            : SystemDecorations.BorderOnly;
+
+        if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
+        {
+            var highlightBrush = new SolidColorBrush(highlightColor);
+            WindowLabel.Foreground = highlightBrush;
+            PreviewBorder.BorderBrush = highlightBrush;
+        }
+        else
+        {
+            PreviewBorder.BorderBrush = WindowLabel.Foreground;
+        }
+
+        if (refreshPreviewPipeline)
+            _service.ApplySettings();
     }
 }

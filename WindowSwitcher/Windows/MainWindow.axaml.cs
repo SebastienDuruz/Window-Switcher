@@ -300,8 +300,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public void ApplySettings()
     {
-        ViewModel.WindowsConfigs.Clear();
-        ViewModel.FetchWindowsWithFilters();
+        foreach (FloatingWindow floatingWindow in _floatingWindows.Values.ToList())
+            floatingWindow.ApplySettings();
     }
 
     private static void ExecuteWithAppClosingFlag(Action action)

@@ -35,6 +35,8 @@ internal sealed class FloatingWindowService
     private Bitmap? _previousScreenshot;
     private IntPtr _thumbnailHandle = IntPtr.Zero;
     private volatile bool _isClosing;
+    private bool _previewCaptureForgottenWhileDisabled;
+    private bool _isPreviewSurfaceCleared = true;
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
 
@@ -139,17 +141,24 @@ internal sealed class FloatingWindowService
         _previousScreenshot?.Dispose();
         _currentScreenshot = null;
         _previousScreenshot = null;
+        _isPreviewSurfaceCleared = true;
+    }
+
+    public void ApplySettings()
+    {
+        if (_isClosing)
+            return;
+
+        UpdateLayout();
+        _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
     }
 
     private async Task RunPreviewLoopAsync(CancellationToken cancellationToken)
     {
-        var configAccessor = ConfigFileAccessor.GetInstance();
-        if (!configAccessor.ReadConfig(config => config.ActivateWindowsPreview))
-            return;
-
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
         {
-            RegisterWindowThumbnail();
+            if (IsWindowsPreviewEnabled())
+                RegisterWindowThumbnail();
             return;
         }
 
@@ -170,6 +179,9 @@ internal sealed class FloatingWindowService
         {
             try
             {
+                if (!await EnsurePreviewEnabledAsync(cancellationToken).ConfigureAwait(false))
+                    continue;
+
                 await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken).ConfigureAwait(false);
                 await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
             }
@@ -189,14 +201,17 @@ internal sealed class FloatingWindowService
         if (_streamingPreviewFrameProvider is null)
             return;
 
-        int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
-        var request = new ScreenshotRequest(
-            MaxWidthPx: null,
-            MaxHeightPx: null,
-            TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
-
         while (!cancellationToken.IsCancellationRequested)
         {
+            if (!await EnsurePreviewEnabledAsync(cancellationToken).ConfigureAwait(false))
+                continue;
+
+            int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
+            var request = new ScreenshotRequest(
+                MaxWidthPx: null,
+                MaxHeightPx: null,
+                TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
+
             try
             {
                 await foreach (Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
@@ -204,6 +219,12 @@ internal sealed class FloatingWindowService
                                    request,
                                    cancellationToken))
                 {
+                    if (!IsWindowsPreviewEnabled())
+                    {
+                        frame.Dispose();
+                        break;
+                    }
+
                     bool lockTaken = false;
                     bool frameTransferred = false;
                     try
@@ -229,6 +250,7 @@ internal sealed class FloatingWindowService
                             _previousScreenshot = _currentScreenshot;
                             _currentScreenshot = frame;
                             _windowScreenshot.Source = frame;
+                            _isPreviewSurfaceCleared = false;
                             frameTransferred = true;
                             disposeNow?.Dispose();
                         });
@@ -322,12 +344,74 @@ internal sealed class FloatingWindowService
                 _previousScreenshot = _currentScreenshot;
                 _currentScreenshot = appScreenshot;
                 _windowScreenshot.Source = appScreenshot;
+                _isPreviewSurfaceCleared = false;
                 disposeNow?.Dispose();
             });
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             appScreenshot?.Dispose();
+        }
+        finally
+        {
+            if (lockTaken)
+                _previewUpdateSemaphore.Release();
+        }
+    }
+
+    private static bool IsWindowsPreviewEnabled()
+    {
+        return ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview);
+    }
+
+    private async Task<bool> EnsurePreviewEnabledAsync(CancellationToken cancellationToken)
+    {
+        if (IsWindowsPreviewEnabled())
+        {
+            _previewCaptureForgottenWhileDisabled = false;
+            return true;
+        }
+
+        if (!_previewCaptureForgottenWhileDisabled)
+        {
+            _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
+            _previewCaptureForgottenWhileDisabled = true;
+        }
+
+        await ClearPreviewSurfaceAsync(cancellationToken).ConfigureAwait(false);
+        await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
+        return false;
+    }
+
+    private async Task ClearPreviewSurfaceAsync(CancellationToken cancellationToken)
+    {
+        if (_isPreviewSurfaceCleared)
+            return;
+
+        bool lockTaken = false;
+        try
+        {
+            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockTaken = true;
+
+            if (_isPreviewSurfaceCleared)
+                return;
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Bitmap? current = _currentScreenshot;
+                Bitmap? previous = _previousScreenshot;
+                _currentScreenshot = null;
+                _previousScreenshot = null;
+                _windowScreenshot.Source = null;
+                _isPreviewSurfaceCleared = true;
+                current?.Dispose();
+                previous?.Dispose();
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown path.
         }
         finally
         {

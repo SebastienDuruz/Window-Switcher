@@ -22,3 +22,32 @@ public interface IPipeWirePortalSession : IDBusObject
 {
     Task CloseAsync();
 }
+
+[DBusInterface("org.freedesktop.impl.portal.ScreenCast")]
+public interface IKdePortalScreenCast : IDBusObject
+{
+    Task<(uint Response, IDictionary<string, object> Results)> CreateSessionAsync(
+        ObjectPath handle,
+        ObjectPath sessionHandle,
+        string appId,
+        IDictionary<string, object> options);
+
+    Task<(uint Response, IDictionary<string, object> Results)> SelectSourcesAsync(
+        ObjectPath handle,
+        ObjectPath sessionHandle,
+        string appId,
+        IDictionary<string, object> options);
+
+    Task<(uint Response, IDictionary<string, object> Results)> StartAsync(
+        ObjectPath handle,
+        ObjectPath sessionHandle,
+        string appId,
+        string parentWindow,
+        IDictionary<string, object> options);
+}
+
+[DBusInterface("org.freedesktop.impl.portal.Session")]
+public interface IKdePortalSession : IDBusObject
+{
+    Task CloseAsync();
+}
