@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -14,9 +15,10 @@ using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 
-public sealed class PipeWireFrameProvider : IPreviewFrameProvider
+public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPreviewFrameProvider
 {
     private const int PipeWireReconnectDelayMs = 300;
+    private const int PipeWireFallbackStreamDelayMs = 100;
     private const int PipeWireNodePollIntervalMs = 300;
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int PipeWireNodeCacheTtlMs = 500;
@@ -80,6 +82,64 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         catch (Exception)
         {
             return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public async IAsyncEnumerable<Bitmap> StreamAsync(
+        string windowId,
+        ScreenshotRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (_disposed)
+            yield break;
+
+        if (string.IsNullOrWhiteSpace(windowId) || !RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            await foreach (Bitmap fallbackFrame in StreamFallbackAsync(windowId, request, cancellationToken))
+                yield return fallbackFrame;
+            yield break;
+        }
+
+        WindowCaptureContext? capture = EnsureCapture(windowId);
+        if (capture is null || capture.ForceFallback)
+        {
+            await foreach (Bitmap fallbackFrame in StreamFallbackAsync(windowId, request, cancellationToken))
+                yield return fallbackFrame;
+            yield break;
+        }
+
+        int timeoutMs = Math.Clamp(request.TimeoutMs, 100, 10_000);
+        long latestSequence = 0;
+
+        while (!cancellationToken.IsCancellationRequested && !capture.IsDisposed && !capture.ForceFallback)
+        {
+            capture.Stream.EnsureRunning();
+
+            PipeWireWindowStream.FrameSnapshot? snapshot = await capture.Stream
+                .WaitForNextFrameAsync(latestSequence, timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (snapshot is not null)
+            {
+                latestSequence = snapshot.Value.Sequence;
+                Bitmap? bitmap = CreateBitmap(snapshot.Value.Bytes);
+                if (bitmap is not null)
+                {
+                    capture.ConsecutiveFailures = 0;
+                    yield return bitmap;
+                    continue;
+                }
+            }
+
+            bool keepStreaming = await TryRecoverCaptureAsync(capture, timeoutMs, cancellationToken).ConfigureAwait(false);
+            if (!keepStreaming)
+                break;
+        }
+
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            await foreach (Bitmap fallbackFrame in StreamFallbackAsync(windowId, request, cancellationToken))
+                yield return fallbackFrame;
         }
     }
 
@@ -228,6 +288,43 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             ClosePortalSession(capture.PortalSessionPath);
 
         return null;
+    }
+
+    private async Task<bool> TryRecoverCaptureAsync(
+        WindowCaptureContext capture,
+        int timeoutMs,
+        CancellationToken cancellationToken)
+    {
+        bool needsRestart = capture.Stream.NeedsRestart() || !capture.Stream.HasReceivedFrame();
+        if (!needsRestart)
+            return true;
+
+        try
+        {
+            await Task.Delay(Math.Min(PipeWireReconnectDelayMs, timeoutMs), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+
+        capture.Stream.Restart();
+        if (!capture.Stream.NeedsRestart())
+        {
+            capture.ConsecutiveFailures = 0;
+            return true;
+        }
+
+        capture.ConsecutiveFailures++;
+        if (capture.ConsecutiveFailures < 3)
+            return true;
+
+        capture.ForceFallback = true;
+        capture.Stream.Dispose();
+        if (!string.IsNullOrWhiteSpace(capture.PortalSessionPath))
+            ClosePortalSession(capture.PortalSessionPath);
+
+        return false;
     }
 
     private string? TryStartPortalWindowScreencast(string windowId, out string? sessionPath)
@@ -399,6 +496,41 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         string normalized = NormalizeForSearch(value);
         if (!string.IsNullOrWhiteSpace(normalized))
             patterns.Add(normalized);
+    }
+
+    private static Bitmap? CreateBitmap(byte[] bytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(bytes, writable: false);
+            return new Bitmap(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async IAsyncEnumerable<Bitmap> StreamFallbackAsync(
+        string windowId,
+        ScreenshotRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            Bitmap? fallbackFrame = await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
+            if (fallbackFrame is not null)
+                yield return fallbackFrame;
+
+            try
+            {
+                await Task.Delay(PipeWireFallbackStreamDelayMs, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                yield break;
+            }
+        }
     }
 
     private async Task<Bitmap?> RequestFallbackAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken)
@@ -706,6 +838,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     {
         private const int MaxFrameBytes = 16 * 1024 * 1024;
 
+        public readonly record struct FrameSnapshot(long Sequence, byte[] Bytes);
+
         private readonly string _nodeId;
         private readonly int _fps;
         private readonly IGstLaunchWrapper _gstLaunch;
@@ -716,6 +850,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         private CancellationTokenSource? _cts;
         private Task? _readerTask;
         private byte[]? _latestFrameBytes;
+        private long _latestFrameSequence;
         private bool _hasReceivedFrame;
         private bool _disposed;
         private bool _faulted;
@@ -812,18 +947,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
             while (!token.IsCancellationRequested)
             {
-                byte[]? bytes = GetLatestFrameBytesSnapshot();
-                if (bytes is not null)
+                FrameSnapshot? snapshot = GetFrameSnapshotAfter(-1);
+                if (snapshot is not null)
                 {
-                    try
-                    {
-                        using var stream = new MemoryStream(bytes, writable: false);
-                        return new Bitmap(stream);
-                    }
-                    catch
-                    {
-                        return null;
-                    }
+                    return CreateBitmap(snapshot.Value.Bytes);
                 }
 
                 if (IsFaulted())
@@ -846,11 +973,49 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
             return null;
         }
 
-        private byte[]? GetLatestFrameBytesSnapshot()
+        public async Task<FrameSnapshot?> WaitForNextFrameAsync(
+            long afterSequence,
+            int timeoutMs,
+            CancellationToken cancellationToken)
+        {
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCts.CancelAfter(Math.Clamp(timeoutMs, 100, 10_000));
+            CancellationToken token = linkedCts.Token;
+
+            while (!token.IsCancellationRequested)
+            {
+                FrameSnapshot? snapshot = GetFrameSnapshotAfter(afterSequence);
+                if (snapshot is not null)
+                    return snapshot;
+
+                if (IsFaulted())
+                    return null;
+
+                try
+                {
+                    await _frameReadySignal.WaitAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return null;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return null;
+                }
+            }
+
+            return null;
+        }
+
+        private FrameSnapshot? GetFrameSnapshotAfter(long afterSequence)
         {
             lock (_syncRoot)
             {
-                return _latestFrameBytes;
+                if (_latestFrameBytes is null || _latestFrameSequence <= afterSequence)
+                    return null;
+
+                return new FrameSnapshot(_latestFrameSequence, _latestFrameBytes);
             }
         }
 
@@ -924,6 +1089,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                             lock (_syncRoot)
                             {
                                 _latestFrameBytes = frame;
+                                _latestFrameSequence++;
                                 _hasReceivedFrame = true;
                             }
                             SignalFrameReady();

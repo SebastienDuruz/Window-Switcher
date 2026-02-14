@@ -34,6 +34,12 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         process.StartInfo.ArgumentList.Add("!");
         process.StartInfo.ArgumentList.Add("videoconvert");
         process.StartInfo.ArgumentList.Add("!");
+        process.StartInfo.ArgumentList.Add("queue");
+        process.StartInfo.ArgumentList.Add("leaky=downstream");
+        process.StartInfo.ArgumentList.Add("max-size-buffers=2");
+        process.StartInfo.ArgumentList.Add("max-size-bytes=0");
+        process.StartInfo.ArgumentList.Add("max-size-time=0");
+        process.StartInfo.ArgumentList.Add("!");
         process.StartInfo.ArgumentList.Add("jpegenc");
         process.StartInfo.ArgumentList.Add("quality=80");
         process.StartInfo.ArgumentList.Add("!");

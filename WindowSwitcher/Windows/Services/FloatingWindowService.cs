@@ -8,7 +8,6 @@ using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Models;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
@@ -19,12 +18,13 @@ internal sealed class FloatingWindowService
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
-    private const int PreviewRefreshIntervalMs = 100;
+    private const int ScreenshotPreviewRefreshIntervalMs = 100;
     private const int PreviewRequestTimeoutMs = 1_500;
 
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
+    private readonly IStreamingPreviewFrameProvider? _streamingPreviewFrameProvider;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
     private readonly Image _windowScreenshot;
     private readonly Border _previewBorder;
@@ -55,6 +55,7 @@ internal sealed class FloatingWindowService
         _ownerWindow = ownerWindow;
         _windowConfig = windowConfig;
         _previewFrameProvider = previewFrameProvider;
+        _streamingPreviewFrameProvider = previewFrameProvider as IStreamingPreviewFrameProvider;
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
@@ -62,7 +63,7 @@ internal sealed class FloatingWindowService
 
     public void Start()
     {
-        _ = Task.Run(() => RunPeriodicTask(_cts.Token));
+        _ = Task.Run(() => RunPreviewLoopAsync(_cts.Token));
     }
 
     public void OnWindowResized(bool activateWindowsPreview)
@@ -76,8 +77,12 @@ internal sealed class FloatingWindowService
     public void SetPreviewHighlight(bool isSelected)
     {
         _previewBorder.IsVisible = isSelected;
-        if (!isSelected && _floatingPreviewPolicy.RefreshScreenshotWhenDeselected)
+        if (!isSelected &&
+            _streamingPreviewFrameProvider is null &&
+            _floatingPreviewPolicy.RefreshScreenshotWhenDeselected)
+        {
             _ = UpdateScreenshot(PreviewRequestTimeoutMs, _cts.Token);
+        }
     }
 
     public void UpdateLayout()
@@ -135,7 +140,7 @@ internal sealed class FloatingWindowService
         _previousScreenshot = null;
     }
 
-    private async Task RunPeriodicTask(CancellationToken cancellationToken)
+    private async Task RunPreviewLoopAsync(CancellationToken cancellationToken)
     {
         var configAccessor = ConfigFileAccessor.GetInstance();
         if (!configAccessor.ReadConfig(config => config.ActivateWindowsPreview))
@@ -149,12 +154,23 @@ internal sealed class FloatingWindowService
 
         await Task.Delay(Random.Shared.Next(0, 400), cancellationToken);
 
+        if (_streamingPreviewFrameProvider is not null)
+        {
+            await RunContinuousStreamLoopAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        await RunScreenshotPollingLoopAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task RunScreenshotPollingLoopAsync(CancellationToken cancellationToken)
+    {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken);
-                await Task.Delay(PreviewRefreshIntervalMs, cancellationToken);
+                await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(ScreenshotPreviewRefreshIntervalMs, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -162,7 +178,80 @@ internal sealed class FloatingWindowService
             }
             catch (Exception)
             {
-                await Task.Delay(500, cancellationToken);
+                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task RunContinuousStreamLoopAsync(CancellationToken cancellationToken)
+    {
+        if (_streamingPreviewFrameProvider is null)
+            return;
+
+        int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
+        var request = new ScreenshotRequest(
+            MaxWidthPx: null,
+            MaxHeightPx: null,
+            TimeoutMs: timeoutMs);
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await foreach (Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
+                                   _windowConfig.WindowId,
+                                   request,
+                                   cancellationToken))
+                {
+                    bool lockTaken = false;
+                    bool frameTransferred = false;
+                    try
+                    {
+                        await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        lockTaken = true;
+
+                        if (_isClosing || cancellationToken.IsCancellationRequested)
+                        {
+                            frame.Dispose();
+                            return;
+                        }
+
+                        await Dispatcher.UIThread.InvokeAsync(() =>
+                        {
+                            if (_isClosing || cancellationToken.IsCancellationRequested)
+                            {
+                                frame.Dispose();
+                                return;
+                            }
+
+                            Bitmap? disposeNow = _previousScreenshot;
+                            _previousScreenshot = _currentScreenshot;
+                            _currentScreenshot = frame;
+                            _windowScreenshot.Source = frame;
+                            frameTransferred = true;
+                            disposeNow?.Dispose();
+                        });
+                    }
+                    catch
+                    {
+                        if (!frameTransferred)
+                            frame.Dispose();
+                        throw;
+                    }
+                    finally
+                    {
+                        if (lockTaken)
+                            _previewUpdateSemaphore.Release();
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Shutdown path.
+            }
+            catch (Exception)
+            {
+                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
             }
         }
     }
