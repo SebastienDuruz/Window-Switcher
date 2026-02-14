@@ -43,6 +43,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         new(@"\(\s*uint32\s+(?<id>\d+)\s*,", RegexOptions.Compiled);
 
     private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
+    private readonly WinAccessorBase _accessorBase;
     private readonly IPwDumpWrapper _pwDump;
     private readonly IGdbusWrapper _gdbus;
     private readonly IGstLaunchWrapper _gstLaunch;
@@ -69,6 +70,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
 
+        _accessorBase = accessorBase;
         _fallbackProvider = new ScreenshotPreviewFrameProvider(accessorBase);
         _pwDump = pwDump ?? new PwDumpWrapper();
         _gdbus = gdbus ?? new GdbusWrapper();
@@ -1189,6 +1191,36 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         foreach (string activeNodeId in SnapshotActiveNodeIds())
             _ = allExcludedNodeIds.Add(activeNodeId);
 
+        string? windowTitle = TryGetWindowTitleById(windowId);
+        IReadOnlyCollection<string> windowPatterns = BuildWindowMatchPatterns(windowId, windowTitle);
+        IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
+        IReadOnlyList<NodeCandidate>? discoveredNodes = null;
+
+        NodeCandidate? FindNodeCandidate(string nodeId)
+        {
+            discoveredNodes ??= GetPipeWireNodeCandidates(forceRefresh: true);
+            for (int index = 0; index < discoveredNodes.Count; index++)
+            {
+                NodeCandidate candidate = discoveredNodes[index];
+                if (string.Equals(candidate.Id, nodeId, StringComparison.Ordinal))
+                    return candidate;
+            }
+
+            return null;
+        }
+
+        bool MatchesRequestedWindow(PortalStreamDescriptor stream)
+        {
+            if (windowTitlePatterns.Count == 0)
+                return true;
+
+            NodeCandidate? candidate = FindNodeCandidate(stream.NodeId);
+            if (candidate is null)
+                return true;
+
+            return MatchesWindowId(candidate.Value, windowTitlePatterns);
+        }
+
         string? expectedStreamStableId = GetStoredWaylandScreenCastStreamId(windowId);
         if (!string.IsNullOrWhiteSpace(expectedStreamStableId))
         {
@@ -1199,6 +1231,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     continue;
                 if (allExcludedNodeIds.Contains(stream.NodeId))
                     continue;
+                if (!MatchesRequestedWindow(stream))
+                {
+                    PipeWireTrace.Write(
+                        $"WaylandPortal stored stream id candidate mismatched window title windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                    continue;
+                }
 
                 selectedStreamStableId = stream.StableId;
                 shouldPersistSelectedStreamStableId = true;
@@ -1210,10 +1248,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
 
         HashSet<string> candidateIds = streams.Select(stream => stream.NodeId).ToHashSet(StringComparer.Ordinal);
-        IReadOnlyCollection<string> windowPatterns = BuildWindowIdPatterns(windowId);
         if (windowPatterns.Count > 0)
         {
-            IReadOnlyList<NodeCandidate> nodes = GetPipeWireNodeCandidates(forceRefresh: true);
+            IReadOnlyList<NodeCandidate> nodes = discoveredNodes ??= GetPipeWireNodeCandidates(forceRefresh: true);
             var matchingCandidates = new List<NodeCandidate>(capacity: streams.Count);
             for (int index = 0; index < nodes.Count; index++)
             {
@@ -1889,7 +1926,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (availableNodes.Count == 0)
             return null;
 
-        IReadOnlyCollection<string> normalizedWindowIds = BuildWindowIdPatterns(windowId);
+        string? windowTitle = TryGetWindowTitleById(windowId);
+        IReadOnlyCollection<string> normalizedWindowIds = BuildWindowMatchPatterns(windowId, windowTitle);
         NodeCandidate? matching = FindBestMatchingNode(availableNodes, normalizedWindowIds);
         if (matching is null)
             return allowBestCandidate
@@ -1905,7 +1943,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds)
     {
-        IReadOnlyCollection<string> normalizedWindowIds = BuildWindowIdPatterns(windowId);
+        string? windowTitle = TryGetWindowTitleById(windowId);
+        IReadOnlyCollection<string> normalizedWindowIds = BuildWindowMatchPatterns(windowId, windowTitle);
         DateTime deadline = DateTime.UtcNow + timeout;
         NodeCandidate? bestNewCandidate = null;
 
@@ -2156,6 +2195,138 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
 
         return builder.ToString();
+    }
+
+    private static IReadOnlyCollection<string> BuildWindowTitlePatterns(string? windowTitle)
+    {
+        var patterns = new HashSet<string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(windowTitle))
+            return patterns;
+
+        AddNormalizedPattern(patterns, windowTitle);
+        foreach (string token in ExtractWindowTitleTokens(windowTitle))
+            AddNormalizedPattern(patterns, token);
+
+        return patterns;
+    }
+
+    private static IReadOnlyCollection<string> BuildWindowMatchPatterns(string? windowId, string? windowTitle)
+    {
+        HashSet<string> patterns = BuildWindowIdPatterns(windowId).ToHashSet(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(windowTitle))
+            return patterns;
+
+        AddNormalizedPattern(patterns, windowTitle);
+        foreach (string token in ExtractWindowTitleTokens(windowTitle))
+            AddNormalizedPattern(patterns, token);
+
+        return patterns;
+    }
+
+    private string? TryGetWindowTitleById(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return null;
+
+        try
+        {
+            IReadOnlyCollection<WindowConfig> windows = _accessorBase.GetWindows();
+            foreach (WindowConfig window in windows)
+            {
+                if (!AreWindowIdsEquivalent(window.WindowId, windowId))
+                    continue;
+                if (string.IsNullOrWhiteSpace(window.WindowTitle))
+                    return null;
+                return window.WindowTitle.Trim();
+            }
+        }
+        catch
+        {
+            // Best-effort enrichment for window-title matching only.
+        }
+
+        return null;
+    }
+
+    private static bool AreWindowIdsEquivalent(string? leftWindowId, string? rightWindowId)
+    {
+        if (string.IsNullOrWhiteSpace(leftWindowId) || string.IsNullOrWhiteSpace(rightWindowId))
+            return false;
+
+        string left = leftWindowId.Trim();
+        string right = rightWindowId.Trim();
+        if (string.Equals(left, right, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!TryParseWindowIdAsUInt64(left, out ulong leftValue))
+            return false;
+        if (!TryParseWindowIdAsUInt64(right, out ulong rightValue))
+            return false;
+
+        return leftValue == rightValue;
+    }
+
+    private static bool TryParseWindowIdAsUInt64(string windowId, out ulong value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(windowId))
+            return false;
+
+        string normalized = windowId.Trim();
+        if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return ulong.TryParse(
+                normalized[2..],
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        return ulong.TryParse(
+            normalized,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out value);
+    }
+
+    private static IReadOnlyList<string> ExtractWindowTitleTokens(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return Array.Empty<string>();
+
+        var tokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = new StringBuilder(capacity: 16);
+
+        static void FlushCurrentToken(StringBuilder buffer, HashSet<string> destination)
+        {
+            if (buffer.Length < 4)
+            {
+                buffer.Clear();
+                return;
+            }
+
+            destination.Add(buffer.ToString());
+            buffer.Clear();
+        }
+
+        foreach (char character in title)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                current.Append(character);
+            }
+            else
+            {
+                FlushCurrentToken(current, tokens);
+            }
+        }
+
+        FlushCurrentToken(current, tokens);
+
+        return tokens
+            .OrderByDescending(token => token.Length)
+            .Take(4)
+            .ToArray();
     }
 
     private static IReadOnlyCollection<string> BuildWindowIdPatterns(string? windowId)
