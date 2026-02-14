@@ -2,9 +2,9 @@ using System;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using WindowSwitcherLib.Application.Platform;
 using WindowSwitcher.Theming;
-using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 
 namespace WindowSwitcher.ViewModels;
 

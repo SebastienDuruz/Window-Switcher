@@ -5,7 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using WindowSwitcher.Controls;
 using WindowSwitcher.Windows.Services;
-using WindowSwitcherLib.Data.Common;
+using WindowSwitcherLib.Data;
 
 namespace WindowSwitcher.Windows;
 

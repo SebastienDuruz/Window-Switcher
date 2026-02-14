@@ -3,12 +3,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Logging;
 using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 using static System.Drawing.Imaging.Encoder;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 

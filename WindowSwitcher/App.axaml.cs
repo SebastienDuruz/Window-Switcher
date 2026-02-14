@@ -5,8 +5,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using WindowSwitcher.Theming;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data;
 
 namespace WindowSwitcher;
 

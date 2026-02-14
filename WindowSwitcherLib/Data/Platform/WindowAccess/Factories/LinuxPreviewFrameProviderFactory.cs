@@ -1,4 +1,3 @@
-using WindowSwitcherLib.Data.Common;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;

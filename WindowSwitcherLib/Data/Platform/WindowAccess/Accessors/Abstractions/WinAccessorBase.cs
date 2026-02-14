@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 

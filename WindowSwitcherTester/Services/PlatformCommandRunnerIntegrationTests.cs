@@ -1,5 +1,6 @@
-using WindowSwitcherLib.Application.Platform;
-using WindowSwitcherLib.Infrastructure.Platform.Commands;
+using WindowSwitcherLib.Data.Platform.Commands;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Models;
 using Xunit;
 
 namespace WindowSwitcherTester.Services;

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Controls;
 using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Common;
 
 namespace WindowSwitcher.Controls;
 

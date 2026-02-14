@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
-        xmlns:models="clr-namespace:WindowSwitcherLib.Domain.Models;assembly=WindowSwitcherLib"
+        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="300" Height="400"

@@ -1,10 +1,7 @@
 using System.Diagnostics;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Logging;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 

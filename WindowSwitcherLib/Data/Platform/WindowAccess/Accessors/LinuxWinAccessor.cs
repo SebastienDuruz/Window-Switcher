@@ -1,13 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Logging;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors;
 

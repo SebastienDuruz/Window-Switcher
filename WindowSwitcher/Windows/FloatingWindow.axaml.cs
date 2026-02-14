@@ -8,12 +8,11 @@ using WindowSwitcher.Controls;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcher.Windows.Services;
-using WindowSwitcherLib.Application.Platform;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.Windows;
 

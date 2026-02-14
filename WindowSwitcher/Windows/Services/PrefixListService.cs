@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
+using WindowSwitcherLib.Data;
 
 namespace WindowSwitcher.Windows.Services;
 

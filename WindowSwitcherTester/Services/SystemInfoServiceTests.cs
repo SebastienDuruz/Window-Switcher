@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using WindowSwitcherLib.Application.Platform;
-using WindowSwitcherLib.Application.Services;
+using WindowSwitcherLib.Data.Platform.SystemInfo;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Models;
 using Xunit;
 
 namespace WindowSwitcherTester.Services;

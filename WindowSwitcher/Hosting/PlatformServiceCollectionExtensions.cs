@@ -1,12 +1,11 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
-using WindowSwitcherLib.Application.Platform;
-using WindowSwitcherLib.Application.Platform.Diagnostics;
-using WindowSwitcherLib.Application.Services;
+using WindowSwitcherLib.Data.Platform.Commands;
+using WindowSwitcherLib.Data.Platform.Diagnostics;
+using WindowSwitcherLib.Data.Platform.Policies;
+using WindowSwitcherLib.Data.Platform.SystemInfo;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
-using WindowSwitcherLib.Infrastructure.Platform.Commands;
-using WindowSwitcherLib.Infrastructure.Platform.Diagnostics;
-using WindowSwitcherLib.Infrastructure.Platform.Policies;
 
 namespace WindowSwitcher.Hosting;
 

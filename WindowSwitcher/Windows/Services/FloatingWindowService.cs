@@ -5,14 +5,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using WindowSwitcherLib.Application.Platform;
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Configuration;
-using WindowSwitcherLib.Data.Logging;
+using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.Interop;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows.Services;

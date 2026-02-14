@@ -1,5 +1,3 @@
-using WindowSwitcherLib.Data.Common;
-using WindowSwitcherLib.Data.Logging;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 

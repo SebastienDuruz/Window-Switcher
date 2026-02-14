@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WindowSwitcherLib.Application.Platform.Diagnostics;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 

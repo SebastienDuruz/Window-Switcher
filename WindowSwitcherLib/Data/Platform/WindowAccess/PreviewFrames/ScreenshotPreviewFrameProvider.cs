@@ -1,7 +1,7 @@
 using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Domain.Models;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 
