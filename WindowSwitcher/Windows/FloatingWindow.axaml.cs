@@ -204,4 +204,13 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         _service.SetPreviewHighlight(isSelected);
     }
+
+    public void UpdateWindowTitle(string newTitle)
+    {
+        if (string.IsNullOrWhiteSpace(newTitle))
+            return;
+
+        WindowConfig.WindowTitle = newTitle;
+        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+    }
 }

@@ -396,7 +396,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         string normalizedToken = restoreToken.Trim();
         ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        (bool needsUpdate, string? legacyToken) = configAccessor.ReadConfig(config =>
+        bool needsUpdate = configAccessor.ReadConfig(config =>
         {
             bool allKeysMatch = true;
             for (int index = 0; index < restoreKeys.Count; index++)
@@ -410,8 +410,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 }
             }
 
-            bool shouldClearLegacy = !string.IsNullOrWhiteSpace(config.LinuxWaylandScreenCastRestoreToken);
-            return (!allKeysMatch || shouldClearLegacy, config.LinuxWaylandScreenCastRestoreToken);
+            bool legacyMatches = string.Equals(
+                config.LinuxWaylandScreenCastRestoreToken,
+                normalizedToken,
+                StringComparison.Ordinal);
+            return !allKeysMatch || !legacyMatches;
         });
         if (!needsUpdate)
             return;
@@ -420,10 +423,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             for (int index = 0; index < restoreKeys.Count; index++)
                 config.LinuxWaylandScreenCastRestoreTokensByWindowId[restoreKeys[index]] = normalizedToken;
-
-            // Legacy single-token setting can cause every preview to restore the same source.
-            if (!string.IsNullOrWhiteSpace(legacyToken))
-                config.LinuxWaylandScreenCastRestoreToken = string.Empty;
+            config.LinuxWaylandScreenCastRestoreToken = normalizedToken;
         });
         configAccessor.WriteUserSettings();
     }

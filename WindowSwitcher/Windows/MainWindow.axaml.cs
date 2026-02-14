@@ -171,8 +171,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (!isUpdated)
             return;
 
-        WinAccessorBase.RenameWindowTitle(windowId, RenameWindow.NewWindowTitle);
-        ApplySettings();
+        string renamedTitle = RenameWindow.NewWindowTitle;
+        WinAccessorBase.RenameWindowTitle(windowId, renamedTitle);
+
+        floatingWindow.UpdateWindowTitle(renamedTitle);
+        WindowConfig? viewModelConfig = ViewModel.WindowsConfigs
+            .FirstOrDefault(config => string.Equals(config.WindowId, windowId, StringComparison.Ordinal));
+        if (viewModelConfig is not null)
+            viewModelConfig.WindowTitle = renamedTitle;
     }
 
     private void ShowPreviouslyReportedDependencies()
