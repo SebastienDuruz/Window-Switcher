@@ -14,6 +14,9 @@ public class ConfigFile
     public string PreviewHighlightColor { get; set; } = "#E3008C";
     
     public bool ActivateWindowsPreview { get; set; } = true;
+    public double LinuxPreviewRefreshRateFps { get; set; } = 20.0;
+    public string LinuxWaylandScreenCastRestoreToken { get; set; } = string.Empty;
+    public Dictionary<string, string> LinuxWaylandScreenCastRestoreTokensByWindowId { get; set; } = new(StringComparer.Ordinal);
     
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();

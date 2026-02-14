@@ -9,4 +9,9 @@ public interface ISettingsPlatformPolicy
     /// Indicates whether window decoration setting should be visible.
     /// </summary>
     bool ShowWindowDecorationSetting { get; }
+
+    /// <summary>
+    /// Indicates whether Linux preview refresh-rate setting should be visible.
+    /// </summary>
+    bool ShowLinuxPreviewRefreshRateSetting { get; }
 }

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -24,6 +25,7 @@ public class SettingsViewModel : ObservableObject
     }
 
     public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
+    public bool ShowLinuxPreviewRefreshRateSetting => _settingsPlatformPolicy.ShowLinuxPreviewRefreshRateSetting;
 
     public bool StartMinimized
     {
@@ -166,6 +168,38 @@ public class SettingsViewModel : ObservableObject
             });
             if (updated)
                 OnPropertyChanged();
+        }
+    }
+
+    public double LinuxPreviewRefreshRateFps
+    {
+        get => PreviewRefreshRateSettings.Clamp(_configAccessor.ReadConfig(config => config.LinuxPreviewRefreshRateFps));
+        set
+        {
+            double clampedValue = PreviewRefreshRateSettings.Clamp(value);
+            bool updated = false;
+            _configAccessor.UpdateConfig(config =>
+            {
+                if (Math.Abs(config.LinuxPreviewRefreshRateFps - clampedValue) < 0.001)
+                    return;
+                config.LinuxPreviewRefreshRateFps = clampedValue;
+                updated = true;
+            });
+            if (updated)
+            {
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(LinuxPreviewRefreshRateSummary));
+            }
+        }
+    }
+
+    public string LinuxPreviewRefreshRateSummary
+    {
+        get
+        {
+            double fps = LinuxPreviewRefreshRateFps;
+            int delayMs = PreviewRefreshRateSettings.GetDelayMs(fps);
+            return $"{fps:0.0} FPS (~1 frame/{delayMs / 1000d:0.##} s)";
         }
     }
 

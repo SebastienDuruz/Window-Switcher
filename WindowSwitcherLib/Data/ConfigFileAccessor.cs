@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data;
@@ -54,6 +55,15 @@ public class ConfigFileAccessor
             _config.WhitelistPrefixes ??= new List<string>();
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
+            _config.LinuxWaylandScreenCastRestoreToken ??= string.Empty;
+            _config.LinuxWaylandScreenCastRestoreTokensByWindowId ??= new Dictionary<string, string>(StringComparer.Ordinal);
+            _config.LinuxWaylandScreenCastRestoreTokensByWindowId = _config.LinuxWaylandScreenCastRestoreTokensByWindowId
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value))
+                .ToDictionary(
+                    entry => entry.Key.Trim(),
+                    entry => entry.Value.Trim(),
+                    StringComparer.Ordinal);
+            _config.LinuxPreviewRefreshRateFps = PreviewRefreshRateSettings.Clamp(_config.LinuxPreviewRefreshRateFps);
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
             {

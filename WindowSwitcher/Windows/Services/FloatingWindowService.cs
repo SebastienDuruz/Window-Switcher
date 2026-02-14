@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Models;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
@@ -18,7 +19,7 @@ internal sealed class FloatingWindowService
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
-    private const int ScreenshotPreviewRefreshIntervalMs = 100;
+    private const int DefaultPreviewRefreshIntervalMs = 100;
     private const int PreviewRequestTimeoutMs = 1_500;
 
     private readonly Window _ownerWindow;
@@ -170,7 +171,7 @@ internal sealed class FloatingWindowService
             try
             {
                 await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken).ConfigureAwait(false);
-                await Task.Delay(ScreenshotPreviewRefreshIntervalMs, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -192,7 +193,7 @@ internal sealed class FloatingWindowService
         var request = new ScreenshotRequest(
             MaxWidthPx: null,
             MaxHeightPx: null,
-            TimeoutMs: timeoutMs);
+            TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -254,6 +255,27 @@ internal sealed class FloatingWindowService
                 await Task.Delay(500, cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    private static int GetPreviewRefreshIntervalMs()
+    {
+        double fps = GetLinuxPreviewRefreshRateFps();
+        return PreviewRefreshRateSettings.GetDelayMs(fps);
+    }
+
+    private static int GetStreamRequestTimeoutMs(int defaultTimeoutMs)
+    {
+        int basedOnFps = checked(GetPreviewRefreshIntervalMs() * 3);
+        return Math.Clamp(Math.Max(defaultTimeoutMs, basedOnFps), 100, 30_000);
+    }
+
+    private static double GetLinuxPreviewRefreshRateFps()
+    {
+        if (!OperatingSystem.IsLinux())
+            return 1000d / DefaultPreviewRefreshIntervalMs;
+
+        double configuredFps = ConfigFileAccessor.GetInstance().ReadConfig(config => config.LinuxPreviewRefreshRateFps);
+        return PreviewRefreshRateSettings.Clamp(configuredFps);
     }
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
