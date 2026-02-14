@@ -67,7 +67,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         var configAccessor = ConfigFileAccessor.GetInstance();
         var configSnapshot = configAccessor.ReadConfig(config => new
         {
-            config.ActivateLogs,
             BlacklistPrefixes = config.BlacklistPrefixes.ToHashSet(StringComparer.OrdinalIgnoreCase),
             WhitelistPrefixes = config.WhitelistPrefixes
                 .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
@@ -90,13 +89,11 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 
             if (isOnWindowsList && (isOnBlacklist || !isOnWhiteList))
             {
-                LogWindowChange(configSnapshot.ActivateLogs, "REMOVE", fetchedWindow, isOnBlacklist, isOnWhiteList, isOnWindowsList);
                 WindowsConfigs.Remove(existingConfig!);
                 existingById.Remove(fetchedWindow.WindowId);
             }
             else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
             {
-                LogWindowChange(configSnapshot.ActivateLogs, "ADD", fetchedWindow, isOnBlacklist, isOnWhiteList, isOnWindowsList);
                 WindowsConfigs.Add(fetchedWindow);
                 existingById[fetchedWindow.WindowId] = fetchedWindow;
             }
@@ -104,7 +101,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
             {
                 if (existingConfig!.WindowTitle != fetchedWindow.WindowTitle)
                 {
-                    LogWindowChange(configSnapshot.ActivateLogs, "UPDATE", fetchedWindow, isOnBlacklist, isOnWhiteList, isOnWindowsList);
                     existingConfig.WindowTitle = fetchedWindow.WindowTitle;
                 }
             }
@@ -117,7 +113,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
             if (fetchedIds.Contains(window.WindowId))
                 continue;
 
-            LogWindowChange(configSnapshot.ActivateLogs, "REMOVE", window, false, false, true);
             WindowsConfigs.RemoveAt(i);
         }
     }
@@ -133,26 +128,9 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         {
             // Shutdown path.
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
+            // Ignore transient refresh failures and continue periodic polling.
         }
-    }
-
-    private static void LogWindowChange(
-        bool activateLogs,
-        string action,
-        WindowConfig windowConfig,
-        bool isOnBlacklist,
-        bool isOnWhiteList,
-        bool isOnWindowsList)
-    {
-        if (!activateLogs)
-            return;
-
-        AppLogger.Log(
-            $"[{action}] {windowConfig.ShortWindowTitle} ({windowConfig.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}",
-            StaticData.LogSeverity.INFO);
     }
 }

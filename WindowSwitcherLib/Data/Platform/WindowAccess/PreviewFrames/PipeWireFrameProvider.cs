@@ -34,7 +34,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
-    private readonly bool _activateLogs;
     private readonly bool _isWaylandSession;
     private bool _disposed;
 
@@ -51,9 +50,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         _gdbus = gdbus ?? new GdbusWrapper();
         _gstLaunch = gstLaunch ?? new GstLaunchWrapper();
 
-        _activateLogs = ConfigFileAccessor.GetInstance().ReadConfig(value => value.ActivateLogs);
         _isWaylandSession = IsWaylandSession();
-        LogWarn($"PipeWire stream target FPS: {PipeWireFps}");
     }
 
     public async Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
@@ -80,9 +77,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         {
             return null;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            LogWarn($"PipeWire request failed unexpectedly: {ex.Message}");
             return await RequestFallbackAsync(windowId, request, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -173,18 +169,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         nodeId = ResolveNodeIdFromPwDump(windowId);
         if (string.IsNullOrWhiteSpace(nodeId) && _isWaylandSession && EnablePortalFallback)
         {
-            LogWarn($"No wmctrl-matching PipeWire node found for `{windowId}`. Trying portal fallback.");
             nodeId = TryStartPortalWindowScreencast(windowId, out portalSessionPath);
         }
 
         if (string.IsNullOrWhiteSpace(nodeId))
-        {
-            LogWarn($"PipeWire node not found for window `{windowId}` (wmctrl id matching).");
             return null;
-        }
 
-        LogWarn($"PipeWire node `{nodeId}` assigned to window `{windowId}`.");
-        var stream = new PipeWireWindowStream(nodeId, PipeWireFps, _activateLogs, _gstLaunch, LogWarn);
+        var stream = new PipeWireWindowStream(nodeId, PipeWireFps, _gstLaunch);
         return new WindowCaptureContext(windowId, nodeId, portalSessionPath, stream);
     }
 
@@ -236,7 +227,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         if (!string.IsNullOrWhiteSpace(capture.PortalSessionPath))
             ClosePortalSession(capture.PortalSessionPath);
 
-        LogWarn($"PipeWire stream failed repeatedly for window `{capture.WindowId}`. Switching this window to screenshot fallback.");
         return null;
     }
 
@@ -263,17 +253,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
         string? createRequestPath = ExtractObjectPath(createResult);
         if (string.IsNullOrWhiteSpace(createRequestPath))
-        {
-            LogWarn("Portal CreateSession did not return a request path.");
             return null;
-        }
 
         string? sender = ExtractRequestSender(createRequestPath);
         if (string.IsNullOrWhiteSpace(sender))
-        {
-            LogWarn("Unable to resolve portal sender id from request path.");
             return null;
-        }
 
         sessionPath = $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
 
@@ -678,14 +662,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         return string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void LogWarn(string message)
-    {
-        if (!_activateLogs)
-            return;
-
-        AppLogger.Log($"[PipeWireProvider] {message}", StaticData.LogSeverity.WARN);
-    }
-
     private static string GetJsonScalarString(JsonElement value)
     {
         return value.ValueKind switch
@@ -732,9 +708,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
 
         private readonly string _nodeId;
         private readonly int _fps;
-        private readonly bool _activateLogs;
         private readonly IGstLaunchWrapper _gstLaunch;
-        private readonly Action<string> _logWarn;
         private readonly object _syncRoot = new();
         private readonly SemaphoreSlim _frameReadySignal = new(initialCount: 0, maxCount: 1);
 
@@ -750,17 +724,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         public PipeWireWindowStream(
             string nodeId,
             int fps,
-            bool activateLogs,
-            IGstLaunchWrapper gstLaunch,
-            Action<string> logWarn)
+            IGstLaunchWrapper gstLaunch)
         {
             ArgumentNullException.ThrowIfNull(gstLaunch);
-            ArgumentNullException.ThrowIfNull(logWarn);
             _nodeId = nodeId;
             _fps = fps;
-            _activateLogs = activateLogs;
             _gstLaunch = gstLaunch;
-            _logWarn = logWarn;
         }
 
         public void EnsureRunning()
@@ -816,9 +785,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                     _faulted = true;
                     _restartInProgress = false;
                 }
-
-                if (_activateLogs)
-                    _logWarn("Failed to start GStreamer PipeWire stream.");
 
                 cts.Dispose();
                 return;
@@ -900,9 +866,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
         {
             try
             {
-                string errorText = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-                if (_activateLogs && !string.IsNullOrWhiteSpace(errorText))
-                    _logWarn($"GStreamer stderr: {errorText.Trim()}");
+                _ = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -972,10 +936,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                if (_activateLogs)
-                    _logWarn($"PipeWire stream read failed: {ex.Message}");
             }
             finally
             {

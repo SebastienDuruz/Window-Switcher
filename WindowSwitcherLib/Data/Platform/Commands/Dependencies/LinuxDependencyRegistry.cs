@@ -55,7 +55,6 @@ public sealed class LinuxDependencyRegistry(
         if (!shouldReport)
             return;
 
-        AppLogger.Log($"Missing dependency: {dependency}", StaticData.LogSeverity.WARN);
         DependencyMissing?.Invoke(dependency);
     }
 

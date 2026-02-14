@@ -77,10 +77,8 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             SetForegroundWindow(IntPtr.Parse(windowId));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"RaiseWindow failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
         }
     }
 
@@ -119,10 +117,8 @@ public class WindowsWinAccessor : WinAccessorBase
                 return new Bitmap(stream);
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"Windows screenshot failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
             return null;
         }
     }
@@ -133,10 +129,8 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"RenameWindowTitle failed for {windowId}: {ex.Message}", StaticData.LogSeverity.WARN);
         }
     }
 }

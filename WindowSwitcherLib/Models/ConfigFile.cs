@@ -13,9 +13,7 @@ public class ConfigFile
     public int WindowHeight { get; set; } = 200;
     public string PreviewHighlightColor { get; set; } = "#E3008C";
     
-    // Debug
     public bool ActivateWindowsPreview { get; set; } = true;
-    public bool ActivateLogs { get; set; } = false;
     
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();

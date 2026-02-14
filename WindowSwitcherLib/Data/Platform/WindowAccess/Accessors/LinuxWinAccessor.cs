@@ -72,10 +72,8 @@ public class LinuxWinAccessor : WinAccessorBase
 
             return new Bitmap(stream);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"Linux screenshot failed: {ex.Message}", StaticData.LogSeverity.WARN);
             return null;
         }
     }
@@ -100,10 +98,8 @@ public class LinuxWinAccessor : WinAccessorBase
         {
             return null;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"Linux screenshot failed: {ex.Message}", StaticData.LogSeverity.WARN);
             return null;
         }
     }

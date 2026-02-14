@@ -43,7 +43,6 @@ static class Program
         }
 
         return builder
-            .WithInterFont()
-            .LogToTrace();
+            .WithInterFont();
     }
 }

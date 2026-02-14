@@ -47,10 +47,8 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
         {
             process.Start();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"Failed to start `import`: {ex.Message}", StaticData.LogSeverity.WARN);
             return null;
         }
 
@@ -69,12 +67,10 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
             outputStream.Dispose();
             return null;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             TryKillProcess(process);
             try { _ = await errorTask.ConfigureAwait(false); } catch { }
-            if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                AppLogger.Log($"`import` capture failed: {ex.Message}", StaticData.LogSeverity.WARN);
             outputStream.Dispose();
             return null;
         }

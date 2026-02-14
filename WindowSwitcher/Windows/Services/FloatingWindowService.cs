@@ -160,11 +160,8 @@ internal sealed class FloatingWindowService
             {
                 // Shutdown path.
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                    AppLogger.Log($"Preview screenshot loop failed: {ex.Message}", StaticData.LogSeverity.WARN);
-
                 await Task.Delay(500, cancellationToken);
             }
         }

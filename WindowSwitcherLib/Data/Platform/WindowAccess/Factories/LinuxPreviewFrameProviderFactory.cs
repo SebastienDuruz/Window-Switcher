@@ -21,25 +21,20 @@ public sealed class LinuxPreviewFrameProviderFactory(ILinuxDependencyRegistry? l
         ArgumentNullException.ThrowIfNull(accessorBase);
 
         if (
-            !EnsureLinuxDependency( dependencyName: "gst-launch-1.0", isAvailable: _linuxDependencies.IsGstLaunchAvailable,
-                logWhenMissing: "PipeWire backend unavailable because `gst-launch-1.0` is missing. Falling back to screenshot backend.") 
-            || !EnsureLinuxDependency( dependencyName: "gstreamer-pipewire", isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable,
-                logWhenMissing: "PipeWire backend unavailable because GStreamer `pipewiresrc` plugin is missing. Falling back to screenshot backend.") 
-            || !EnsureLinuxDependency( dependencyName: "pw-dump", isAvailable: _linuxDependencies.IsPwDumpAvailable,
-                logWhenMissing: "PipeWire backend unavailable because `pw-dump` is missing. Falling back to screenshot backend."))
+            !EnsureLinuxDependency(dependencyName: "gst-launch-1.0", isAvailable: _linuxDependencies.IsGstLaunchAvailable)
+            || !EnsureLinuxDependency(dependencyName: "gstreamer-pipewire", isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable)
+            || !EnsureLinuxDependency(dependencyName: "pw-dump", isAvailable: _linuxDependencies.IsPwDumpAvailable))
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
-        StaticData.LogIfEnabled("Using PipeWire preview backend (wmctrl window-id to PipeWire node matching).");
         return new PipeWireFrameProvider(accessorBase);
     }
 
-    private bool EnsureLinuxDependency(string dependencyName, bool isAvailable, string logWhenMissing)
+    private bool EnsureLinuxDependency(string dependencyName, bool isAvailable)
     {
         if (isAvailable)
             return true;
 
         _linuxDependencies.ReportMissingOnce(dependencyName);
-        StaticData.LogIfEnabled(logWhenMissing);
         return false;
     }
 }

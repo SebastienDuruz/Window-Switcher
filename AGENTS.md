@@ -24,7 +24,6 @@ But: fournir des consignes claires pour contribuer a Window Switcher en tant que
 - Concurrence: utiliser `CancellationToken` sur les boucles longues; liberer les ressources (`IDisposable/Dispose`).
 - MVVM: utiliser `ObservableObject` et `[ObservableProperty]` dans les ViewModels; garder le code-behind minimal.
 - Config: passer par `ConfigFileAccessor` pour lecture/ecriture; eviter l'I/O direct depuis la UI.
-- Logs: utiliser `AppLogger` et respecter `ActivateLogs`.
 - Portabilite: isoler le code specifique OS dans `WindowSwitcherLib/Data/WindowAccess` (pas de P/Invoke dans la UI).
 - Exceptions: fail-fast pour erreurs de programmation; gerer proprement les erreurs attendues (message utilisateur).
 - Collections: preferer `IReadOnlyCollection` en entree; eviter les mutations concurrentes.

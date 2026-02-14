@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using WindowSwitcherLib.Data.Platform.SystemInfo;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Models;
@@ -14,7 +13,7 @@ public sealed class SystemInfoServiceTests
         var commandRunner = new FakeCommandRunner(_ =>
             Task.FromResult(new CommandResult(0, "alice\n", string.Empty, TimedOut: false)));
 
-        var sut = new SystemInfoService(commandRunner, NullLogger<SystemInfoService>.Instance);
+        var sut = new SystemInfoService(commandRunner);
 
         string user = await sut.GetCurrentUserAsync();
 
@@ -29,7 +28,7 @@ public sealed class SystemInfoServiceTests
         var commandRunner = new FakeCommandRunner(_ =>
             Task.FromResult(new CommandResult(127, string.Empty, "dotnet not found", TimedOut: false)));
 
-        var sut = new SystemInfoService(commandRunner, NullLogger<SystemInfoService>.Instance);
+        var sut = new SystemInfoService(commandRunner);
 
         string dotnetVersion = await sut.GetDotnetVersionAsync();
 

@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Models;
 
@@ -10,15 +9,12 @@ namespace WindowSwitcherLib.Data.Platform.SystemInfo;
 public sealed class SystemInfoService
 {
     private readonly ICommandRunner _commandRunner;
-    private readonly ILogger<SystemInfoService> _logger;
 
-    public SystemInfoService(ICommandRunner commandRunner, ILogger<SystemInfoService> logger)
+    public SystemInfoService(ICommandRunner commandRunner)
     {
         ArgumentNullException.ThrowIfNull(commandRunner);
-        ArgumentNullException.ThrowIfNull(logger);
 
         _commandRunner = commandRunner;
-        _logger = logger;
     }
 
     /// <summary>
@@ -31,14 +27,7 @@ public sealed class SystemInfoService
             .ConfigureAwait(false);
 
         if (!result.IsSuccess)
-        {
-            _logger.LogWarning(
-                "Could not resolve current user. ExitCode={ExitCode}, TimedOut={TimedOut}, Stderr={StandardError}",
-                result.ExitCode,
-                result.TimedOut,
-                result.StandardError);
             return string.Empty;
-        }
 
         return result.StandardOutput.Trim();
     }
@@ -53,14 +42,7 @@ public sealed class SystemInfoService
             .ConfigureAwait(false);
 
         if (!result.IsSuccess)
-        {
-            _logger.LogWarning(
-                "Could not resolve dotnet version. ExitCode={ExitCode}, TimedOut={TimedOut}, Stderr={StandardError}",
-                result.ExitCode,
-                result.TimedOut,
-                result.StandardError);
             return string.Empty;
-        }
 
         return result.StandardOutput.Trim();
     }

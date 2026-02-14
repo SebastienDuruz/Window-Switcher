@@ -13,7 +13,6 @@ internal static class AppServiceProvider
             return;
 
         var services = new ServiceCollection();
-        services.AddLogging();
         services.AddPlatformServices();
 
         _serviceProvider = services.BuildServiceProvider();
