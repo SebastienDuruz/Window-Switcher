@@ -51,6 +51,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly object _dbusSync = new();
     private readonly SemaphoreSlim _waylandPortalSessionGate = new(initialCount: 1, maxCount: 1);
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _pendingNodeIdsByWindow = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _excludedNodesByWindow = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
@@ -165,6 +166,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     Bitmap? bitmap = CreateBitmap(snapshot.Value.Bytes);
                     if (bitmap is not null)
                     {
+                        if (!capture.FirstDeliveredFrameLogged)
+                        {
+                            string fingerprint = ComputeFrameFingerprint(snapshot.Value.Bytes);
+                            PipeWireTrace.Write(
+                                $"WaylandPreview frame delivered windowId={capture.WindowId} nodeId={capture.NodeId} seq={snapshot.Value.Sequence} sha256={fingerprint}");
+                            capture.FirstDeliveredFrameLogged = true;
+                        }
+
                         capture.ConsecutiveFailures = 0;
                         capture.ConsecutiveNoFrameTimeouts = 0;
                         ClearExcludedNodes(capture.WindowId);
@@ -203,6 +212,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             _failedWindows.Remove(windowId);
             _excludedNodesByWindow.Remove(windowId);
+            _pendingNodeIdsByWindow.Remove(windowId);
             if (_captures.TryGetValue(windowId, out capture))
                 _captures.Remove(windowId);
         }
@@ -222,6 +232,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             captures = _captures.Values.ToList();
             _captures.Clear();
+            _pendingNodeIdsByWindow.Clear();
             _failedWindows.Clear();
             _excludedNodesByWindow.Clear();
         }
@@ -255,6 +266,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         WindowCaptureContext? created = await CreateCaptureAsync(windowId, cancellationToken).ConfigureAwait(false);
         if (created is null)
         {
+            ClearPendingNodeId(windowId);
             PipeWireTrace.Write($"EnsureCaptureAsync create failed windowId={windowId}");
             if (!_isWaylandSession)
             {
@@ -269,11 +281,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             if (_captures.TryGetValue(windowId, out WindowCaptureContext? existing))
             {
+                _pendingNodeIdsByWindow.Remove(windowId);
                 created.Dispose(ClosePortalSession);
                 return existing;
             }
 
             _failedWindows.Remove(windowId);
+            _pendingNodeIdsByWindow.Remove(windowId);
             _captures[windowId] = created;
             PipeWireTrace.Write($"EnsureCaptureAsync create success windowId={windowId} nodeId={created.NodeId}");
             return created;
@@ -341,60 +355,148 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return PreviewRefreshRateSettings.Clamp(configuredFps);
     }
 
-    private static string? GetStoredWaylandScreenCastRestoreToken(string windowId)
+    private string? GetStoredWaylandScreenCastRestoreToken(string windowId)
     {
-        string normalizedWindowId = NormalizeWindowId(windowId);
-        if (string.IsNullOrWhiteSpace(normalizedWindowId))
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0)
             return null;
 
         (string? mappedToken, string? legacyToken) = ConfigFileAccessor.GetInstance()
             .ReadConfig(config =>
             {
-                string? tokenByWindow = null;
-                if (config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(normalizedWindowId, out string? existing))
-                    tokenByWindow = existing;
+                for (int index = 0; index < restoreKeys.Count; index++)
+                {
+                    string key = restoreKeys[index];
+                    if (!config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(key, out string? existing))
+                        continue;
+                    if (string.IsNullOrWhiteSpace(existing))
+                        continue;
+                    return (existing, config.LinuxWaylandScreenCastRestoreToken);
+                }
 
-                return (tokenByWindow, config.LinuxWaylandScreenCastRestoreToken);
+                return ((string?)null, config.LinuxWaylandScreenCastRestoreToken);
             });
 
-        string? configuredToken = !string.IsNullOrWhiteSpace(mappedToken)
-            ? mappedToken
-            : legacyToken;
-        if (string.IsNullOrWhiteSpace(configuredToken))
+        if (!string.IsNullOrWhiteSpace(mappedToken))
+            return mappedToken.Trim();
+
+        if (string.IsNullOrWhiteSpace(legacyToken))
             return null;
 
-        return configuredToken.Trim();
+        return legacyToken.Trim();
     }
 
-    private static void SaveStoredWaylandScreenCastRestoreToken(string windowId, string restoreToken)
+    private void SaveStoredWaylandScreenCastRestoreToken(string windowId, string restoreToken)
     {
-        string normalizedWindowId = NormalizeWindowId(windowId);
-        if (string.IsNullOrWhiteSpace(normalizedWindowId))
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0)
             return;
 
         ArgumentException.ThrowIfNullOrWhiteSpace(restoreToken);
 
         string normalizedToken = restoreToken.Trim();
         ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        (string? existingToken, string? legacyToken) = configAccessor.ReadConfig(config =>
+        (bool needsUpdate, string? legacyToken) = configAccessor.ReadConfig(config =>
         {
-            string? tokenByWindow = null;
-            if (config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(normalizedWindowId, out string? existing))
-                tokenByWindow = existing;
+            bool allKeysMatch = true;
+            for (int index = 0; index < restoreKeys.Count; index++)
+            {
+                string key = restoreKeys[index];
+                if (!config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(key, out string? existing) ||
+                    !string.Equals(existing, normalizedToken, StringComparison.Ordinal))
+                {
+                    allKeysMatch = false;
+                    break;
+                }
+            }
 
-            return (tokenByWindow, config.LinuxWaylandScreenCastRestoreToken);
+            bool shouldClearLegacy = !string.IsNullOrWhiteSpace(config.LinuxWaylandScreenCastRestoreToken);
+            return (!allKeysMatch || shouldClearLegacy, config.LinuxWaylandScreenCastRestoreToken);
         });
-        if (string.Equals(existingToken, normalizedToken, StringComparison.Ordinal))
+        if (!needsUpdate)
             return;
 
         configAccessor.UpdateConfig(config =>
         {
-            config.LinuxWaylandScreenCastRestoreTokensByWindowId[normalizedWindowId] = normalizedToken;
+            for (int index = 0; index < restoreKeys.Count; index++)
+                config.LinuxWaylandScreenCastRestoreTokensByWindowId[restoreKeys[index]] = normalizedToken;
+
             // Legacy single-token setting can cause every preview to restore the same source.
             if (!string.IsNullOrWhiteSpace(legacyToken))
                 config.LinuxWaylandScreenCastRestoreToken = string.Empty;
         });
         configAccessor.WriteUserSettings();
+    }
+
+    private string? GetStoredWaylandScreenCastStreamId(string windowId)
+    {
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0)
+            return null;
+
+        string? configuredId = ConfigFileAccessor.GetInstance()
+            .ReadConfig(config =>
+            {
+                for (int index = 0; index < restoreKeys.Count; index++)
+                {
+                    string key = restoreKeys[index];
+                    if (!config.LinuxWaylandScreenCastStreamIdsByWindowId.TryGetValue(key, out string? value))
+                        continue;
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+                    return value;
+                }
+
+                return null;
+            });
+
+        if (string.IsNullOrWhiteSpace(configuredId))
+            return null;
+
+        return configuredId.Trim();
+    }
+
+    private void SaveStoredWaylandScreenCastStreamId(string windowId, string streamId)
+    {
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0 || string.IsNullOrWhiteSpace(streamId))
+            return;
+
+        string normalizedStreamId = streamId.Trim();
+        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
+        bool needsUpdate = configAccessor.ReadConfig(config =>
+        {
+            for (int index = 0; index < restoreKeys.Count; index++)
+            {
+                string key = restoreKeys[index];
+                if (!config.LinuxWaylandScreenCastStreamIdsByWindowId.TryGetValue(key, out string? existing) ||
+                    !string.Equals(existing, normalizedStreamId, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+        if (!needsUpdate)
+            return;
+
+        configAccessor.UpdateConfig(config =>
+        {
+            for (int index = 0; index < restoreKeys.Count; index++)
+                config.LinuxWaylandScreenCastStreamIdsByWindowId[restoreKeys[index]] = normalizedStreamId;
+        });
+        configAccessor.WriteUserSettings();
+    }
+
+    private static IReadOnlyList<string> BuildWaylandRestoreKeys(string windowId)
+    {
+        var keys = new List<string>(capacity: 1);
+        string normalizedWindowId = NormalizeWindowId(windowId);
+        if (!string.IsNullOrWhiteSpace(normalizedWindowId))
+            keys.Add(normalizedWindowId);
+
+        return keys;
     }
 
     private static string NormalizeWindowId(string windowId)
@@ -621,7 +723,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             {
                 ["handle_token"] = $"ws_select_{token}",
                 ["types"] = (uint)2,
-                ["multiple"] = false,
+                ["multiple"] = true,
                 ["cursor_mode"] = (uint)2,
                 ["persist_mode"] = (uint)2
             };
@@ -680,14 +782,29 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 PipeWireTrace.Write($"WaylandPortal no restore token in start response windowId={windowId}");
             }
 
-            string? nodeId = SelectPortalStreamNodeId(windowId, startResponse.Value.Results, excludedNodeIds);
-            IReadOnlyList<string> extractedIds = ExtractPortalStreamNodeIds(startResponse.Value.Results);
-            PipeWireTrace.Write($"WaylandPortal streams extracted={string.Join(',', extractedIds)} selected={nodeId ?? "null"}");
+            string? nodeId = SelectPortalStreamNodeId(
+                windowId,
+                startResponse.Value.Results,
+                excludedNodeIds,
+                out string? selectedStreamStableId,
+                out bool shouldPersistSelectedStreamStableId);
+            IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(startResponse.Value.Results);
+            string extractedSummary = string.Join(
+                ',',
+                extractedStreams.Select(stream =>
+                    string.IsNullOrWhiteSpace(stream.StableId)
+                        ? stream.NodeId
+                        : $"{stream.NodeId}({stream.StableId})"));
+            PipeWireTrace.Write(
+                $"WaylandPortal streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}");
             if (string.IsNullOrWhiteSpace(nodeId))
             {
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None).ConfigureAwait(false);
                 return null;
             }
+
+            if (shouldPersistSelectedStreamStableId && !string.IsNullOrWhiteSpace(selectedStreamStableId))
+                SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
 
             pipeWireRemoteHandle = await screenCast.OpenPipeWireRemoteAsync(
                     sessionObjectPath,
@@ -701,11 +818,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
             }
 
+            SetPendingNodeId(windowId, nodeId);
             PipeWireTrace.Write($"WaylandPortal remote fd={pipeWireRemoteHandle.DangerousGetHandle().ToInt64()}");
             return new PortalCaptureBootstrap(nodeId, sessionPath, pipeWireRemoteHandle);
         }
         catch (TimeoutException)
         {
+            ClearPendingNodeId(windowId);
             PipeWireTrace.Write("WaylandPortal exception timeout");
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
@@ -714,6 +833,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         catch (OperationCanceledException)
         {
+            ClearPendingNodeId(windowId);
             PipeWireTrace.Write("WaylandPortal exception cancelled");
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
@@ -722,6 +842,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         catch (Exception exception)
         {
+            ClearPendingNodeId(windowId);
             PipeWireTrace.Write($"WaylandPortal exception {exception.GetType().FullName}: {exception.Message}");
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
@@ -838,109 +959,174 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private string? SelectPortalStreamNodeId(
         string windowId,
         IDictionary<string, object> results,
-        IReadOnlyCollection<string> excludedNodeIds)
+        IReadOnlyCollection<string> excludedNodeIds,
+        out string? selectedStreamStableId,
+        out bool shouldPersistSelectedStreamStableId)
     {
-        IReadOnlyList<string> streamNodeIds = ExtractPortalStreamNodeIds(results);
-        if (streamNodeIds.Count == 0)
+        selectedStreamStableId = null;
+        shouldPersistSelectedStreamStableId = false;
+
+        IReadOnlyList<PortalStreamDescriptor> streams = ExtractPortalStreams(results);
+        if (streams.Count == 0)
             return null;
 
-        HashSet<string> candidateIds = streamNodeIds.ToHashSet(StringComparer.Ordinal);
+        var allExcludedNodeIds = new HashSet<string>(excludedNodeIds, StringComparer.Ordinal);
+        foreach (string activeNodeId in SnapshotActiveNodeIds())
+            _ = allExcludedNodeIds.Add(activeNodeId);
+
+        string? expectedStreamStableId = GetStoredWaylandScreenCastStreamId(windowId);
+        if (!string.IsNullOrWhiteSpace(expectedStreamStableId))
+        {
+            for (int index = 0; index < streams.Count; index++)
+            {
+                PortalStreamDescriptor stream = streams[index];
+                if (!string.Equals(stream.StableId, expectedStreamStableId, StringComparison.Ordinal))
+                    continue;
+                if (allExcludedNodeIds.Contains(stream.NodeId))
+                    continue;
+
+                selectedStreamStableId = stream.StableId;
+                shouldPersistSelectedStreamStableId = true;
+                return stream.NodeId;
+            }
+
+            PipeWireTrace.Write(
+                $"WaylandPortal stored stream id mismatch windowId={windowId} expected={expectedStreamStableId}");
+        }
+
+        HashSet<string> candidateIds = streams.Select(stream => stream.NodeId).ToHashSet(StringComparer.Ordinal);
         IReadOnlyCollection<string> windowPatterns = BuildWindowIdPatterns(windowId);
         if (windowPatterns.Count > 0)
         {
             IReadOnlyList<NodeCandidate> nodes = GetPipeWireNodeCandidates(forceRefresh: true);
-            var matchingCandidates = new List<NodeCandidate>(capacity: streamNodeIds.Count);
+            var matchingCandidates = new List<NodeCandidate>(capacity: streams.Count);
             for (int index = 0; index < nodes.Count; index++)
             {
                 NodeCandidate node = nodes[index];
                 if (!candidateIds.Contains(node.Id))
                     continue;
-                if (excludedNodeIds.Contains(node.Id))
+                if (allExcludedNodeIds.Contains(node.Id))
                     continue;
                 matchingCandidates.Add(node);
             }
 
             NodeCandidate? matchedNode = FindBestMatchingNode(matchingCandidates, windowPatterns);
             if (matchedNode is not null)
+            {
+                selectedStreamStableId = streams
+                    .FirstOrDefault(stream => string.Equals(stream.NodeId, matchedNode.Value.Id, StringComparison.Ordinal))
+                    .StableId;
                 return matchedNode.Value.Id;
+            }
         }
 
-        for (int index = 0; index < streamNodeIds.Count; index++)
+        for (int index = 0; index < streams.Count; index++)
         {
-            string streamNodeId = streamNodeIds[index];
-            if (!excludedNodeIds.Contains(streamNodeId))
-                return streamNodeId;
+            PortalStreamDescriptor stream = streams[index];
+            if (allExcludedNodeIds.Contains(stream.NodeId))
+                continue;
+
+            selectedStreamStableId = stream.StableId;
+            shouldPersistSelectedStreamStableId = string.IsNullOrWhiteSpace(expectedStreamStableId);
+            return stream.NodeId;
         }
 
-        return streamNodeIds.Count > 0 ? streamNodeIds[0] : null;
+        PipeWireTrace.Write(
+            $"WaylandPortal all stream candidates excluded windowId={windowId} candidates={string.Join(',', streams.Select(stream => stream.NodeId))}");
+        return null;
     }
 
-    private static IReadOnlyList<string> ExtractPortalStreamNodeIds(IDictionary<string, object> results)
+    private static IReadOnlyList<PortalStreamDescriptor> ExtractPortalStreams(IDictionary<string, object> results)
     {
         ArgumentNullException.ThrowIfNull(results);
 
         if (!results.TryGetValue("streams", out object? streams))
-            return Array.Empty<string>();
+            return Array.Empty<PortalStreamDescriptor>();
 
-        var ids = new List<string>(capacity: 4);
-        CollectPortalStreamNodeIds(streams, ids);
-        return ids;
+        var descriptors = new List<PortalStreamDescriptor>(capacity: 4);
+        CollectPortalStreams(streams, descriptors);
+        return descriptors;
     }
 
-    private static void CollectPortalStreamNodeIds(object? value, IList<string> ids)
+    private static void CollectPortalStreams(object? value, IList<PortalStreamDescriptor> streams)
     {
         if (value is null)
             return;
 
-        if (TryExtractStreamNodeId(value, out string? streamNodeId))
+        if (TryExtractPortalStreamDescriptor(value, out PortalStreamDescriptor descriptor))
         {
-            if (!ids.Contains(streamNodeId, StringComparer.Ordinal))
-                ids.Add(streamNodeId);
+            bool exists = false;
+            for (int index = 0; index < streams.Count; index++)
+            {
+                PortalStreamDescriptor existing = streams[index];
+                if (!string.Equals(existing.NodeId, descriptor.NodeId, StringComparison.Ordinal))
+                    continue;
+                if (string.Equals(existing.StableId, descriptor.StableId, StringComparison.Ordinal))
+                {
+                    exists = true;
+                    break;
+                }
+            }
+
+            if (!exists)
+                streams.Add(descriptor);
             return;
         }
 
         if (value is Array array)
         {
             for (int index = 0; index < array.Length; index++)
-                CollectPortalStreamNodeIds(array.GetValue(index), ids);
+                CollectPortalStreams(array.GetValue(index), streams);
             return;
         }
 
         if (value is System.Collections.IEnumerable enumerable)
         {
             foreach (object? item in enumerable)
-                CollectPortalStreamNodeIds(item, ids);
+                CollectPortalStreams(item, streams);
         }
     }
 
-    private static bool TryExtractStreamNodeId(object value, out string streamNodeId)
+    private static bool TryExtractPortalStreamDescriptor(object value, out PortalStreamDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(value);
 
-        streamNodeId = string.Empty;
-
-        if (TryConvertToUInt32(value, out uint scalarId))
-        {
-            streamNodeId = scalarId.ToString(CultureInfo.InvariantCulture);
-            return true;
-        }
+        descriptor = default;
 
         if (value is ValueTuple<uint, IDictionary<string, object>> typedTuple)
         {
-            streamNodeId = typedTuple.Item1.ToString(CultureInfo.InvariantCulture);
+            descriptor = new PortalStreamDescriptor(
+                typedTuple.Item1.ToString(CultureInfo.InvariantCulture),
+                TryExtractPortalStreamStableId(typedTuple.Item2));
             return true;
         }
 
-        if (value is ITuple tuple && tuple.Length > 0 && TryConvertToUInt32(tuple[0], out uint tupleId))
+        if (value is ITuple tuple &&
+            tuple.Length > 0 &&
+            TryConvertToUInt32(tuple[0], out uint tupleId))
         {
-            streamNodeId = tupleId.ToString(CultureInfo.InvariantCulture);
+            string? stableId = tuple.Length > 1 && tuple[1] is IDictionary<string, object> tupleProperties
+                ? TryExtractPortalStreamStableId(tupleProperties)
+                : null;
+            descriptor = new PortalStreamDescriptor(tupleId.ToString(CultureInfo.InvariantCulture), stableId);
             return true;
         }
 
         if (value is IDictionary<string, object> dictionary)
         {
-            if (TryExtractStreamNodeIdFromDictionary(dictionary, out streamNodeId))
+            if (TryExtractStreamNodeIdFromDictionary(dictionary, out string nodeId))
+            {
+                descriptor = new PortalStreamDescriptor(nodeId, TryExtractPortalStreamStableId(dictionary));
                 return true;
+            }
+        }
+
+        if (TryConvertToUInt32(value, out uint scalarId))
+        {
+            descriptor = new PortalStreamDescriptor(
+                scalarId.ToString(CultureInfo.InvariantCulture),
+                null);
+            return true;
         }
 
         return false;
@@ -968,6 +1154,28 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
 
         return false;
+    }
+
+    private static string? TryExtractPortalStreamStableId(IDictionary<string, object> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+
+        string[] candidateKeys = ["id", "mapping_id", "stream_id"];
+        for (int index = 0; index < candidateKeys.Length; index++)
+        {
+            string key = candidateKeys[index];
+            if (!properties.TryGetValue(key, out object? value))
+                continue;
+
+            string? scalarValue = TryExtractScalarString(value);
+            if (!string.IsNullOrWhiteSpace(scalarValue))
+                return scalarValue.Trim();
+
+            if (TryConvertToUInt32(value, out uint numericValue))
+                return numericValue.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return null;
     }
 
     private static bool TryConvertToUInt32(object? value, out uint result)
@@ -1538,6 +1746,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
+    private static string ComputeFrameFingerprint(byte[] bytes)
+    {
+        if (bytes.Length == 0)
+            return "empty";
+
+        byte[] hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
+    }
+
     private async IAsyncEnumerable<Bitmap> StreamFallbackAsync(
         string windowId,
         ScreenshotRequest request,
@@ -1769,6 +1986,40 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return filtered;
     }
 
+    private IReadOnlyCollection<string> SnapshotActiveNodeIds()
+    {
+        lock (_capturesSync)
+        {
+            if (_captures.Count == 0 && _pendingNodeIdsByWindow.Count == 0)
+                return Array.Empty<string>();
+
+            return _captures.Values
+                .Select(capture => capture.NodeId)
+                .Concat(_pendingNodeIdsByWindow.Values)
+                .Where(nodeId => !string.IsNullOrWhiteSpace(nodeId))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+    }
+
+    private void SetPendingNodeId(string windowId, string nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId) || string.IsNullOrWhiteSpace(nodeId))
+            return;
+
+        lock (_capturesSync)
+            _pendingNodeIdsByWindow[windowId] = nodeId;
+    }
+
+    private void ClearPendingNodeId(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        lock (_capturesSync)
+            _pendingNodeIdsByWindow.Remove(windowId);
+    }
+
     private IReadOnlyCollection<string> SnapshotExcludedNodeIds(string windowId)
     {
         if (string.IsNullOrWhiteSpace(windowId))
@@ -1973,6 +2224,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         uint ResponseCode,
         IDictionary<string, object> Results);
 
+    private readonly record struct PortalStreamDescriptor(string NodeId, string? StableId);
+
     private readonly record struct NodeCandidate(string Id, int Score, string NormalizedSearchText);
 
     private sealed class WindowCaptureContext(
@@ -1988,6 +2241,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
         public bool ForceFallback { get; set; }
+        public bool FirstDeliveredFrameLogged { get; set; }
         public bool IsDisposed { get; private set; }
 
         public void Dispose(Action<string> closePortalSession)

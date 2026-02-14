@@ -63,6 +63,13 @@ public class ConfigFileAccessor
                     entry => entry.Key.Trim(),
                     entry => entry.Value.Trim(),
                     StringComparer.Ordinal);
+            _config.LinuxWaylandScreenCastStreamIdsByWindowId ??= new Dictionary<string, string>(StringComparer.Ordinal);
+            _config.LinuxWaylandScreenCastStreamIdsByWindowId = _config.LinuxWaylandScreenCastStreamIdsByWindowId
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value))
+                .ToDictionary(
+                    entry => entry.Key.Trim(),
+                    entry => entry.Value.Trim(),
+                    StringComparer.Ordinal);
             _config.LinuxPreviewRefreshRateFps = PreviewRefreshRateSettings.Clamp(_config.LinuxPreviewRefreshRateFps);
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
