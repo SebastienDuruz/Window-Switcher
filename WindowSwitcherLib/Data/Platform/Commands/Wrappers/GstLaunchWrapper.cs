@@ -22,16 +22,13 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
 
     }
 
-    public Process? StartPipeWireJpegStream(string nodeId, int fpsNumerator, int fpsDenominator, int? pipeWireRemoteFd = null)
+    public Process? StartPipeWireJpegStream(string nodeId, int? pipeWireRemoteFd = null)
     {
         if (!LinuxDependencies.IsGstLaunchAvailable)
         {
             LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
             return null;
         }
-
-        int safeNumerator = Math.Max(1, fpsNumerator);
-        int safeDenominator = Math.Max(1, fpsDenominator);
 
         var process = CreateProcess();
         process.StartInfo.ArgumentList.Add("-q");
@@ -41,10 +38,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             process.StartInfo.ArgumentList.Add($"fd={pipeWireRemoteFd.Value}");
         process.StartInfo.ArgumentList.Add("always-copy=true");
         process.StartInfo.ArgumentList.Add("do-timestamp=true");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add("videorate");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add($"video/x-raw,framerate={safeNumerator}/{safeDenominator}");
         process.StartInfo.ArgumentList.Add("!");
         process.StartInfo.ArgumentList.Add("videoconvert");
         process.StartInfo.ArgumentList.Add("!");

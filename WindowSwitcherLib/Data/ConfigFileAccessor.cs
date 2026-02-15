@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data;
@@ -77,7 +76,6 @@ public class ConfigFileAccessor
                     entry => entry.Key.Trim(),
                     entry => entry.Value.Trim(),
                     StringComparer.Ordinal);
-            _config.LinuxPreviewRefreshRateFps = PreviewRefreshRateSettings.Clamp(_config.LinuxPreviewRefreshRateFps);
             _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
             foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
             {

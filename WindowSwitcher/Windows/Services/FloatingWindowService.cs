@@ -281,23 +281,13 @@ internal sealed class FloatingWindowService
 
     private static int GetPreviewRefreshIntervalMs()
     {
-        double fps = GetLinuxPreviewRefreshRateFps();
-        return PreviewRefreshRateSettings.GetDelayMs(fps);
+        return DefaultPreviewRefreshIntervalMs;
     }
 
     private static int GetStreamRequestTimeoutMs(int defaultTimeoutMs)
     {
-        int basedOnFps = checked(GetPreviewRefreshIntervalMs() * 3);
-        return Math.Clamp(Math.Max(defaultTimeoutMs, basedOnFps), 100, 30_000);
-    }
-
-    private static double GetLinuxPreviewRefreshRateFps()
-    {
-        if (!OperatingSystem.IsLinux())
-            return 1000d / DefaultPreviewRefreshIntervalMs;
-
-        double configuredFps = ConfigFileAccessor.GetInstance().ReadConfig(config => config.LinuxPreviewRefreshRateFps);
-        return PreviewRefreshRateSettings.Clamp(configuredFps);
+        int basedOnPreviewLoop = checked(GetPreviewRefreshIntervalMs() * 3);
+        return Math.Clamp(Math.Max(defaultTimeoutMs, basedOnPreviewLoop), 100, 30_000);
     }
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)

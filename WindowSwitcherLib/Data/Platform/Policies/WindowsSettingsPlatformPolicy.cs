@@ -8,6 +8,4 @@ namespace WindowSwitcherLib.Data.Platform.Policies;
 public sealed class WindowsSettingsPlatformPolicy : ISettingsPlatformPolicy
 {
     public bool ShowWindowDecorationSetting => false;
-
-    public bool ShowLinuxPreviewRefreshRateSetting => false;
 }

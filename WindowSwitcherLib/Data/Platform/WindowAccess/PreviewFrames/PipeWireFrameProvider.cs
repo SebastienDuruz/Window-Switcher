@@ -23,6 +23,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 {
     private const int PipeWireReconnectDelayMs = 300;
     private const int PipeWireNodePollIntervalMs = 300;
+    private const int FallbackPreviewDelayMs = 100;
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
@@ -438,16 +439,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(nodeId))
             return null;
 
-        double configuredFps = GetConfiguredLinuxPreviewRefreshRateFps();
-        PreviewRefreshRateSettings.ToFraction(configuredFps, out int fpsNumerator, out int fpsDenominator);
-        var stream = new PipeWireWindowStream(nodeId, fpsNumerator, fpsDenominator, _gstLaunch, pipeWireRemoteHandle);
+        var stream = new PipeWireWindowStream(nodeId, _gstLaunch, pipeWireRemoteHandle);
         return new WindowCaptureContext(windowId, nodeId, portalSessionPath, portalSessionDestination, stream);
-    }
-
-    private static double GetConfiguredLinuxPreviewRefreshRateFps()
-    {
-        double configuredFps = ConfigFileAccessor.GetInstance().ReadConfig(config => config.LinuxPreviewRefreshRateFps);
-        return PreviewRefreshRateSettings.Clamp(configuredFps);
     }
 
     private string? GetStoredWaylandScreenCastRestoreToken(string windowId)
@@ -529,9 +522,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (restoreKeys.Count == 0)
             return null;
 
+        string? windowTitle = TryGetWindowTitleById(windowId);
+        IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
         string? configuredValue = ConfigFileAccessor.GetInstance()
             .ReadConfig(config =>
             {
+                var preferredValues = new List<string>(capacity: restoreKeys.Count);
                 for (int index = 0; index < restoreKeys.Count; index++)
                 {
                     string key = restoreKeys[index];
@@ -539,7 +535,31 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         continue;
                     if (string.IsNullOrWhiteSpace(value))
                         continue;
-                    return value;
+                    preferredValues.Add(value.Trim());
+                }
+
+                if (preferredValues.Count == 0)
+                    return null;
+
+                if (windowTitlePatterns.Count == 0)
+                    return preferredValues[0];
+
+                for (int index = 0; index < preferredValues.Count; index++)
+                {
+                    string candidate = preferredValues[index];
+                    if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
+                        return candidate;
+                }
+
+                // Window ids can be reused; if direct key lookup misses title match, scan known mappings for a better match.
+                foreach ((_, string value) in config.LinuxWaylandScreenCastRestoreDataByWindowId)
+                {
+                    if (string.IsNullOrWhiteSpace(value))
+                        continue;
+
+                    string candidate = value.Trim();
+                    if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
+                        return candidate;
                 }
 
                 return null;
@@ -2559,6 +2579,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return ComputePatternScore(normalizedSearchText, requestedWindowTitlePatterns) > 0;
     }
 
+    private static bool SerializedRestoreDataMatchesTitle(
+        string serializedRestoreData,
+        IReadOnlyCollection<string> requestedWindowTitlePatterns)
+    {
+        if (!TryDeserializePortalRestoreData(serializedRestoreData, out PortalRestoreData parsedRestoreData))
+            return false;
+
+        return MatchesRestoreDataWindowTitle(parsedRestoreData, requestedWindowTitlePatterns);
+    }
+
     private static string BuildRestoreDataSearchText(PortalRestoreData restoreData)
     {
         if (restoreData.Bytes.Length == 0)
@@ -2570,6 +2600,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         AppendDecodedRestoreData(builder, restoreData.Bytes, Encoding.Unicode);
         AppendDecodedRestoreData(builder, restoreData.Bytes, Encoding.BigEndianUnicode);
         AppendDecodedRestoreData(builder, restoreData.Bytes, Encoding.Latin1);
+        AppendAsciiAlphaNumericBytes(builder, restoreData.Bytes);
         return NormalizeForSearch(builder.ToString());
     }
 
@@ -2591,6 +2622,26 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         catch (ArgumentException)
         {
             // Best-effort decoding.
+        }
+    }
+
+    private static void AppendAsciiAlphaNumericBytes(StringBuilder builder, byte[] bytes)
+    {
+        if (bytes.Length == 0)
+            return;
+
+        builder.Append(' ');
+        for (int index = 0; index < bytes.Length; index++)
+        {
+            byte value = bytes[index];
+            if (value is >= (byte)'A' and <= (byte)'Z')
+            {
+                builder.Append((char)(value + 32));
+                continue;
+            }
+
+            if ((value is >= (byte)'a' and <= (byte)'z') || (value is >= (byte)'0' and <= (byte)'9'))
+                builder.Append((char)value);
         }
     }
 
@@ -2878,8 +2929,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             try
             {
-                int delayMs = PreviewRefreshRateSettings.GetDelayMs(GetConfiguredLinuxPreviewRefreshRateFps());
-                await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(FallbackPreviewDelayMs, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -3439,8 +3489,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public readonly record struct FrameSnapshot(long Sequence, byte[] Bytes);
 
         private readonly string _nodeId;
-        private readonly int _fpsNumerator;
-        private readonly int _fpsDenominator;
         private readonly IGstLaunchWrapper _gstLaunch;
         private readonly CloseSafeHandle? _pipeWireRemoteHandle;
         private readonly object _syncRoot = new();
@@ -3458,15 +3506,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         public PipeWireWindowStream(
             string nodeId,
-            int fpsNumerator,
-            int fpsDenominator,
             IGstLaunchWrapper gstLaunch,
             CloseSafeHandle? pipeWireRemoteHandle)
         {
             ArgumentNullException.ThrowIfNull(gstLaunch);
             _nodeId = nodeId;
-            _fpsNumerator = fpsNumerator;
-            _fpsDenominator = fpsDenominator;
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
         }
@@ -3518,8 +3562,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             int? remoteFd = GetPipeWireRemoteFd();
             Process? process = _gstLaunch.StartPipeWireJpegStream(
                 _nodeId,
-                _fpsNumerator,
-                _fpsDenominator,
                 remoteFd);
             var cts = new CancellationTokenSource();
             if (process is null)

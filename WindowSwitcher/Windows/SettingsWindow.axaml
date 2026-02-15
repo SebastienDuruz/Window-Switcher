@@ -45,19 +45,6 @@
                         <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
                         <CheckBox Content="Focus on hover" IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
                         <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
-                        <StackPanel Orientation="Horizontal"
-                                    Spacing="6"
-                                    IsVisible="{Binding ShowLinuxPreviewRefreshRateSetting}">
-                                <TextBlock VerticalAlignment="Center">Preview refresh (FPS)</TextBlock>
-                                <Slider Width="180"
-                                        Minimum="0.2"
-                                        Maximum="60"
-                                        TickFrequency="0.1"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding LinuxPreviewRefreshRateFps, Mode=TwoWay}" />
-                                <TextBlock VerticalAlignment="Center"
-                                           Text="{Binding LinuxPreviewRefreshRateSummary}" />
-                        </StackPanel>
                         <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
                                 <TextBlock VerticalAlignment="Center">Highlight color</TextBlock>
                                 <colorPicker:ColorPicker Grid.Column="1"
