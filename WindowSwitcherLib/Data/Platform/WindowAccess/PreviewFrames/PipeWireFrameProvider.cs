@@ -1201,12 +1201,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 out string? selectedStreamStableId,
                 out bool shouldPersistSelectedStreamStableId);
             IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(startResponse.Value.Results);
-            string extractedSummary = string.Join(
-                ',',
-                extractedStreams.Select(stream =>
-                    string.IsNullOrWhiteSpace(stream.StableId)
-                        ? stream.NodeId
-                        : $"{stream.NodeId}({stream.StableId})"));
+            string extractedSummary = DescribePortalStreams(extractedStreams);
             PipeWireTrace.Write(
                 $"WaylandPortal streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}");
             if (string.IsNullOrWhiteSpace(nodeId))
@@ -2213,175 +2208,44 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             bool retryWithoutStoredArtifacts = false;
             while (true)
             {
-                string requestToken = Guid.NewGuid().ToString("N");
-                string senderPathSegment = $"1_{Environment.ProcessId}";
-                string createHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_create_{requestToken}";
-                string selectHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_select_{requestToken}";
-                string startHandlePath = $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_start_{requestToken}";
-                sessionPath = $"/org/freedesktop/portal/desktop/session/{senderPathSegment}/ws_session_{requestToken}";
+                KdePortalRequestPaths requestPaths = BuildKdePortalRequestPaths();
+                sessionPath = requestPaths.SessionPath;
 
                 IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
                 HashSet<string> baselineIds = baseline.Select(candidate => candidate.Id).ToHashSet(StringComparer.Ordinal);
 
-                cancellationToken.ThrowIfCancellationRequested();
-                (uint createResponseCode, IDictionary<string, object> _) = await screenCast.CreateSessionAsync(
-                        new ObjectPath(createHandlePath),
-                        new ObjectPath(sessionPath),
-                        KdePortalAppId,
-                        new Dictionary<string, object>())
-                    .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
-                    .ConfigureAwait(false);
-                PipeWireTrace.Write($"WaylandKdeBackend create response={createResponseCode} windowId={windowId}");
-                if (createResponseCode != 0)
+                if (!await TryCreateKdePortalSessionAsync(screenCast, requestPaths, windowId, cancellationToken).ConfigureAwait(false))
                     return null;
 
-                PortalRestoreData? storedRestoreData = null;
-                string? restoreToken = null;
-                string? storedStreamStableId = null;
-                if (!retryWithoutStoredArtifacts)
-                {
-                    string? storedRestoreDataValue = GetStoredWaylandScreenCastRestoreData(windowId);
-                    if (!string.IsNullOrWhiteSpace(storedRestoreDataValue))
-                    {
-                        if (TryDeserializePortalRestoreData(storedRestoreDataValue, out PortalRestoreData parsedRestoreData))
-                        {
-                            storedRestoreData = parsedRestoreData;
-                            PipeWireTrace.Write(
-                                $"WaylandKdeBackend using stored restore data windowId={windowId} provider={parsedRestoreData.Provider} version={parsedRestoreData.Version}");
-                        }
-                        else
-                        {
-                            PipeWireTrace.Write($"WaylandKdeBackend stored restore data invalid format windowId={windowId}");
-                        }
-                    }
+                KdeStoredArtifacts storedArtifacts = LoadKdeStoredArtifactsForAttempt(windowId, retryWithoutStoredArtifacts);
+                LogKdeStoredArtifactsForAttempt(windowId, retryWithoutStoredArtifacts, storedArtifacts);
 
-                    restoreToken = GetStoredWaylandScreenCastRestoreToken(windowId);
-                    storedStreamStableId = GetStoredWaylandScreenCastStreamId(windowId);
-                }
-
-                if (storedRestoreData is null && string.IsNullOrWhiteSpace(restoreToken))
-                {
-                    if (retryWithoutStoredArtifacts)
-                    {
-                        PipeWireTrace.Write(
-                            $"WaylandKdeBackend retrying without stored restore artifacts windowId={windowId}; requesting interactive source selection");
-                    }
-                    else
-                    {
-                        PipeWireTrace.Write(
-                            $"WaylandKdeBackend no stored restore artifacts windowId={windowId}; requesting interactive source selection");
-                    }
-                }
-                else if (storedRestoreData is null)
-                {
-                    PipeWireTrace.Write($"WaylandKdeBackend using stored restore token windowId={windowId}");
-                }
-
-                var selectOptions = new Dictionary<string, object>
-                {
-                    ["types"] = (uint)2,
-                    ["multiple"] = false,
-                    ["cursor_mode"] = (uint)2,
-                    ["persist_mode"] = (uint)2
-                };
-                if (storedRestoreData is PortalRestoreData restoreData)
-                {
-                    selectOptions["restore_data"] = ValueTuple.Create(
-                        restoreData.Provider,
-                        restoreData.Version,
-                        restoreData.Bytes);
-                }
-                else if (!string.IsNullOrWhiteSpace(restoreToken))
-                {
-                    selectOptions["restore_token"] = restoreToken.Trim();
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-                (uint selectResponseCode, IDictionary<string, object> _) = await screenCast.SelectSourcesAsync(
-                        new ObjectPath(selectHandlePath),
-                        new ObjectPath(sessionPath),
-                        KdePortalAppId,
-                        selectOptions)
-                    .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
-                    .ConfigureAwait(false);
-                PipeWireTrace.Write($"WaylandKdeBackend select response={selectResponseCode} windowId={windowId}");
-                if (selectResponseCode != 0)
+                Dictionary<string, object> selectOptions = BuildKdeSelectOptions(
+                    storedArtifacts.RestoreData,
+                    storedArtifacts.RestoreToken);
+                if (!await TrySelectKdePortalSourcesAsync(screenCast, requestPaths, selectOptions, windowId, cancellationToken)
+                        .ConfigureAwait(false))
                 {
                     ClosePortalSession(sessionPath, KdePortalBackendDestination);
                     return null;
                 }
 
-                cancellationToken.ThrowIfCancellationRequested();
-                (uint startResponseCode, IDictionary<string, object> startResults) = await screenCast.StartAsync(
-                        new ObjectPath(startHandlePath),
-                        new ObjectPath(sessionPath),
-                        KdePortalAppId,
-                        string.Empty,
-                        new Dictionary<string, object>())
-                    .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
+                KdePortalStartResult? startResult = await TryStartKdePortalSessionAsync(screenCast, requestPaths, windowId, cancellationToken)
                     .ConfigureAwait(false);
-                PipeWireTrace.Write($"WaylandKdeBackend start response={startResponseCode} windowId={windowId}");
-                if (startResponseCode != 0)
+                if (startResult is null)
                 {
                     ClosePortalSession(sessionPath, KdePortalBackendDestination);
                     return null;
-                }
-
-                PortalRestoreData? newRestoreData = ExtractPortalRestoreData(startResults);
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend restore data from start={(newRestoreData is null ? "null" : "present")} windowId={windowId}");
-
-                string? newRestoreToken = ExtractPortalRestoreToken(startResults);
-                if (newRestoreData is null && string.IsNullOrWhiteSpace(newRestoreToken))
-                {
-                    PipeWireTrace.Write(
-                        $"WaylandKdeBackend start result keys windowId={windowId} keys={DescribePortalResultKeys(startResults)}");
-                }
-
-                void PersistUpdatedRestoreArtifacts()
-                {
-                    if (newRestoreData is PortalRestoreData startRestoreData)
-                    {
-                        if (storedRestoreData is null)
-                        {
-                            SaveStoredWaylandScreenCastRestoreData(windowId, SerializePortalRestoreData(startRestoreData));
-                            PipeWireTrace.Write($"WaylandKdeBackend stored initial restore data windowId={windowId}");
-                        }
-                        else if (!ArePortalRestoreDataEquivalent(storedRestoreData.Value, startRestoreData))
-                        {
-                            SaveStoredWaylandScreenCastRestoreData(windowId, SerializePortalRestoreData(startRestoreData));
-                            PipeWireTrace.Write($"WaylandKdeBackend refreshed restore data windowId={windowId}");
-                        }
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(newRestoreToken))
-                    {
-                        if (string.IsNullOrWhiteSpace(restoreToken))
-                        {
-                            SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
-                            PipeWireTrace.Write($"WaylandKdeBackend stored initial restore token windowId={windowId}");
-                        }
-                        else if (!string.Equals(restoreToken, newRestoreToken, StringComparison.Ordinal))
-                        {
-                            SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
-                            PipeWireTrace.Write($"WaylandKdeBackend refreshed restore token windowId={windowId}");
-                        }
-                    }
                 }
 
                 string? nodeId = SelectPortalStreamNodeId(
                     windowId,
-                    startResults,
+                    startResult.Value.Results,
                     excludedNodeIds,
                     out string? selectedStreamStableId,
                     out bool shouldPersistSelectedStreamStableId);
-                IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(startResults);
-                string extractedSummary = string.Join(
-                    ',',
-                    extractedStreams.Select(stream =>
-                        string.IsNullOrWhiteSpace(stream.StableId)
-                            ? stream.NodeId
-                            : $"{stream.NodeId}({stream.StableId})"));
+                IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(startResult.Value.Results);
+                string extractedSummary = DescribePortalStreams(extractedStreams);
                 PipeWireTrace.Write(
                     $"WaylandKdeBackend streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}");
 
@@ -2390,7 +2254,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                 if (!string.IsNullOrWhiteSpace(nodeId))
                 {
-                    PersistUpdatedRestoreArtifacts();
+                    PersistUpdatedKdeRestoreArtifacts(
+                        windowId,
+                        storedArtifacts.RestoreData,
+                        storedArtifacts.RestoreToken,
+                        startResult.Value.RestoreData,
+                        startResult.Value.RestoreToken);
                     SetPendingNodeId(windowId, nodeId);
                     return new PortalCaptureBootstrap(
                         nodeId,
@@ -2399,14 +2268,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         PipeWireRemoteHandle: null);
                 }
 
-                bool hadStoredArtifacts = !retryWithoutStoredArtifacts &&
-                                          (storedRestoreData is not null ||
-                                           !string.IsNullOrWhiteSpace(restoreToken) ||
-                                           !string.IsNullOrWhiteSpace(storedStreamStableId));
-
                 if (extractedStreams.Count > 0)
                 {
-                    if (hadStoredArtifacts)
+                    if (!retryWithoutStoredArtifacts && storedArtifacts.HasAny)
                     {
                         PipeWireTrace.Write(
                             $"WaylandKdeBackend stream list present but no eligible match windowId={windowId}; retrying once without stored artifacts");
@@ -2417,7 +2281,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         continue;
                     }
 
-                    PersistUpdatedRestoreArtifacts();
+                    PersistUpdatedKdeRestoreArtifacts(
+                        windowId,
+                        storedArtifacts.RestoreData,
+                        storedArtifacts.RestoreToken,
+                        startResult.Value.RestoreData,
+                        startResult.Value.RestoreToken);
                     PipeWireTrace.Write(
                         $"WaylandKdeBackend stream list present but no eligible match windowId={windowId}; skipping node discovery wait");
                     ClosePortalSession(sessionPath, KdePortalBackendDestination);
@@ -2436,7 +2305,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     allowUnmatchedFallback: false);
                 if (!string.IsNullOrWhiteSpace(discoveredNodeId))
                 {
-                    PersistUpdatedRestoreArtifacts();
+                    PersistUpdatedKdeRestoreArtifacts(
+                        windowId,
+                        storedArtifacts.RestoreData,
+                        storedArtifacts.RestoreToken,
+                        startResult.Value.RestoreData,
+                        startResult.Value.RestoreToken);
                     SetPendingNodeId(windowId, discoveredNodeId);
                     PipeWireTrace.Write($"WaylandKdeBackend selected={discoveredNodeId} discovered=true windowId={windowId}");
                     return new PortalCaptureBootstrap(
@@ -2477,6 +2351,210 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             _waylandPortalSessionGate.Release();
         }
+    }
+
+    private static KdePortalRequestPaths BuildKdePortalRequestPaths()
+    {
+        string requestToken = Guid.NewGuid().ToString("N");
+        string senderPathSegment = $"1_{Environment.ProcessId}";
+        return new KdePortalRequestPaths(
+            CreateHandlePath: $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_create_{requestToken}",
+            SelectHandlePath: $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_select_{requestToken}",
+            StartHandlePath: $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/ws_start_{requestToken}",
+            SessionPath: $"/org/freedesktop/portal/desktop/session/{senderPathSegment}/ws_session_{requestToken}");
+    }
+
+    private async Task<bool> TryCreateKdePortalSessionAsync(
+        IKdePortalScreenCast screenCast,
+        KdePortalRequestPaths requestPaths,
+        string windowId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        (uint createResponseCode, IDictionary<string, object> _) = await screenCast.CreateSessionAsync(
+                new ObjectPath(requestPaths.CreateHandlePath),
+                new ObjectPath(requestPaths.SessionPath),
+                KdePortalAppId,
+                new Dictionary<string, object>())
+            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
+            .ConfigureAwait(false);
+        PipeWireTrace.Write($"WaylandKdeBackend create response={createResponseCode} windowId={windowId}");
+        return createResponseCode == 0;
+    }
+
+    private KdeStoredArtifacts LoadKdeStoredArtifactsForAttempt(string windowId, bool retryWithoutStoredArtifacts)
+    {
+        if (retryWithoutStoredArtifacts)
+            return new KdeStoredArtifacts(RestoreData: null, RestoreToken: null, StreamStableId: null);
+
+        PortalRestoreData? restoreData = null;
+        string? storedRestoreDataValue = GetStoredWaylandScreenCastRestoreData(windowId);
+        if (!string.IsNullOrWhiteSpace(storedRestoreDataValue))
+        {
+            if (TryDeserializePortalRestoreData(storedRestoreDataValue, out PortalRestoreData parsedRestoreData))
+            {
+                restoreData = parsedRestoreData;
+                PipeWireTrace.Write(
+                    $"WaylandKdeBackend using stored restore data windowId={windowId} provider={parsedRestoreData.Provider} version={parsedRestoreData.Version}");
+            }
+            else
+            {
+                PipeWireTrace.Write($"WaylandKdeBackend stored restore data invalid format windowId={windowId}");
+            }
+        }
+
+        return new KdeStoredArtifacts(
+            RestoreData: restoreData,
+            RestoreToken: GetStoredWaylandScreenCastRestoreToken(windowId),
+            StreamStableId: GetStoredWaylandScreenCastStreamId(windowId));
+    }
+
+    private static void LogKdeStoredArtifactsForAttempt(
+        string windowId,
+        bool retryWithoutStoredArtifacts,
+        KdeStoredArtifacts storedArtifacts)
+    {
+        if (storedArtifacts.RestoreData is null && string.IsNullOrWhiteSpace(storedArtifacts.RestoreToken))
+        {
+            if (retryWithoutStoredArtifacts)
+            {
+                PipeWireTrace.Write(
+                    $"WaylandKdeBackend retrying without stored restore artifacts windowId={windowId}; requesting interactive source selection");
+            }
+            else
+            {
+                PipeWireTrace.Write(
+                    $"WaylandKdeBackend no stored restore artifacts windowId={windowId}; requesting interactive source selection");
+            }
+        }
+        else if (storedArtifacts.RestoreData is null)
+        {
+            PipeWireTrace.Write($"WaylandKdeBackend using stored restore token windowId={windowId}");
+        }
+    }
+
+    private static Dictionary<string, object> BuildKdeSelectOptions(
+        PortalRestoreData? restoreData,
+        string? restoreToken)
+    {
+        var selectOptions = new Dictionary<string, object>
+        {
+            ["types"] = (uint)2,
+            ["multiple"] = false,
+            ["cursor_mode"] = (uint)2,
+            ["persist_mode"] = (uint)2
+        };
+        if (restoreData is PortalRestoreData typedRestoreData)
+        {
+            selectOptions["restore_data"] = ValueTuple.Create(
+                typedRestoreData.Provider,
+                typedRestoreData.Version,
+                typedRestoreData.Bytes);
+        }
+        else if (!string.IsNullOrWhiteSpace(restoreToken))
+        {
+            selectOptions["restore_token"] = restoreToken.Trim();
+        }
+
+        return selectOptions;
+    }
+
+    private async Task<bool> TrySelectKdePortalSourcesAsync(
+        IKdePortalScreenCast screenCast,
+        KdePortalRequestPaths requestPaths,
+        IDictionary<string, object> selectOptions,
+        string windowId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        (uint selectResponseCode, IDictionary<string, object> _) = await screenCast.SelectSourcesAsync(
+                new ObjectPath(requestPaths.SelectHandlePath),
+                new ObjectPath(requestPaths.SessionPath),
+                KdePortalAppId,
+                selectOptions)
+            .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
+            .ConfigureAwait(false);
+        PipeWireTrace.Write($"WaylandKdeBackend select response={selectResponseCode} windowId={windowId}");
+        return selectResponseCode == 0;
+    }
+
+    private async Task<KdePortalStartResult?> TryStartKdePortalSessionAsync(
+        IKdePortalScreenCast screenCast,
+        KdePortalRequestPaths requestPaths,
+        string windowId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        (uint startResponseCode, IDictionary<string, object> startResults) = await screenCast.StartAsync(
+                new ObjectPath(requestPaths.StartHandlePath),
+                new ObjectPath(requestPaths.SessionPath),
+                KdePortalAppId,
+                string.Empty,
+                new Dictionary<string, object>())
+            .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
+            .ConfigureAwait(false);
+        PipeWireTrace.Write($"WaylandKdeBackend start response={startResponseCode} windowId={windowId}");
+        if (startResponseCode != 0)
+            return null;
+
+        PortalRestoreData? restoreData = ExtractPortalRestoreData(startResults);
+        PipeWireTrace.Write(
+            $"WaylandKdeBackend restore data from start={(restoreData is null ? "null" : "present")} windowId={windowId}");
+
+        string? restoreToken = ExtractPortalRestoreToken(startResults);
+        if (restoreData is null && string.IsNullOrWhiteSpace(restoreToken))
+        {
+            PipeWireTrace.Write(
+                $"WaylandKdeBackend start result keys windowId={windowId} keys={DescribePortalResultKeys(startResults)}");
+        }
+
+        return new KdePortalStartResult(startResults, restoreData, restoreToken);
+    }
+
+    private void PersistUpdatedKdeRestoreArtifacts(
+        string windowId,
+        PortalRestoreData? previousRestoreData,
+        string? previousRestoreToken,
+        PortalRestoreData? newRestoreData,
+        string? newRestoreToken)
+    {
+        if (newRestoreData is PortalRestoreData typedNewRestoreData)
+        {
+            if (previousRestoreData is null)
+            {
+                SaveStoredWaylandScreenCastRestoreData(windowId, SerializePortalRestoreData(typedNewRestoreData));
+                PipeWireTrace.Write($"WaylandKdeBackend stored initial restore data windowId={windowId}");
+            }
+            else if (!ArePortalRestoreDataEquivalent(previousRestoreData.Value, typedNewRestoreData))
+            {
+                SaveStoredWaylandScreenCastRestoreData(windowId, SerializePortalRestoreData(typedNewRestoreData));
+                PipeWireTrace.Write($"WaylandKdeBackend refreshed restore data windowId={windowId}");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(newRestoreToken))
+            return;
+
+        if (string.IsNullOrWhiteSpace(previousRestoreToken))
+        {
+            SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
+            PipeWireTrace.Write($"WaylandKdeBackend stored initial restore token windowId={windowId}");
+        }
+        else if (!string.Equals(previousRestoreToken, newRestoreToken, StringComparison.Ordinal))
+        {
+            SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
+            PipeWireTrace.Write($"WaylandKdeBackend refreshed restore token windowId={windowId}");
+        }
+    }
+
+    private static string DescribePortalStreams(IReadOnlyList<PortalStreamDescriptor> streams)
+    {
+        return string.Join(
+            ',',
+            streams.Select(stream =>
+                string.IsNullOrWhiteSpace(stream.StableId)
+                    ? stream.NodeId
+                    : $"{stream.NodeId}({stream.StableId})"));
     }
 
     private string? TryStartPortalWindowScreencast(
@@ -3756,6 +3834,28 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             JsonValueKind.False => "false",
             _ => string.Empty
         };
+    }
+
+    private readonly record struct KdePortalRequestPaths(
+        string CreateHandlePath,
+        string SelectHandlePath,
+        string StartHandlePath,
+        string SessionPath);
+
+    private readonly record struct KdePortalStartResult(
+        IDictionary<string, object> Results,
+        PortalRestoreData? RestoreData,
+        string? RestoreToken);
+
+    private readonly record struct KdeStoredArtifacts(
+        PortalRestoreData? RestoreData,
+        string? RestoreToken,
+        string? StreamStableId)
+    {
+        public bool HasAny =>
+            RestoreData is not null ||
+            !string.IsNullOrWhiteSpace(RestoreToken) ||
+            !string.IsNullOrWhiteSpace(StreamStableId);
     }
 
     private readonly record struct PortalCaptureBootstrap(
