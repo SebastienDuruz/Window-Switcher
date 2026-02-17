@@ -27,6 +27,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
+    private const int PipeWireReaderFrameIntervalMs = 100;
     private const bool EnablePortalFallback = true;
     private const string PortalDesktopDestination = "org.freedesktop.portal.Desktop";
     private const string KdePortalBackendDestination = "org.freedesktop.impl.portal.desktop.kde";
@@ -469,7 +470,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(nodeId))
             return null;
 
-        var stream = new PipeWireWindowStream(nodeId, _gstLaunch, pipeWireRemoteHandle);
+        var stream = new PipeWireWindowStream(
+            nodeId,
+            _gstLaunch,
+            pipeWireRemoteHandle,
+            PipeWireReaderFrameIntervalMs);
         return new WindowCaptureContext(windowId, nodeId, portalSessionPath, portalSessionDestination, stream);
     }
 
@@ -3550,6 +3555,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         private readonly string _nodeId;
         private readonly IGstLaunchWrapper _gstLaunch;
         private readonly CloseSafeHandle? _pipeWireRemoteHandle;
+        private readonly int _minFrameIntervalMs;
         private readonly object _syncRoot = new();
         private readonly SemaphoreSlim _frameReadySignal = new(initialCount: 0, maxCount: 1);
 
@@ -3566,12 +3572,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public PipeWireWindowStream(
             string nodeId,
             IGstLaunchWrapper gstLaunch,
-            CloseSafeHandle? pipeWireRemoteHandle)
+            CloseSafeHandle? pipeWireRemoteHandle,
+            int minFrameIntervalMs)
         {
             ArgumentNullException.ThrowIfNull(gstLaunch);
             _nodeId = nodeId;
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
+            _minFrameIntervalMs = Math.Clamp(minFrameIntervalMs, 0, 1000);
         }
 
         public void EnsureRunning()
@@ -3765,7 +3773,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 Stream output = process.StandardOutput.BaseStream;
 
                 bool inFrame = false;
+                bool dropCurrentFrame = false;
                 byte previous = 0;
+                long nextAcceptedFrameAtMs = 0;
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
@@ -3782,20 +3792,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                             if (previous == 0xFF && current == 0xD8)
                             {
                                 inFrame = true;
+                                long now = Environment.TickCount64;
+                                dropCurrentFrame = _minFrameIntervalMs > 0 && now < nextAcceptedFrameAtMs;
                                 frameBuffer.Clear();
-                                frameBuffer.Add(0xFF);
-                                frameBuffer.Add(0xD8);
+                                if (!dropCurrentFrame)
+                                {
+                                    frameBuffer.Add(0xFF);
+                                    frameBuffer.Add(0xD8);
+                                }
                             }
 
                             previous = current;
                             continue;
                         }
 
-                        frameBuffer.Add(current);
+                        if (!dropCurrentFrame)
+                            frameBuffer.Add(current);
 
-                        if (frameBuffer.Count > MaxFrameBytes)
+                        if (!dropCurrentFrame && frameBuffer.Count > MaxFrameBytes)
                         {
                             inFrame = false;
+                            dropCurrentFrame = false;
                             frameBuffer.Clear();
                             previous = current;
                             continue;
@@ -3803,21 +3820,28 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                         if (previous == 0xFF && current == 0xD9)
                         {
-                            byte[] frame = frameBuffer.ToArray();
-                            lock (_syncRoot)
+                            if (!dropCurrentFrame)
                             {
-                                _latestFrameBytes = frame;
-                                _latestFrameSequence++;
-                                _hasReceivedFrame = true;
+                                byte[] frame = frameBuffer.ToArray();
+                                lock (_syncRoot)
+                                {
+                                    _latestFrameBytes = frame;
+                                    _latestFrameSequence++;
+                                    _hasReceivedFrame = true;
+                                }
+                                if (_latestFrameSequence == 1)
+                                {
+                                    string fingerprint = ComputeFrameFingerprint(frame);
+                                    PipeWireTrace.Write($"PipeWireStream first frame nodeId={_nodeId} bytes={frame.Length} sha256={fingerprint}");
+                                }
+                                SignalFrameReady();
+
+                                if (_minFrameIntervalMs > 0)
+                                    nextAcceptedFrameAtMs = Environment.TickCount64 + _minFrameIntervalMs;
                             }
-                            if (_latestFrameSequence == 1)
-                            {
-                                string fingerprint = ComputeFrameFingerprint(frame);
-                                PipeWireTrace.Write($"PipeWireStream first frame nodeId={_nodeId} bytes={frame.Length} sha256={fingerprint}");
-                            }
-                            SignalFrameReady();
 
                             inFrame = false;
+                            dropCurrentFrame = false;
                             frameBuffer.Clear();
                         }
 

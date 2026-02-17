@@ -10,6 +10,9 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
     private const int FGetFd = 1;
     private const int FSetFd = 2;
     private const int FdCloExec = 1;
+    private const int OptimizedPipeWireMaxFps = 30;
+    private const int OptimizedPipeWireJpegQuality = 70;
+    private const int OptimizedQueueBufferCount = 1;
 
     [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static extern int Fcntl(int fd, int cmd, int arg);
@@ -30,29 +33,22 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             return null;
         }
 
+        Process? optimized = TryStartPipeWireJpegStream(nodeId, pipeWireRemoteFd, useVideoRate: true);
+        if (optimized is null)
+            return null;
+
+        // If the optimized pipeline exits right away (e.g. missing videorate), retry with a compatible pipeline.
+        if (!optimized.WaitForExit(milliseconds: 150))
+            return optimized;
+
+        optimized.Dispose();
+        return TryStartPipeWireJpegStream(nodeId, pipeWireRemoteFd, useVideoRate: false);
+    }
+
+    private Process? TryStartPipeWireJpegStream(string nodeId, int? pipeWireRemoteFd, bool useVideoRate)
+    {
         var process = CreateProcess();
-        process.StartInfo.ArgumentList.Add("-q");
-        process.StartInfo.ArgumentList.Add("pipewiresrc");
-        process.StartInfo.ArgumentList.Add($"path={nodeId}");
-        if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-            process.StartInfo.ArgumentList.Add($"fd={pipeWireRemoteFd.Value}");
-        process.StartInfo.ArgumentList.Add("always-copy=true");
-        process.StartInfo.ArgumentList.Add("do-timestamp=true");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add("videoconvert");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add("queue");
-        process.StartInfo.ArgumentList.Add("leaky=downstream");
-        process.StartInfo.ArgumentList.Add("max-size-buffers=2");
-        process.StartInfo.ArgumentList.Add("max-size-bytes=0");
-        process.StartInfo.ArgumentList.Add("max-size-time=0");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add("jpegenc");
-        process.StartInfo.ArgumentList.Add("quality=80");
-        process.StartInfo.ArgumentList.Add("!");
-        process.StartInfo.ArgumentList.Add("fdsink");
-        process.StartInfo.ArgumentList.Add("fd=1");
-        process.StartInfo.ArgumentList.Add("sync=false");
+        ConfigurePipeWireJpegPipeline(process.StartInfo, nodeId, pipeWireRemoteFd, useVideoRate);
 
         try
         {
@@ -74,6 +70,45 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             process.Dispose();
             return null;
         }
+    }
+
+    private static void ConfigurePipeWireJpegPipeline(
+        ProcessStartInfo startInfo,
+        string nodeId,
+        int? pipeWireRemoteFd,
+        bool useVideoRate)
+    {
+        startInfo.ArgumentList.Clear();
+        startInfo.ArgumentList.Add("-q");
+        startInfo.ArgumentList.Add("pipewiresrc");
+        startInfo.ArgumentList.Add($"path={nodeId}");
+        if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
+            startInfo.ArgumentList.Add($"fd={pipeWireRemoteFd.Value}");
+        startInfo.ArgumentList.Add("always-copy=true");
+        startInfo.ArgumentList.Add("do-timestamp=true");
+        startInfo.ArgumentList.Add("!");
+        if (useVideoRate)
+        {
+            startInfo.ArgumentList.Add("videorate");
+            startInfo.ArgumentList.Add("drop-only=true");
+            startInfo.ArgumentList.Add($"max-rate={OptimizedPipeWireMaxFps}");
+            startInfo.ArgumentList.Add("!");
+        }
+
+        startInfo.ArgumentList.Add("videoconvert");
+        startInfo.ArgumentList.Add("!");
+        startInfo.ArgumentList.Add("queue");
+        startInfo.ArgumentList.Add("leaky=downstream");
+        startInfo.ArgumentList.Add($"max-size-buffers={OptimizedQueueBufferCount}");
+        startInfo.ArgumentList.Add("max-size-bytes=0");
+        startInfo.ArgumentList.Add("max-size-time=0");
+        startInfo.ArgumentList.Add("!");
+        startInfo.ArgumentList.Add("jpegenc");
+        startInfo.ArgumentList.Add($"quality={OptimizedPipeWireJpegQuality}");
+        startInfo.ArgumentList.Add("!");
+        startInfo.ArgumentList.Add("fdsink");
+        startInfo.ArgumentList.Add("fd=1");
+        startInfo.ArgumentList.Add("sync=false");
     }
 
     private static void SetCloseOnExec(int fileDescriptor, bool enabled)
