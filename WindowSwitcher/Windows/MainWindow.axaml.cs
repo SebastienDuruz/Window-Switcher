@@ -272,12 +272,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void CloseAllFloatingWindows()
     {
-        ExecuteWithAppClosingFlag(() =>
-        {
-            foreach (FloatingWindow window in _floatingWindows.Values.ToList())
-                window.Close();
-            _floatingWindows.Clear();
-        });
+        foreach (FloatingWindow window in _floatingWindows.Values.ToList())
+            window.RequestCloseFromHost();
+        _floatingWindows.Clear();
     }
 
     private void CloseFloatingWindow(string windowId)
@@ -285,7 +282,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (!_floatingWindows.Remove(windowId, out FloatingWindow? window))
             return;
 
-        ExecuteWithAppClosingFlag(window.Close);
+        window.RequestCloseFromHost();
     }
 
     private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
@@ -304,18 +301,4 @@ public partial class MainWindow : Window, IFloatingWindowHost
             floatingWindow.ApplySettings();
     }
 
-    private static void ExecuteWithAppClosingFlag(Action action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-        bool previousAppClosingState = StaticData.AppClosing;
-        StaticData.AppClosing = true;
-        try
-        {
-            action();
-        }
-        finally
-        {
-            StaticData.AppClosing = previousAppClosingState;
-        }
-    }
 }

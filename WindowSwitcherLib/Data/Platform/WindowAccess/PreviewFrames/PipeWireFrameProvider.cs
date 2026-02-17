@@ -55,6 +55,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly SemaphoreSlim _waylandPortalSessionGate = new(initialCount: 1, maxCount: 1);
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Task<WindowCaptureContext?>> _captureCreationTasks = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, CancellationTokenSource> _captureCreationCancellationSources = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _pendingNodeIdsByWindow = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _excludedNodesByWindow = new(StringComparer.Ordinal);
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
@@ -215,11 +216,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         _fallbackProvider.ForgetWindow(windowId);
 
         WindowCaptureContext? capture = null;
+        CancellationTokenSource? captureCreationCancellation = null;
         lock (_capturesSync)
         {
             _failedWindows.Remove(windowId);
             _excludedNodesByWindow.Remove(windowId);
             _pendingNodeIdsByWindow.Remove(windowId);
+            if (_captureCreationCancellationSources.TryGetValue(windowId, out captureCreationCancellation))
+                captureCreationCancellation.Cancel();
             if (_captures.TryGetValue(windowId, out capture))
                 _captures.Remove(windowId);
         }
@@ -235,11 +239,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         _disposed = true;
 
         List<WindowCaptureContext> captures;
+        List<CancellationTokenSource> captureCreationCancellations;
         lock (_capturesSync)
         {
             captures = _captures.Values.ToList();
+            captureCreationCancellations = _captureCreationCancellationSources.Values.ToList();
             _captures.Clear();
             _captureCreationTasks.Clear();
+            _captureCreationCancellationSources.Clear();
             _pendingNodeIdsByWindow.Clear();
             _failedWindows.Clear();
             _excludedNodesByWindow.Clear();
@@ -247,6 +254,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         foreach (WindowCaptureContext capture in captures)
             capture.Dispose(ClosePortalSession);
+        foreach (CancellationTokenSource cancellation in captureCreationCancellations)
+        {
+            cancellation.Cancel();
+            cancellation.Dispose();
+        }
 
         _fallbackProvider.Dispose();
         lock (_dbusSync)
@@ -272,7 +284,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             if (!_captureCreationTasks.TryGetValue(windowId, out createTask!))
             {
-                createTask = CreateAndRegisterCaptureAsync(windowId);
+                var createCancellationSource = new CancellationTokenSource();
+                _captureCreationCancellationSources[windowId] = createCancellationSource;
+                createTask = CreateAndRegisterCaptureAsync(windowId, createCancellationSource.Token);
                 _captureCreationTasks[windowId] = createTask;
             }
         }
@@ -287,11 +301,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
-    private async Task<WindowCaptureContext?> CreateAndRegisterCaptureAsync(string windowId)
+    private async Task<WindowCaptureContext?> CreateAndRegisterCaptureAsync(
+        string windowId,
+        CancellationToken cancellationToken)
     {
         try
         {
-            using var creationCts = new CancellationTokenSource(CaptureCreationTimeoutMs);
+            using var creationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            creationCts.CancelAfter(CaptureCreationTimeoutMs);
             PipeWireTrace.Write($"EnsureCaptureAsync create requested windowId={windowId} wayland={_isWaylandSession}");
             WindowCaptureContext? created = await CreateCaptureAsync(windowId, creationCts.Token).ConfigureAwait(false);
             if (created is null)
@@ -343,13 +360,26 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         finally
         {
+            CancellationTokenSource? captureCreationCancellation = null;
             lock (_capturesSync)
+            {
                 _captureCreationTasks.Remove(windowId);
+                if (_captureCreationCancellationSources.TryGetValue(windowId, out captureCreationCancellation))
+                    _captureCreationCancellationSources.Remove(windowId);
+            }
+
+            captureCreationCancellation?.Dispose();
         }
     }
 
     private async Task<WindowCaptureContext?> CreateCaptureAsync(string windowId, CancellationToken cancellationToken)
     {
+        if (!IsWindowStillAvailable(windowId))
+        {
+            PipeWireTrace.Write($"CreateCaptureAsync skipped missing window windowId={windowId}");
+            return null;
+        }
+
         string? nodeId = null;
         string? portalSessionPath = null;
         string? portalSessionDestination = null;
@@ -995,6 +1025,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string sessionToken = $"ws_session_{token}";
             string? restoreToken = GetStoredWaylandScreenCastRestoreToken(windowId);
 
+            cancellationToken.ThrowIfCancellationRequested();
             ObjectPath createRequestPath = await screenCast.CreateSessionAsync(new Dictionary<string, object>
             {
                 ["handle_token"] = $"ws_create_{token}",
@@ -1032,6 +1063,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
 
             var sessionObjectPath = new ObjectPath(sessionPath);
+            cancellationToken.ThrowIfCancellationRequested();
             ObjectPath selectRequestPath = await screenCast.SelectSourcesAsync(sessionObjectPath, selectOptions)
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
@@ -1050,6 +1082,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             ObjectPath startRequestPath = await screenCast.StartAsync(sessionObjectPath, string.Empty, new Dictionary<string, object>
             {
                 ["handle_token"] = $"ws_start_{token}"
@@ -1103,6 +1136,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (shouldPersistSelectedStreamStableId && !string.IsNullOrWhiteSpace(selectedStreamStableId))
                 SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
 
+            cancellationToken.ThrowIfCancellationRequested();
             pipeWireRemoteHandle = await screenCast.OpenPipeWireRemoteAsync(
                     sessionObjectPath,
                     new Dictionary<string, object>())
@@ -1954,6 +1988,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 KdePortalBackendDestination,
                 new ObjectPath("/org/freedesktop/portal/desktop"));
 
+            cancellationToken.ThrowIfCancellationRequested();
             (uint createResponseCode, IDictionary<string, object> _) = await screenCast.CreateSessionAsync(
                     new ObjectPath(createHandlePath),
                     new ObjectPath(sessionPath),
@@ -2011,6 +2046,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 selectOptions["restore_token"] = restoreToken.Trim();
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             (uint selectResponseCode, IDictionary<string, object> _) = await screenCast.SelectSourcesAsync(
                     new ObjectPath(selectHandlePath),
                     new ObjectPath(sessionPath),
@@ -2025,6 +2061,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             (uint startResponseCode, IDictionary<string, object> startResults) = await screenCast.StartAsync(
                     new ObjectPath(startHandlePath),
                     new ObjectPath(sessionPath),
@@ -2750,6 +2787,28 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             AddNormalizedPattern(patterns, token);
 
         return patterns;
+    }
+
+    private bool IsWindowStillAvailable(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return false;
+
+        try
+        {
+            IReadOnlyCollection<WindowConfig> windows = _accessorBase.GetWindows();
+            foreach (WindowConfig window in windows)
+            {
+                if (AreWindowIdsEquivalent(window.WindowId, windowId))
+                    return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private string? TryGetWindowTitleById(string windowId)

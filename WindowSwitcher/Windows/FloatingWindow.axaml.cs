@@ -19,6 +19,7 @@ namespace WindowSwitcher.Windows;
 public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
     private volatile bool _isPointerInside;
+    private bool _closeRequestedByHost;
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
@@ -154,7 +155,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
         _floatingWindowHost.ClearActivePreview(this);
-        e.Cancel = !StaticData.AppClosing;
+        bool allowClose = StaticData.AppClosing || _closeRequestedByHost;
+        e.Cancel = !allowClose;
         if (!e.Cancel)
             _service.Stop(WindowConfig.WindowId);
     }
@@ -181,6 +183,16 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     public void ApplySettings()
     {
         ApplySettingsCore(refreshPreviewPipeline: true);
+    }
+
+    public void RequestCloseFromHost()
+    {
+        if (_closeRequestedByHost)
+            return;
+
+        _closeRequestedByHost = true;
+        _service.Stop(WindowConfig.WindowId);
+        Close();
     }
 
     private void ApplySettingsCore(bool refreshPreviewPipeline)
