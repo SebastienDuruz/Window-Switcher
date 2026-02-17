@@ -586,17 +586,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         return candidate;
                 }
 
-                // Window ids can be reused; if direct key lookup misses title match, scan known mappings for a better match.
-                foreach ((_, string value) in config.LinuxWaylandScreenCastRestoreDataByWindowId)
-                {
-                    if (string.IsNullOrWhiteSpace(value))
-                        continue;
-
-                    string candidate = value.Trim();
-                    if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
-                        return candidate;
-                }
-
                 return null;
             });
 
@@ -698,6 +687,36 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 config.LinuxWaylandScreenCastStreamIdsByWindowId[restoreKeys[index]] = normalizedStreamId;
         });
         configAccessor.WriteUserSettings();
+    }
+
+    private void ClearStoredWaylandScreenCastArtifacts(string windowId)
+    {
+        IReadOnlyList<string> restoreKeys = BuildWaylandRestoreKeys(windowId);
+        if (restoreKeys.Count == 0)
+            return;
+
+        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
+        bool changed = false;
+        configAccessor.UpdateConfig(config =>
+        {
+            for (int index = 0; index < restoreKeys.Count; index++)
+            {
+                string key = restoreKeys[index];
+                changed |= config.LinuxWaylandScreenCastRestoreTokensByWindowId.Remove(key);
+                changed |= config.LinuxWaylandScreenCastRestoreDataByWindowId.Remove(key);
+                changed |= config.LinuxWaylandScreenCastStreamIdsByWindowId.Remove(key);
+            }
+
+            if (!string.IsNullOrWhiteSpace(config.LinuxWaylandScreenCastRestoreToken) &&
+                config.LinuxWaylandScreenCastRestoreTokensByWindowId.Count == 0)
+            {
+                config.LinuxWaylandScreenCastRestoreToken = string.Empty;
+                changed = true;
+            }
+        });
+
+        if (changed)
+            configAccessor.WriteUserSettings();
     }
 
     private IReadOnlyList<string> BuildWaylandRestoreKeys(string windowId)
@@ -1432,10 +1451,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         string? windowTitle = TryGetWindowTitleById(windowId);
         IReadOnlyCollection<string> windowPatterns = BuildWindowMatchPatterns(windowId, windowTitle);
         IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
-        PortalRestoreData? restoreData = ExtractPortalRestoreData(results);
-        bool restoreDataMatchesRequestedWindowTitle = restoreData is PortalRestoreData typedRestoreData &&
-                                                      MatchesRestoreDataWindowTitle(typedRestoreData, windowTitlePatterns);
+        string normalizedRequestedWindowTitle = NormalizeForSearch(windowTitle);
         IReadOnlyList<NodeCandidate>? discoveredNodes = null;
+        IReadOnlyCollection<WindowConfig>? windowsSnapshot = null;
 
         NodeCandidate? FindNodeCandidate(string nodeId)
         {
@@ -1448,6 +1466,104 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
 
             return null;
+        }
+
+        bool MatchesExactRequestedWindowTitle(PortalStreamDescriptor stream)
+        {
+            if (string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle))
+                return false;
+            if (string.IsNullOrWhiteSpace(stream.NormalizedSearchText))
+                return false;
+
+            return stream.NormalizedSearchText.Contains(normalizedRequestedWindowTitle, StringComparison.Ordinal);
+        }
+
+        bool MatchesExactWindowTitle(PortalStreamDescriptor stream, string? title)
+        {
+            string normalizedTitle = NormalizeForSearch(title);
+            if (string.IsNullOrWhiteSpace(normalizedTitle))
+                return false;
+            if (string.IsNullOrWhiteSpace(stream.NormalizedSearchText))
+                return false;
+
+            return stream.NormalizedSearchText.Contains(normalizedTitle, StringComparison.Ordinal);
+        }
+
+        int ComputeWindowPatternScore(PortalStreamDescriptor stream, IReadOnlyCollection<string> patterns)
+        {
+            if (patterns.Count == 0)
+                return 0;
+
+            int score = ComputePatternScore(stream.NormalizedSearchText, patterns);
+            NodeCandidate? candidate = FindNodeCandidate(stream.NodeId);
+            if (candidate is NodeCandidate typedCandidate)
+                score = Math.Max(score, ComputePatternScore(typedCandidate.NormalizedSearchText, patterns));
+
+            return score;
+        }
+
+        bool IsLikelyAssignedToAnotherWindow(PortalStreamDescriptor stream)
+        {
+            if (windowPatterns.Count == 0)
+                return false;
+
+            bool requestedExactTitleMatch = MatchesExactRequestedWindowTitle(stream);
+
+            int requestedScore = ComputeWindowPatternScore(stream, windowPatterns);
+
+            try
+            {
+                windowsSnapshot ??= _accessorBase.GetWindows();
+            }
+            catch
+            {
+                return false;
+            }
+
+            int bestOtherScore = 0;
+            string? bestOtherWindowId = null;
+            foreach (WindowConfig candidateWindow in windowsSnapshot)
+            {
+                if (AreWindowIdsEquivalent(candidateWindow.WindowId, windowId))
+                    continue;
+
+                if (MatchesExactWindowTitle(stream, candidateWindow.WindowTitle))
+                {
+                    if (!requestedExactTitleMatch)
+                        return true;
+                }
+
+                IReadOnlyCollection<string> candidatePatterns = BuildWindowMatchPatterns(candidateWindow.WindowId, candidateWindow.WindowTitle);
+                int score = ComputeWindowPatternScore(stream, candidatePatterns);
+                if (score <= bestOtherScore)
+                    continue;
+
+                bestOtherScore = score;
+                bestOtherWindowId = candidateWindow.WindowId;
+            }
+
+            if (bestOtherScore <= 0 || string.IsNullOrWhiteSpace(bestOtherWindowId))
+                return false;
+
+            return requestedScore <= 0 || bestOtherScore > requestedScore;
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle))
+        {
+            PortalStreamDescriptor[] exactTitleMatches = streams
+                .Where(stream => !allExcludedNodeIds.Contains(stream.NodeId) && MatchesExactRequestedWindowTitle(stream))
+                .OrderBy(stream => stream.NodeId, Comparer<string>.Create(CompareNodeId))
+                .ToArray();
+
+            if (exactTitleMatches.Length == 1)
+            {
+                PortalStreamDescriptor matched = exactTitleMatches[0];
+                PipeWireTrace.Write(
+                    $"WaylandPortal selected via exact title match windowId={windowId} nodeId={matched.NodeId} streamId={matched.StableId ?? "null"}");
+                selectedStreamStableId = matched.StableId;
+                shouldPersistSelectedStreamStableId = true;
+                return matched.NodeId;
+            }
         }
 
         MatchState EvaluateWindowTitleMatchState(PortalStreamDescriptor stream)
@@ -1467,11 +1583,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 : MatchState.Mismatch;
         }
 
-        bool MatchesRequestedWindow(PortalStreamDescriptor stream)
-        {
-            return EvaluateWindowTitleMatchState(stream) is not MatchState.Mismatch;
-        }
-
         string? expectedStreamStableId = GetStoredWaylandScreenCastStreamId(windowId);
         if (!string.IsNullOrWhiteSpace(expectedStreamStableId))
         {
@@ -1482,10 +1593,34 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     continue;
                 if (allExcludedNodeIds.Contains(stream.NodeId))
                     continue;
-                if (!MatchesRequestedWindow(stream))
+                MatchState storedStreamMatchState = EvaluateWindowTitleMatchState(stream);
+                if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Mismatch)
+                {
+                    if (streams.Count == 1 && !IsLikelyAssignedToAnotherWindow(stream))
+                    {
+                        PipeWireTrace.Write(
+                            $"WaylandPortal stored stream id candidate accepted single stream despite title mismatch windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                    }
+                    else
+                    {
+                        PipeWireTrace.Write(
+                            $"WaylandPortal stored stream id candidate mismatched window title windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                        ClearStoredWaylandScreenCastArtifacts(windowId);
+                        continue;
+                    }
+                }
+
+                if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Unknown)
                 {
                     PipeWireTrace.Write(
-                        $"WaylandPortal stored stream id candidate mismatched window title windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                        $"WaylandPortal stored stream id candidate accepted despite missing title metadata windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                }
+
+                if (IsLikelyAssignedToAnotherWindow(stream))
+                {
+                    PipeWireTrace.Write(
+                        $"WaylandPortal stored stream id candidate appears to belong to another window windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                    ClearStoredWaylandScreenCastArtifacts(windowId);
                     continue;
                 }
 
@@ -1545,33 +1680,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 continue;
 
             MatchState titleMatchState = EvaluateWindowTitleMatchState(stream);
-            if (titleMatchState is MatchState.Mismatch)
+            if (windowTitlePatterns.Count > 0 && titleMatchState is not MatchState.Match)
             {
-                if (streams.Count == 1 && restoreDataMatchesRequestedWindowTitle)
+                bool allowSingleStreamFallback = streams.Count == 1 && !IsLikelyAssignedToAnotherWindow(stream);
+                if (allowSingleStreamFallback)
                 {
+                    string acceptanceReason = titleMatchState is MatchState.Mismatch
+                        ? "title mismatch"
+                        : "missing title metadata";
                     PipeWireTrace.Write(
-                        $"WaylandPortal fallback candidate accepted via restore_data title match windowId={windowId} nodeId={stream.NodeId}");
+                        $"WaylandPortal fallback candidate accepted single stream with {acceptanceReason} windowId={windowId} nodeId={stream.NodeId}");
                 }
                 else
                 {
+                    string rejectionReason = titleMatchState is MatchState.Mismatch
+                        ? "strict title mismatch"
+                        : "missing strict title verification";
                     PipeWireTrace.Write(
-                        $"WaylandPortal fallback candidate rejected by title windowId={windowId} nodeId={stream.NodeId}");
+                        $"WaylandPortal fallback candidate rejected by {rejectionReason} windowId={windowId} nodeId={stream.NodeId}");
+                    ClearStoredWaylandScreenCastArtifacts(windowId);
                     continue;
                 }
-            }
-
-            if (windowTitlePatterns.Count > 0 && streams.Count == 1 && titleMatchState is not MatchState.Match &&
-                restoreDataMatchesRequestedWindowTitle)
-            {
-                PipeWireTrace.Write(
-                    $"WaylandPortal fallback candidate title verified by restore_data windowId={windowId} nodeId={stream.NodeId}");
-            }
-
-            if (windowTitlePatterns.Count > 0 && streams.Count > 1 && titleMatchState is not MatchState.Match)
-            {
-                PipeWireTrace.Write(
-                    $"WaylandPortal fallback candidate unverified for ambiguous selection windowId={windowId} nodeId={stream.NodeId}");
-                continue;
             }
 
             PipeWireTrace.Write($"WaylandPortal selected via deterministic fallback windowId={windowId} nodeId={stream.NodeId}");
@@ -1580,10 +1709,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             return stream.NodeId;
         }
 
-        if (windowTitlePatterns.Count > 0 && streams.Count > 1)
+        if (windowTitlePatterns.Count > 0)
         {
             PipeWireTrace.Write(
-                $"WaylandPortal no verified stream candidate for ambiguous selection windowId={windowId}");
+                $"WaylandPortal no verified stream candidate for strict title matching windowId={windowId}");
         }
 
         PipeWireTrace.Write(
@@ -2150,6 +2279,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     sessionPath,
                     KdePortalBackendDestination,
                     PipeWireRemoteHandle: null);
+            }
+
+            if (extractedStreams.Count > 0)
+            {
+                PipeWireTrace.Write(
+                    $"WaylandKdeBackend stream list present but no eligible match windowId={windowId}; skipping node discovery wait");
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
             }
 
             var allExcludedNodeIds = new HashSet<string>(excludedNodeIds, StringComparer.Ordinal);
