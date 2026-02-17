@@ -42,6 +42,7 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="0" Grid.Column="1" Spacing="8">
+                        <CheckBox Content="Disable previews" IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
                         <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
                         <CheckBox Content="Focus on hover" IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
                         <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}" />

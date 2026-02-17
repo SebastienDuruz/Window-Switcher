@@ -12,6 +12,8 @@ public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     private readonly ISettingsPlatformPolicy _settingsPlatformPolicy;
+    private readonly Action _applyAction;
+    private bool _pendingDisablePreviews;
     public IRelayCommand ApplyCommand { get; }
 
     public SettingsViewModel(Action applyAction, ISettingsPlatformPolicy settingsPlatformPolicy)
@@ -19,11 +21,35 @@ public class SettingsViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(applyAction);
         ArgumentNullException.ThrowIfNull(settingsPlatformPolicy);
 
+        _applyAction = applyAction;
         _settingsPlatformPolicy = settingsPlatformPolicy;
-        ApplyCommand = new RelayCommand(applyAction);
+        _pendingDisablePreviews = _configAccessor.ReadConfig(config => config.DisablePreviews);
+        ApplyCommand = new RelayCommand(Apply);
     }
 
     public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
+
+    public bool DisablePreviews
+    {
+        get => _pendingDisablePreviews;
+        set
+        {
+            if (_pendingDisablePreviews == value)
+                return;
+            _pendingDisablePreviews = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public void ResetPendingValues()
+    {
+        bool configuredValue = _configAccessor.ReadConfig(config => config.DisablePreviews);
+        if (_pendingDisablePreviews == configuredValue)
+            return;
+
+        _pendingDisablePreviews = configuredValue;
+        OnPropertyChanged(nameof(DisablePreviews));
+    }
 
     public bool StartMinimized
     {
@@ -208,5 +234,11 @@ public class SettingsViewModel : ObservableObject
         return color.A == 0xFF
             ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
             : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
+    private void Apply()
+    {
+        _configAccessor.UpdateConfig(config => config.DisablePreviews = _pendingDisablePreviews);
+        _applyAction();
     }
 }

@@ -30,7 +30,9 @@ internal sealed class FloatingWindowService
     private readonly Image _windowScreenshot;
     private readonly Border _previewBorder;
     private readonly CancellationTokenSource _cts = new();
+    private readonly object _previewOperationCancellationSync = new();
     private readonly SemaphoreSlim _previewUpdateSemaphore = new(1, 1);
+    private CancellationTokenSource? _previewOperationCancellation = new();
     private Bitmap? _currentScreenshot;
     private Bitmap? _previousScreenshot;
     private IntPtr _thumbnailHandle = IntPtr.Zero;
@@ -62,6 +64,7 @@ internal sealed class FloatingWindowService
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
+        _previewCaptureForgottenWhileDisabled = !IsPreviewCaptureEnabled();
     }
 
     public void Start()
@@ -69,11 +72,11 @@ internal sealed class FloatingWindowService
         _ = Task.Run(() => RunPreviewLoopAsync(_cts.Token));
     }
 
-    public void OnWindowResized(bool activateWindowsPreview)
+    public void OnWindowResized()
     {
         UpdateLayout();
 
-        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && activateWindowsPreview)
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && IsPreviewCaptureEnabled())
             RegisterWindowThumbnail();
     }
 
@@ -81,10 +84,11 @@ internal sealed class FloatingWindowService
     {
         _previewBorder.IsVisible = isSelected;
         if (!isSelected &&
+            IsPreviewCaptureEnabled() &&
             _streamingPreviewFrameProvider is null &&
             _floatingPreviewPolicy.RefreshScreenshotWhenDeselected)
         {
-            _ = UpdateScreenshot(PreviewRequestTimeoutMs, _cts.Token);
+            _ = UpdateScreenshotForCurrentOperationAsync(PreviewRequestTimeoutMs, _cts.Token);
         }
     }
 
@@ -129,12 +133,10 @@ internal sealed class FloatingWindowService
         _isClosing = true;
         _previewFrameProvider.ForgetWindow(windowId);
         _cts.Cancel();
+        CancelPreviewOperations(recreateTokenSource: false);
 
-        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && _thumbnailHandle != IntPtr.Zero)
-        {
-            DwmFunctions.DwmUnregisterThumbnail(_thumbnailHandle);
-            _thumbnailHandle = IntPtr.Zero;
-        }
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
+            UnregisterWindowThumbnail();
 
         _windowScreenshot.Source = null;
         _currentScreenshot?.Dispose();
@@ -150,14 +152,32 @@ internal sealed class FloatingWindowService
             return;
 
         UpdateLayout();
+        CancelPreviewOperations(recreateTokenSource: true);
+        if (!IsPreviewCaptureEnabled())
+        {
+            if (!_previewCaptureForgottenWhileDisabled)
+            {
+                _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
+                _previewCaptureForgottenWhileDisabled = true;
+            }
+
+            if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
+                UnregisterWindowThumbnail();
+            _ = ClearPreviewSurfaceAsync(_cts.Token);
+            return;
+        }
+
+        _previewCaptureForgottenWhileDisabled = false;
         _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
+        if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
+            RegisterWindowThumbnail();
     }
 
     private async Task RunPreviewLoopAsync(CancellationToken cancellationToken)
     {
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
         {
-            if (IsWindowsPreviewEnabled())
+            if (IsPreviewCaptureEnabled())
                 RegisterWindowThumbnail();
             return;
         }
@@ -177,17 +197,23 @@ internal sealed class FloatingWindowService
     {
         while (!cancellationToken.IsCancellationRequested)
         {
+            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+            CancellationToken operationToken = operationCts.Token;
             try
             {
-                if (!await EnsurePreviewEnabledAsync(cancellationToken).ConfigureAwait(false))
+                if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
 
-                await UpdateScreenshot(PreviewRequestTimeoutMs, cancellationToken).ConfigureAwait(false);
-                await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
+                await UpdateScreenshot(PreviewRequestTimeoutMs, operationToken).ConfigureAwait(false);
+                await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Shutdown path.
+            }
+            catch (OperationCanceledException)
+            {
+                // Preview settings changed while an operation was running.
             }
             catch (Exception)
             {
@@ -203,23 +229,26 @@ internal sealed class FloatingWindowService
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (!await EnsurePreviewEnabledAsync(cancellationToken).ConfigureAwait(false))
-                continue;
-
-            int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
-            var request = new ScreenshotRequest(
-                MaxWidthPx: null,
-                MaxHeightPx: null,
-                TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
+            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+            CancellationToken operationToken = operationCts.Token;
 
             try
             {
+                if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
+                    continue;
+
+                int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
+                var request = new ScreenshotRequest(
+                    MaxWidthPx: null,
+                    MaxHeightPx: null,
+                    TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
+
                 await foreach (Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
                                    _windowConfig.WindowId,
                                    request,
-                                   cancellationToken))
+                                   operationToken))
                 {
-                    if (!IsWindowsPreviewEnabled())
+                    if (!IsPreviewCaptureEnabled())
                     {
                         frame.Dispose();
                         break;
@@ -268,12 +297,16 @@ internal sealed class FloatingWindowService
                     }
 
                     if (frameTransferred)
-                        await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Shutdown path.
+            }
+            catch (OperationCanceledException)
+            {
+                // Preview settings changed while an operation was running.
             }
             catch (Exception)
             {
@@ -295,7 +328,7 @@ internal sealed class FloatingWindowService
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
     {
-        if (_isClosing || cancellationToken.IsCancellationRequested)
+        if (_isClosing || cancellationToken.IsCancellationRequested || !IsPreviewCaptureEnabled())
             return;
 
         bool lockTaken = false;
@@ -341,7 +374,7 @@ internal sealed class FloatingWindowService
                 disposeNow?.Dispose();
             });
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             appScreenshot?.Dispose();
         }
@@ -352,14 +385,57 @@ internal sealed class FloatingWindowService
         }
     }
 
-    private static bool IsWindowsPreviewEnabled()
+    private static bool IsPreviewCaptureEnabled()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview);
+        return ConfigFileAccessor.GetInstance().ReadConfig(config => !config.DisablePreviews && config.ActivateWindowsPreview);
+    }
+
+    private async Task UpdateScreenshotForCurrentOperationAsync(int requestTimeoutMs, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+        await UpdateScreenshot(requestTimeoutMs, operationCts.Token).ConfigureAwait(false);
+    }
+
+    private CancellationTokenSource CreatePreviewOperationTokenSource(CancellationToken cancellationToken)
+    {
+        CancellationToken previewOperationToken;
+        lock (_previewOperationCancellationSync)
+            previewOperationToken = _previewOperationCancellation?.Token ?? CancellationToken.None;
+
+        return CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, previewOperationToken);
+    }
+
+    private void CancelPreviewOperations(bool recreateTokenSource)
+    {
+        CancellationTokenSource? toCancel;
+        lock (_previewOperationCancellationSync)
+        {
+            toCancel = _previewOperationCancellation;
+            _previewOperationCancellation = recreateTokenSource
+                ? new CancellationTokenSource()
+                : null;
+        }
+
+        if (toCancel is null)
+            return;
+
+        try
+        {
+            toCancel.Cancel();
+        }
+        catch
+        {
+            // Best effort cancellation.
+        }
+        finally
+        {
+            toCancel.Dispose();
+        }
     }
 
     private async Task<bool> EnsurePreviewEnabledAsync(CancellationToken cancellationToken)
     {
-        if (IsWindowsPreviewEnabled())
+        if (IsPreviewCaptureEnabled())
         {
             _previewCaptureForgottenWhileDisabled = false;
             return true;
@@ -458,6 +534,15 @@ internal sealed class FloatingWindowService
         props.rcDestination = dest;
 
         DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props);
+    }
+
+    private void UnregisterWindowThumbnail()
+    {
+        if (_thumbnailHandle == IntPtr.Zero)
+            return;
+
+        DwmFunctions.DwmUnregisterThumbnail(_thumbnailHandle);
+        _thumbnailHandle = IntPtr.Zero;
     }
 
     private double RoundToPixel(double value)

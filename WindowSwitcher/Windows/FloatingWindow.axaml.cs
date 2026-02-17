@@ -141,8 +141,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
-        bool activateWindowsPreview = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateWindowsPreview);
-        _service.OnWindowResized(activateWindowsPreview);
+        _service.OnWindowResized();
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)

@@ -108,6 +108,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     
     private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
     {
+        SettingsWindow.RefreshPendingValues();
         SettingsWindow.Show();
     }
 
