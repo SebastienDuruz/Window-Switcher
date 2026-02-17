@@ -1772,14 +1772,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 bool allowByStableId = titleMatchState is MatchState.Unknown &&
                                        !string.IsNullOrWhiteSpace(expectedStreamStableId) &&
                                        string.Equals(stream.StableId, expectedStreamStableId, StringComparison.Ordinal);
+                bool allowInteractiveSelectionBootstrap = titleMatchState is MatchState.Unknown &&
+                                                         string.IsNullOrWhiteSpace(expectedStreamStableId) &&
+                                                         !restoreDataMatchesRequestedWindowTitle;
                 bool allowSingleStreamFallback = streams.Count == 1 &&
                                                  !IsLikelyAssignedToAnotherWindow(stream) &&
-                                                 (restoreDataMatchesRequestedWindowTitle || allowByStableId);
+                                                 (restoreDataMatchesRequestedWindowTitle || allowByStableId || allowInteractiveSelectionBootstrap);
                 if (allowSingleStreamFallback)
                 {
                     string acceptanceReason = restoreDataMatchesRequestedWindowTitle
                         ? "restore_data title match"
-                        : "stored stream id";
+                        : allowByStableId
+                            ? "stored stream id"
+                            : "interactive selection without title metadata";
                     PipeWireTrace.Write(
                         $"WaylandPortal fallback candidate accepted single stream with {acceptanceReason} windowId={windowId} nodeId={stream.NodeId}");
                 }
