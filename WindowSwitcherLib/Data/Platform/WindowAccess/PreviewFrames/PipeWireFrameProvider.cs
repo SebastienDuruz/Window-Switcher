@@ -1452,6 +1452,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         IReadOnlyCollection<string> windowPatterns = BuildWindowMatchPatterns(windowId, windowTitle);
         IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
         string normalizedRequestedWindowTitle = NormalizeForSearch(windowTitle);
+        PortalRestoreData? restoreData = ExtractPortalRestoreData(results);
+        bool restoreDataMatchesRequestedWindowTitle = restoreData is PortalRestoreData typedRestoreData &&
+                                                      MatchesRestoreDataWindowTitle(typedRestoreData, windowTitlePatterns);
         IReadOnlyList<NodeCandidate>? discoveredNodes = null;
         IReadOnlyCollection<WindowConfig>? windowsSnapshot = null;
 
@@ -1596,10 +1599,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 MatchState storedStreamMatchState = EvaluateWindowTitleMatchState(stream);
                 if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Mismatch)
                 {
-                    if (streams.Count == 1 && !IsLikelyAssignedToAnotherWindow(stream))
+                    bool allowSingleMismatchByRestoreData = streams.Count == 1 &&
+                                                            restoreDataMatchesRequestedWindowTitle &&
+                                                            !IsLikelyAssignedToAnotherWindow(stream);
+                    if (allowSingleMismatchByRestoreData)
                     {
                         PipeWireTrace.Write(
-                            $"WaylandPortal stored stream id candidate accepted single stream despite title mismatch windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
+                            $"WaylandPortal stored stream id candidate accepted single stream via restore_data title match windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}");
                     }
                     else
                     {
@@ -1682,12 +1688,17 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             MatchState titleMatchState = EvaluateWindowTitleMatchState(stream);
             if (windowTitlePatterns.Count > 0 && titleMatchState is not MatchState.Match)
             {
-                bool allowSingleStreamFallback = streams.Count == 1 && !IsLikelyAssignedToAnotherWindow(stream);
+                bool allowByStableId = titleMatchState is MatchState.Unknown &&
+                                       !string.IsNullOrWhiteSpace(expectedStreamStableId) &&
+                                       string.Equals(stream.StableId, expectedStreamStableId, StringComparison.Ordinal);
+                bool allowSingleStreamFallback = streams.Count == 1 &&
+                                                 !IsLikelyAssignedToAnotherWindow(stream) &&
+                                                 (restoreDataMatchesRequestedWindowTitle || allowByStableId);
                 if (allowSingleStreamFallback)
                 {
-                    string acceptanceReason = titleMatchState is MatchState.Mismatch
-                        ? "title mismatch"
-                        : "missing title metadata";
+                    string acceptanceReason = restoreDataMatchesRequestedWindowTitle
+                        ? "restore_data title match"
+                        : "stored stream id";
                     PipeWireTrace.Write(
                         $"WaylandPortal fallback candidate accepted single stream with {acceptanceReason} windowId={windowId} nodeId={stream.NodeId}");
                 }
