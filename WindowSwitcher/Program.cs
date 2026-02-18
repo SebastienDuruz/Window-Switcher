@@ -38,7 +38,11 @@ static class Program
         {
             builder = builder.With(new X11PlatformOptions
             {
-                RenderingMode = [X11RenderingMode.Software]
+                RenderingMode = [
+                    X11RenderingMode.Vulkan,
+                    X11RenderingMode.Egl,
+                    X11RenderingMode.Software
+                ]
             });
         }
 
