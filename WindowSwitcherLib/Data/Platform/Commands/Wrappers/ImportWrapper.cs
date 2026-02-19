@@ -22,7 +22,8 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
     public async Task<MemoryStream?> CaptureScreenshotStreamAsync(
         string client,
         ScreenshotRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (!LinuxDependencies.IsImportAvailable)
         {
@@ -41,7 +42,8 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
         process.StartInfo.RedirectStandardError = true;
 
         string resizeArg = BuildResizeArgument(request);
-        process.StartInfo.Arguments = $"-window {client}{resizeArg} -strip -quality {quality} jpg:-";
+        process.StartInfo.Arguments =
+            $"-window {client}{resizeArg} -strip -quality {quality} jpg:-";
 
         try
         {
@@ -56,21 +58,31 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
         Task<string> errorTask = process.StandardError.ReadToEndAsync(linkedToken);
         try
         {
-            await process.StandardOutput.BaseStream.CopyToAsync(outputStream, linkedToken).ConfigureAwait(false);
+            await process
+                .StandardOutput.BaseStream.CopyToAsync(outputStream, linkedToken)
+                .ConfigureAwait(false);
             await process.WaitForExitAsync(linkedToken).ConfigureAwait(false);
             _ = await errorTask.ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             TryKillProcess(process);
-            try { _ = await errorTask.ConfigureAwait(false); } catch { }
+            try
+            {
+                _ = await errorTask.ConfigureAwait(false);
+            }
+            catch { }
             outputStream.Dispose();
             return null;
         }
         catch (Exception)
         {
             TryKillProcess(process);
-            try { _ = await errorTask.ConfigureAwait(false); } catch { }
+            try
+            {
+                _ = await errorTask.ConfigureAwait(false);
+            }
+            catch { }
             outputStream.Dispose();
             return null;
         }
@@ -107,7 +119,8 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 
         // Keep aspect ratio: downscale to fit within the requested box.
         // (The UI will stretch as needed.)
-        string geometry = $"{(w is null ? "" : w.Value.ToString())}x{(h is null ? "" : h.Value.ToString())}";
+        string geometry =
+            $"{(w is null ? "" : w.Value.ToString())}x{(h is null ? "" : h.Value.ToString())}";
         return $" -thumbnail {geometry}";
     }
 

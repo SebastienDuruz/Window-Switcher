@@ -14,7 +14,8 @@ public partial class AppInfoWindow : Window
     public AppInfoWindow()
     {
         InitializeComponent();
-        IPlatformAppInfoProvider appInfoProvider = AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>();
+        IPlatformAppInfoProvider appInfoProvider =
+            AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>();
         ViewModel = new AppInfoViewModel(appInfoProvider);
         DataContext = ViewModel;
         Closing += OnClosing;

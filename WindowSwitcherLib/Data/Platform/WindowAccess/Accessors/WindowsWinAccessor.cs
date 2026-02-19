@@ -28,13 +28,13 @@ public class WindowsWinAccessor : WinAccessorBase
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-    
+
     [DllImport("user32.dll")]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
 
-    private static readonly ImageCodecInfo? JpegCodec =
-        ImageCodecInfo.GetImageDecoders()
-            .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
+    private static readonly ImageCodecInfo? JpegCodec = ImageCodecInfo
+        .GetImageDecoders()
+        .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
 
     private ObservableCollection<WindowConfig> Windows { get; set; } = new();
 
@@ -48,15 +48,22 @@ public class WindowsWinAccessor : WinAccessorBase
             {
                 if (process.HasExited || string.IsNullOrWhiteSpace(process.MainWindowTitle))
                     continue;
-                if (process.MainWindowTitle.Equals(StaticData.AppName, StringComparison.OrdinalIgnoreCase))
+                if (
+                    process.MainWindowTitle.Equals(
+                        StaticData.AppName,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                     continue;
 
-                Windows.Add(new WindowConfig
-                {
-                    WindowTitle = process.MainWindowTitle,
-                    WindowId = process.MainWindowHandle.ToString(),
-                    ProcessName = process.ProcessName
-                });
+                Windows.Add(
+                    new WindowConfig
+                    {
+                        WindowTitle = process.MainWindowTitle,
+                        WindowId = process.MainWindowHandle.ToString(),
+                        ProcessName = process.ProcessName,
+                    }
+                );
             }
             catch
             {
@@ -77,9 +84,7 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             SetForegroundWindow(IntPtr.Parse(windowId));
         }
-        catch (Exception)
-        {
-        }
+        catch (Exception) { }
     }
 
     /// <summary>
@@ -90,7 +95,7 @@ public class WindowsWinAccessor : WinAccessorBase
     public override Bitmap? TakeScreenshot(string windowId)
     {
         IntPtr hwnd = IntPtr.Parse(windowId);
-        
+
         try
         {
             GetWindowRect(hwnd, out RECT rect);
@@ -98,7 +103,7 @@ public class WindowsWinAccessor : WinAccessorBase
             int height = rect.bottom - rect.top;
             if (width <= 0 || height <= 0 || JpegCodec == null)
                 return null;
-        
+
             using (System.Drawing.Bitmap bitmap = new(width, height))
             {
                 using (Graphics g = Graphics.FromImage(bitmap))
@@ -129,8 +134,6 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
         }
-        catch (Exception)
-        {
-        }
+        catch (Exception) { }
     }
 }

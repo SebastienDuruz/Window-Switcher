@@ -17,14 +17,16 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 {
     private const int WindowListRefreshIntervalMs = 250;
     private readonly CancellationTokenSource _cts = new();
-    [ObservableProperty] 
+
+    [ObservableProperty]
     private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
+
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
     private WinAccessorBase WinAccessorBase { get; }
     public string LastSelectedItemId { get; } = string.Empty;
     public HashSet<string> TempWindowIdsBlacklist { get; } = new(StringComparer.Ordinal);
-    
+
     public WindowListViewModel(WinAccessorBase winAccessorBase)
     {
         WinAccessorBase = winAccessorBase;
@@ -56,7 +58,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         _cts.Cancel();
         _cts.Dispose();
     }
-    
+
     public void FetchWindowsWithFilters()
     {
         ApplyWindowsWithFilters(WinAccessorBase.GetWindows());
@@ -67,25 +69,35 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         var configAccessor = ConfigFileAccessor.GetInstance();
         var configSnapshot = configAccessor.ReadConfig(config => new
         {
-            BlacklistPrefixes = config.BlacklistPrefixes.ToHashSet(StringComparer.OrdinalIgnoreCase),
-            WhitelistPrefixes = config.WhitelistPrefixes
-                .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
-                .ToArray()
+            BlacklistPrefixes = config.BlacklistPrefixes.ToHashSet(
+                StringComparer.OrdinalIgnoreCase
+            ),
+            WhitelistPrefixes = config
+                .WhitelistPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix))
+                .ToArray(),
         });
 
         var fetchedIds = new HashSet<string>(StringComparer.Ordinal);
-        var existingById = WindowsConfigs.ToDictionary(config => config.WindowId, StringComparer.Ordinal);
+        var existingById = WindowsConfigs.ToDictionary(
+            config => config.WindowId,
+            StringComparer.Ordinal
+        );
 
         // Apply whitelist/blacklist rules while iterating fetched windows.
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
             fetchedIds.Add(fetchedWindow.WindowId);
 
-            bool isOnBlacklist = configSnapshot.BlacklistPrefixes.Contains(fetchedWindow.WindowTitle) ||
-                                 TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId);
+            bool isOnBlacklist =
+                configSnapshot.BlacklistPrefixes.Contains(fetchedWindow.WindowTitle)
+                || TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId);
             bool isOnWhiteList = configSnapshot.WhitelistPrefixes.Any(prefix =>
-                fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase));
-            bool isOnWindowsList = existingById.TryGetValue(fetchedWindow.WindowId, out WindowConfig? existingConfig);
+                fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase)
+            );
+            bool isOnWindowsList = existingById.TryGetValue(
+                fetchedWindow.WindowId,
+                out WindowConfig? existingConfig
+            );
 
             if (isOnWindowsList && (isOnBlacklist || !isOnWhiteList))
             {
@@ -122,7 +134,10 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         try
         {
             ObservableCollection<WindowConfig> fetchedWindows = WinAccessorBase.GetWindows();
-            await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows), DispatcherPriority.Background);
+            await Dispatcher.UIThread.InvokeAsync(
+                () => ApplyWindowsWithFilters(fetchedWindows),
+                DispatcherPriority.Background
+            );
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -26,7 +26,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
 {
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
-    private readonly Dictionary<string, FloatingWindow> _floatingWindows = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, FloatingWindow> _floatingWindows = new(
+        StringComparer.Ordinal
+    );
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
@@ -35,12 +37,15 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
     private readonly IDependencyNotificationService _dependencyNotificationService;
-    private readonly HashSet<string> _missingDependenciesShown = new(StringComparer.OrdinalIgnoreCase);
-    
+    private readonly HashSet<string> _missingDependenciesShown = new(
+        StringComparer.OrdinalIgnoreCase
+    );
+
     public MainWindow()
     {
         InitializeComponent();
-        _dependencyNotificationService = AppServiceProvider.GetRequiredService<IDependencyNotificationService>();
+        _dependencyNotificationService =
+            AppServiceProvider.GetRequiredService<IDependencyNotificationService>();
         _dependencyNotificationService.DependencyMissing += OnDependencyMissing;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
@@ -49,10 +54,20 @@ public partial class MainWindow : Window, IFloatingWindowHost
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
-        PrefixesWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.WhitelistPrefixes.ToList()),
-            StaticData.PrefixWindowType.whitelist, "Prefixes");
-        BlacklistWindow = new PrefixesWindow(ConfigFileAccessor.GetInstance().ReadConfig(config => config.BlacklistPrefixes.ToList()),
-            StaticData.PrefixWindowType.blacklist, "Blacklist");
+        PrefixesWindow = new PrefixesWindow(
+            ConfigFileAccessor
+                .GetInstance()
+                .ReadConfig(config => config.WhitelistPrefixes.ToList()),
+            StaticData.PrefixWindowType.whitelist,
+            "Prefixes"
+        );
+        BlacklistWindow = new PrefixesWindow(
+            ConfigFileAccessor
+                .GetInstance()
+                .ReadConfig(config => config.BlacklistPrefixes.ToList()),
+            StaticData.PrefixWindowType.blacklist,
+            "Blacklist"
+        );
         SettingsWindow = new SettingsWindow(ApplySettings);
         AppInfoWindow = new AppInfoWindow { Title = $"About {StaticData.AppName}" };
         RenameWindow = new RenameWindow();
@@ -62,10 +77,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
         ShowPreviouslyReportedDependencies();
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
-            Dispatcher.UIThread.Post(() =>
-            {
-                this.WindowState = WindowState.Minimized;
-            }, DispatcherPriority.Background);
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    this.WindowState = WindowState.Minimized;
+                },
+                DispatcherPriority.Background
+            );
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -89,23 +107,21 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void OpenDataFolderClick(object? sender, RoutedEventArgs e)
     {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = StaticData.DataFolder,
-            UseShellExecute = true
-        });
+        Process.Start(
+            new ProcessStartInfo { FileName = StaticData.DataFolder, UseShellExecute = true }
+        );
     }
 
     private void OpenPrefixesWindowClick(object? sender, RoutedEventArgs e)
     {
         PrefixesWindow.Show();
     }
-    
+
     private void OpenBlacklistWindowClick(object? sender, RoutedEventArgs e)
     {
         BlacklistWindow.Show();
     }
-    
+
     private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
     {
         SettingsWindow.RefreshPendingValues();
@@ -168,7 +184,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (!_floatingWindows.TryGetValue(windowId, out FloatingWindow? floatingWindow))
             return;
 
-        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(floatingWindow.WindowConfig.WindowTitle);
+        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(
+            floatingWindow.WindowConfig.WindowTitle
+        );
         if (!isUpdated)
             return;
 
@@ -176,8 +194,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         WinAccessorBase.RenameWindowTitle(windowId, renamedTitle);
 
         floatingWindow.UpdateWindowTitle(renamedTitle);
-        WindowConfig? viewModelConfig = ViewModel.WindowsConfigs
-            .FirstOrDefault(config => string.Equals(config.WindowId, windowId, StringComparison.Ordinal));
+        WindowConfig? viewModelConfig = ViewModel.WindowsConfigs.FirstOrDefault(config =>
+            string.Equals(config.WindowId, windowId, StringComparison.Ordinal)
+        );
         if (viewModelConfig is not null)
             viewModelConfig.WindowTitle = renamedTitle;
     }
@@ -205,14 +224,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
         var okButton = new Button
         {
             Content = "OK",
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = HorizontalAlignment.Right,
         };
 
-        var panel = new StackPanel
-        {
-            Margin = new Thickness(12),
-            Spacing = 10
-        };
+        var panel = new StackPanel { Margin = new Thickness(12), Spacing = 10 };
         panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(okButton);
 
@@ -222,7 +237,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
             CanResize = false,
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel
+            Content = panel,
         };
 
         okButton.Click += (_, _) => dialog.Close();
@@ -240,7 +255,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
             if (_floatingWindows.ContainsKey(window.WindowId))
                 continue;
 
-            _floatingWindows[window.WindowId] = new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this);
+            _floatingWindows[window.WindowId] = new FloatingWindow(
+                window,
+                WinAccessorBase,
+                PreviewFrameProvider,
+                this
+            );
         }
     }
 
@@ -260,7 +280,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
                 if (_floatingWindows.ContainsKey(window.WindowId))
                     continue;
 
-                _floatingWindows[window.WindowId] = new FloatingWindow(window, WinAccessorBase, PreviewFrameProvider, this);
+                _floatingWindows[window.WindowId] = new FloatingWindow(
+                    window,
+                    WinAccessorBase,
+                    PreviewFrameProvider,
+                    this
+                );
             }
         }
 
@@ -288,12 +313,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
     {
-       AddToBlacklist(((string)((MenuItem)sender!).Tag!)); 
+        AddToBlacklist(((string)((MenuItem)sender!).Tag!));
     }
-    
+
     private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
     {
-        AddToTempBlacklist((string)((MenuItem)sender!).Tag!); 
+        AddToTempBlacklist((string)((MenuItem)sender!).Tag!);
     }
 
     public void ApplySettings()
@@ -301,5 +326,4 @@ public partial class MainWindow : Window, IFloatingWindowHost
         foreach (FloatingWindow floatingWindow in _floatingWindows.Values.ToList())
             floatingWindow.ApplySettings();
     }
-
 }

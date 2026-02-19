@@ -15,7 +15,8 @@ public partial class SettingsWindow : Window
     public SettingsWindow(Action applyAction)
     {
         InitializeComponent();
-        ISettingsPlatformPolicy settingsPlatformPolicy = AppServiceProvider.GetRequiredService<ISettingsPlatformPolicy>();
+        ISettingsPlatformPolicy settingsPlatformPolicy =
+            AppServiceProvider.GetRequiredService<ISettingsPlatformPolicy>();
         _viewModel = new SettingsViewModel(applyAction, settingsPlatformPolicy);
         DataContext = _viewModel;
         Closing += OnClosing;
@@ -31,5 +32,4 @@ public partial class SettingsWindow : Window
         _viewModel.ResetPendingValues();
         _windowLifecycle.HandleClosing(this, e, hideWhenCanceled: true, hideWhenAllowed: true);
     }
-
 }

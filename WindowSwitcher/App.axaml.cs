@@ -12,7 +12,7 @@ namespace WindowSwitcher;
 public partial class App : Application
 {
     private Windows.MainWindow? MainWindow { get; set; }
-    
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -22,7 +22,7 @@ public partial class App : Application
     {
         StaticData.CheckFolders();
         ApplyAccentColorFromConfig();
-        
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             MainWindow = new Windows.MainWindow();
@@ -34,7 +34,9 @@ public partial class App : Application
 
     private static void ApplyAccentColorFromConfig()
     {
-        string configValue = ConfigFileAccessor.GetInstance().ReadConfig(config => config.PreviewHighlightColor);
+        string configValue = ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => config.PreviewHighlightColor);
         if (Color.TryParse(configValue, out Color accentColor))
             AccentColorApplier.Apply(accentColor);
     }

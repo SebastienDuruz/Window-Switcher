@@ -12,7 +12,7 @@ public class LinuxWinAccessor : WinAccessorBase
 {
     private WmctrlWrapper WmctrlWrapper { get; set; } = new();
     private ImportWrapper ImportWrapper { get; set; } = new();
-    
+
     public override ObservableCollection<WindowConfig> GetWindows()
     {
         if (!LinuxDependencies.IsWmctrlAvailable)
@@ -28,14 +28,21 @@ public class LinuxWinAccessor : WinAccessorBase
         string wmctrlOutput = WmctrlWrapper.Execute(" -lp");
         if (string.IsNullOrWhiteSpace(wmctrlOutput))
             return new ObservableCollection<WindowConfig>();
-        
+
         ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
         var processNameByPid = new Dictionary<int, string>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
             if (!String.IsNullOrWhiteSpace(line))
             {
-                if (!TryParseWmctrlLine(line, out string? windowId, out int pid, out string windowName))
+                if (
+                    !TryParseWmctrlLine(
+                        line,
+                        out string? windowId,
+                        out int pid,
+                        out string windowName
+                    )
+                )
                     continue;
 
                 // Never list WindowSwitcher windows (Main/Settings/About/Floating previews).
@@ -48,15 +55,18 @@ public class LinuxWinAccessor : WinAccessorBase
                     processNameByPid[pid] = processName;
                 }
 
-                windows.Add(new WindowConfig()
-                {
-                    WindowId = windowId!,
-                    WindowTitle = windowName,
-                    ShortWindowTitle = windowName.Length > 40 ? $"{windowName[..40]}..." : windowName,
-                    ProcessName = processName
-                });
+                windows.Add(
+                    new WindowConfig()
+                    {
+                        WindowId = windowId!,
+                        WindowTitle = windowName,
+                        ShortWindowTitle =
+                            windowName.Length > 40 ? $"{windowName[..40]}..." : windowName,
+                        ProcessName = processName,
+                    }
+                );
             }
-                
+
         return windows;
     }
 
@@ -89,7 +99,8 @@ public class LinuxWinAccessor : WinAccessorBase
     public override async Task<Bitmap?> TakeScreenshotAsync(
         string windowId,
         ScreenshotRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
@@ -118,7 +129,12 @@ public class LinuxWinAccessor : WinAccessorBase
         WmctrlWrapper.Execute($" -i -r {windowId} -T \"{escapedTitle}\"");
     }
 
-    private static bool TryParseWmctrlLine(string windowInfo, out string? windowId, out int pid, out string windowTitle)
+    private static bool TryParseWmctrlLine(
+        string windowInfo,
+        out string? windowId,
+        out int pid,
+        out string windowTitle
+    )
     {
         windowId = null;
         pid = -1;
@@ -136,14 +152,17 @@ public class LinuxWinAccessor : WinAccessorBase
             _ = int.TryParse(parts[2], out pid);
 
             int titleStartIndex = windowInfo.IndexOf(parts[4], StringComparison.Ordinal);
-            windowTitle = titleStartIndex >= 0 ? windowInfo[titleStartIndex..].Trim() : string.Join(' ', parts.Skip(4));
+            windowTitle =
+                titleStartIndex >= 0
+                    ? windowInfo[titleStartIndex..].Trim()
+                    : string.Join(' ', parts.Skip(4));
         }
         catch (Exception)
         {
             // TODO : Log
             return false;
         }
-        
+
         return !string.IsNullOrWhiteSpace(windowId);
     }
 

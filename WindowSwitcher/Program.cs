@@ -1,6 +1,6 @@
-﻿using Avalonia;
-using System;
+﻿using System;
 using System.Threading;
+using Avalonia;
 using Avalonia.Skia;
 using Avalonia.X11;
 using WindowSwitcher.Hosting;
@@ -10,7 +10,7 @@ namespace WindowSwitcher;
 static class Program
 {
     private static Mutex mutex = new Mutex(true, "{8A6F0BA4-B5B1-45fd-A8CF-71F04B6BDE8F}");
-    
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -23,42 +23,44 @@ static class Program
         if (mutex.WaitOne(TimeSpan.Zero, true))
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-            mutex.ReleaseMutex();            
+            mutex.ReleaseMutex();
         }
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
     {
-        var builder = AppBuilder.Configure<App>()
-            .UseSkia()
-            .UsePlatformDetect();
+        var builder = AppBuilder.Configure<App>().UseSkia().UsePlatformDetect();
 
         if (OperatingSystem.IsLinux())
         {
-            builder = builder.With(new X11PlatformOptions
-            {
-                RenderingMode = [
-                    X11RenderingMode.Vulkan,
-                    X11RenderingMode.Egl,
-                    X11RenderingMode.Software
-                ]
-            });
+            builder = builder.With(
+                new X11PlatformOptions
+                {
+                    RenderingMode =
+                    [
+                        X11RenderingMode.Vulkan,
+                        X11RenderingMode.Egl,
+                        X11RenderingMode.Software,
+                    ],
+                }
+            );
         }
         else if (OperatingSystem.IsWindows())
         {
-            builder = builder.With(new Win32PlatformOptions()
-            {
-                RenderingMode =
-                [
-                    Win32RenderingMode.Vulkan,
-                    Win32RenderingMode.Wgl,
-                    Win32RenderingMode.Software
-                ],
-            });
+            builder = builder.With(
+                new Win32PlatformOptions()
+                {
+                    RenderingMode =
+                    [
+                        Win32RenderingMode.Vulkan,
+                        Win32RenderingMode.Wgl,
+                        Win32RenderingMode.Software,
+                    ],
+                }
+            );
         }
 
-        return builder
-            .WithInterFont();
+        return builder.WithInterFont();
     }
 }

@@ -34,16 +34,18 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(accessorBase);
         _accessorBase = accessorBase;
 
-        _channel = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
-        {
-            SingleReader = true,
-            SingleWriter = false
-        });
+        _channel = Channel.CreateUnbounded<string>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
+        );
 
         _worker = Task.Run(RunWorkerAsync);
     }
 
-    public Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
+    public Task<Bitmap?> RequestAsync(
+        string windowId,
+        ScreenshotRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         if (string.IsNullOrWhiteSpace(windowId))
             return NullBitmapTask;
@@ -110,7 +112,11 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         Dispose();
-        try { await _worker.ConfigureAwait(false); } catch { }
+        try
+        {
+            await _worker.ConfigureAwait(false);
+        }
+        catch { }
         _cts.Dispose();
     }
 
@@ -122,7 +128,14 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
             {
                 while (_channel.Reader.TryRead(out string? windowId))
                 {
-                    if (!TryBeginInFlight(windowId, out WindowEntry? entry, out ScreenshotRequest request, out TaskCompletionSource<Bitmap?> tcs))
+                    if (
+                        !TryBeginInFlight(
+                            windowId,
+                            out WindowEntry? entry,
+                            out ScreenshotRequest request,
+                            out TaskCompletionSource<Bitmap?> tcs
+                        )
+                    )
                         continue;
 
                     Bitmap? bitmap = null;
@@ -179,13 +192,19 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         return entry;
     }
 
-    private Task<Bitmap?> QueueOrAttachRequest(string windowId, ScreenshotRequest request, WindowEntry entry)
+    private Task<Bitmap?> QueueOrAttachRequest(
+        string windowId,
+        ScreenshotRequest request,
+        WindowEntry entry
+    )
     {
         if (entry.InFlight)
         {
-            if (entry.PendingTcs is null &&
-                entry.InFlightTcs is not null &&
-                entry.InFlightRequest == request)
+            if (
+                entry.PendingTcs is null
+                && entry.InFlightTcs is not null
+                && entry.InFlightRequest == request
+            )
             {
                 return entry.InFlightTcs.Task;
             }
@@ -211,7 +230,8 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         string windowId,
         out WindowEntry? entry,
         out ScreenshotRequest request,
-        out TaskCompletionSource<Bitmap?> tcs)
+        out TaskCompletionSource<Bitmap?> tcs
+    )
     {
         lock (_sync)
         {
@@ -245,7 +265,8 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
         string windowId,
         WindowEntry entry,
         Bitmap? bitmap,
-        TaskCompletionSource<Bitmap?> inFlightTcs)
+        TaskCompletionSource<Bitmap?> inFlightTcs
+    )
     {
         bool forgotten;
         bool shouldRequeue;
@@ -278,10 +299,13 @@ public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
             _ = _channel.Writer.TryWrite(windowId);
     }
 
-    private static TaskCompletionSource<Bitmap?> NewTcs()
-        => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static TaskCompletionSource<Bitmap?> NewTcs() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private static async Task<Bitmap?> WaitOrNullAsync(Task<Bitmap?> task, CancellationToken cancellationToken)
+    private static async Task<Bitmap?> WaitOrNullAsync(
+        Task<Bitmap?> task,
+        CancellationToken cancellationToken
+    )
     {
         try
         {

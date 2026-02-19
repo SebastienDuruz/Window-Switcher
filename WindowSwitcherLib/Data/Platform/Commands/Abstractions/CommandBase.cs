@@ -16,8 +16,8 @@ public abstract class CommandBase(string command)
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                CreateNoWindow = true
-            }
+                CreateNoWindow = true,
+            },
         };
     }
 
@@ -49,7 +49,11 @@ public abstract class CommandBase(string command)
 
             if (!process.WaitForExit(timeoutMs))
             {
-                try { process.Kill(entireProcessTree: true); } catch { }
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch { }
                 return string.Empty;
             }
 

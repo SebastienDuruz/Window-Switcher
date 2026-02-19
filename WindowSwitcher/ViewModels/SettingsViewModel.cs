@@ -213,7 +213,13 @@ public class SettingsViewModel : ObservableObject
             bool updated = false;
             _configAccessor.UpdateConfig(config =>
             {
-                if (string.Equals(config.PreviewHighlightColor, configValue, StringComparison.OrdinalIgnoreCase))
+                if (
+                    string.Equals(
+                        config.PreviewHighlightColor,
+                        configValue,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                     return;
                 config.PreviewHighlightColor = configValue;
                 updated = true;

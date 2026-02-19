@@ -18,6 +18,7 @@ public sealed class WindowsPlatformAppInfoProvider : IPlatformAppInfoProvider
             UiBackend: "Windows",
             ConfigPath: ConfigFileAccessor.GetInstance().GetFilePath(),
             PreviewMode: "Desktop Window Manager (DWM)",
-            DependencyStatus: "N/A");
+            DependencyStatus: "N/A"
+        );
     }
 }

@@ -9,7 +9,7 @@ public class ConfigFileAccessor
     private readonly object _syncRoot = new();
     private readonly string _filePath;
     private ConfigFile _config;
-    
+
     private ConfigFileAccessor()
     {
         StaticData.CheckFolders();
@@ -22,7 +22,7 @@ public class ConfigFileAccessor
     {
         return Instance.Value;
     }
-    
+
     public string GetFilePath()
     {
         return _filePath;
@@ -37,7 +37,8 @@ public class ConfigFileAccessor
                 try
                 {
                     string fileContents = File.ReadAllText(_filePath);
-                    _config = JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
+                    _config =
+                        JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
                 }
                 catch (Exception)
                 {
@@ -55,29 +56,51 @@ public class ConfigFileAccessor
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.LinuxWaylandScreenCastRestoreToken ??= string.Empty;
-            _config.LinuxWaylandScreenCastRestoreTokensByWindowId ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastRestoreTokensByWindowId = _config.LinuxWaylandScreenCastRestoreTokensByWindowId
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value))
+            _config.LinuxWaylandScreenCastRestoreTokensByWindowId ??= new Dictionary<
+                string,
+                string
+            >(StringComparer.Ordinal);
+            _config.LinuxWaylandScreenCastRestoreTokensByWindowId = _config
+                .LinuxWaylandScreenCastRestoreTokensByWindowId.Where(entry =>
+                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
+                )
                 .ToDictionary(
                     entry => entry.Key.Trim(),
                     entry => entry.Value.Trim(),
-                    StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastRestoreDataByWindowId ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastRestoreDataByWindowId = _config.LinuxWaylandScreenCastRestoreDataByWindowId
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value))
+                    StringComparer.Ordinal
+                );
+            _config.LinuxWaylandScreenCastRestoreDataByWindowId ??= new Dictionary<string, string>(
+                StringComparer.Ordinal
+            );
+            _config.LinuxWaylandScreenCastRestoreDataByWindowId = _config
+                .LinuxWaylandScreenCastRestoreDataByWindowId.Where(entry =>
+                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
+                )
                 .ToDictionary(
                     entry => entry.Key.Trim(),
                     entry => entry.Value.Trim(),
-                    StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastStreamIdsByWindowId ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastStreamIdsByWindowId = _config.LinuxWaylandScreenCastStreamIdsByWindowId
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value))
+                    StringComparer.Ordinal
+                );
+            _config.LinuxWaylandScreenCastStreamIdsByWindowId ??= new Dictionary<string, string>(
+                StringComparer.Ordinal
+            );
+            _config.LinuxWaylandScreenCastStreamIdsByWindowId = _config
+                .LinuxWaylandScreenCastStreamIdsByWindowId.Where(entry =>
+                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
+                )
                 .ToDictionary(
                     entry => entry.Key.Trim(),
                     entry => entry.Value.Trim(),
-                    StringComparer.Ordinal);
-            _config.FloatingWindowsConfig = _config.FloatingWindowsConfig.Where(x => x != null).ToList();
-            foreach (WindowConfig windowConfig in _config.FloatingWindowsConfig.Where(x => x != null).Select(x => x!))
+                    StringComparer.Ordinal
+                );
+            _config.FloatingWindowsConfig = _config
+                .FloatingWindowsConfig.Where(x => x != null)
+                .ToList();
+            foreach (
+                WindowConfig windowConfig in _config
+                    .FloatingWindowsConfig.Where(x => x != null)
+                    .Select(x => x!)
+            )
             {
                 if (string.IsNullOrWhiteSpace(windowConfig.ConfigKey))
                     windowConfig.ConfigKey = CreateConfigKey(windowConfig);
@@ -132,14 +155,16 @@ public class ConfigFileAccessor
         lock (_syncRoot)
         {
             string configKey = CreateConfigKey(windowConfig);
-            WindowConfig? existingConfig =
-                _config.FloatingWindowsConfig.FirstOrDefault(x => x != null && x.ConfigKey == configKey);
+            WindowConfig? existingConfig = _config.FloatingWindowsConfig.FirstOrDefault(x =>
+                x != null && x.ConfigKey == configKey
+            );
 
             if (existingConfig == null)
             {
                 string normalizedTitle = NormalizeKeyPart(windowConfig.WindowTitle);
-                existingConfig = _config.FloatingWindowsConfig
-                    .FirstOrDefault(x => x != null && NormalizeKeyPart(x.WindowTitle) == normalizedTitle);
+                existingConfig = _config.FloatingWindowsConfig.FirstOrDefault(x =>
+                    x != null && NormalizeKeyPart(x.WindowTitle) == normalizedTitle
+                );
                 if (existingConfig != null && existingConfig.ConfigKey != configKey)
                     existingConfig.ConfigKey = configKey;
             }

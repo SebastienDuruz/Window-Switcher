@@ -16,14 +16,17 @@ public class ConfigFile
     public bool DisablePreviews { get; set; } = false;
     public bool ActivateWindowsPreview { get; set; } = true;
     public string LinuxWaylandScreenCastRestoreToken { get; set; } = string.Empty;
-    public Dictionary<string, string> LinuxWaylandScreenCastRestoreTokensByWindowId { get; set; } = new(StringComparer.Ordinal);
-    public Dictionary<string, string> LinuxWaylandScreenCastRestoreDataByWindowId { get; set; } = new(StringComparer.Ordinal);
-    public Dictionary<string, string> LinuxWaylandScreenCastStreamIdsByWindowId { get; set; } = new(StringComparer.Ordinal);
-    
+    public Dictionary<string, string> LinuxWaylandScreenCastRestoreTokensByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+    public Dictionary<string, string> LinuxWaylandScreenCastRestoreDataByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+    public Dictionary<string, string> LinuxWaylandScreenCastStreamIdsByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();
     public List<string> BlacklistPrefixes { get; set; } = new List<string>();
-    
+
     // Remember floating windows positions
     public List<WindowConfig?> FloatingWindowsConfig { get; set; } = new List<WindowConfig?>();
 }

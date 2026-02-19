@@ -24,13 +24,15 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
         ];
 
         var reported = LinuxDependencies.GetReportedMissing().ToArray();
-        string dependencies = reported.Length == 0
-            ? string.Join(", ", statuses)
-            : $"{string.Join(", ", statuses)}\nReported missing: {string.Join(", ", reported)}";
+        string dependencies =
+            reported.Length == 0
+                ? string.Join(", ", statuses)
+                : $"{string.Join(", ", statuses)}\nReported missing: {string.Join(", ", reported)}";
 
-        bool pipeWireReady = LinuxDependencies.IsGstLaunchAvailable
-                             && LinuxDependencies.IsGstPipeWireSrcAvailable
-                             && LinuxDependencies.IsPwDumpAvailable;
+        bool pipeWireReady =
+            LinuxDependencies.IsGstLaunchAvailable
+            && LinuxDependencies.IsGstPipeWireSrcAvailable
+            && LinuxDependencies.IsPwDumpAvailable;
 
         return new PlatformAppInfoSnapshot(
             OsDescription: RuntimeInformation.OSDescription,
@@ -39,12 +41,16 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
             UiBackend: GetLinuxBackend(),
             ConfigPath: ConfigFileAccessor.GetInstance().GetFilePath(),
             PreviewMode: pipeWireReady ? "PipeWire" : "Screenshots",
-            DependencyStatus: dependencies);
+            DependencyStatus: dependencies
+        );
     }
 
     private static string GetLinuxBackend()
     {
-        if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime)
+        if (
+            Avalonia.Application.Current?.ApplicationLifetime
+            is not IClassicDesktopStyleApplicationLifetime
+        )
             return "Unknown";
 
         string? sessionType = LinuxSessionDetector.GetSessionType();

@@ -7,7 +7,8 @@ public sealed record CommandResult(
     int ExitCode,
     string StandardOutput,
     string StandardError,
-    bool TimedOut)
+    bool TimedOut
+)
 {
     /// <summary>
     /// Indicates whether command succeeded and did not time out.

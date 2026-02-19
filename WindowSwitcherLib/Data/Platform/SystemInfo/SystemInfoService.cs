@@ -23,7 +23,13 @@ public sealed class SystemInfoService
     public async Task<string> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         CommandResult result = await _commandRunner
-            .RunAsync(CommandRequest.ForShell("whoami") with { Timeout = TimeSpan.FromSeconds(2) }, cancellationToken)
+            .RunAsync(
+                CommandRequest.ForShell("whoami") with
+                {
+                    Timeout = TimeSpan.FromSeconds(2),
+                },
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
         if (!result.IsSuccess)
@@ -38,7 +44,13 @@ public sealed class SystemInfoService
     public async Task<string> GetDotnetVersionAsync(CancellationToken cancellationToken = default)
     {
         CommandResult result = await _commandRunner
-            .RunAsync(CommandRequest.ForExecutable("dotnet", "--version") with { Timeout = TimeSpan.FromSeconds(2) }, cancellationToken)
+            .RunAsync(
+                CommandRequest.ForExecutable("dotnet", "--version") with
+                {
+                    Timeout = TimeSpan.FromSeconds(2),
+                },
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
         if (!result.IsSuccess)

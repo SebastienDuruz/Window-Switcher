@@ -28,7 +28,9 @@ internal sealed class PrefixListService
         if (string.IsNullOrWhiteSpace(normalizedCandidate))
             return false;
 
-        return _prefixes.Any(prefix => prefix.StartsWith(normalizedCandidate, StringComparison.Ordinal));
+        return _prefixes.Any(prefix =>
+            prefix.StartsWith(normalizedCandidate, StringComparison.Ordinal)
+        );
     }
 
     public bool TryAddPrefix(string? value, out string normalizedPrefix)

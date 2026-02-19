@@ -24,8 +24,14 @@ public static class PlatformServiceCollectionExtensions
             PreviewFactory.Current = new WindowsPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, WindowsCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, WindowsFloatingPreviewPolicy>();
-            services.AddSingleton<IFloatingWindowHandleConfigurator, WindowsFloatingWindowHandleConfigurator>();
-            services.AddSingleton<IDependencyNotificationService, NoOpDependencyNotificationService>();
+            services.AddSingleton<
+                IFloatingWindowHandleConfigurator,
+                WindowsFloatingWindowHandleConfigurator
+            >();
+            services.AddSingleton<
+                IDependencyNotificationService,
+                NoOpDependencyNotificationService
+            >();
             services.AddSingleton<ISettingsPlatformPolicy, WindowsSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, WindowsPlatformAppInfoProvider>();
         }
@@ -35,14 +41,22 @@ public static class PlatformServiceCollectionExtensions
             PreviewFactory.Current = new LinuxPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, LinuxCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, LinuxFloatingPreviewPolicy>();
-            services.AddSingleton<IFloatingWindowHandleConfigurator, NoOpFloatingWindowHandleConfigurator>();
-            services.AddSingleton<IDependencyNotificationService, LinuxDependencyNotificationService>();
+            services.AddSingleton<
+                IFloatingWindowHandleConfigurator,
+                NoOpFloatingWindowHandleConfigurator
+            >();
+            services.AddSingleton<
+                IDependencyNotificationService,
+                LinuxDependencyNotificationService
+            >();
             services.AddSingleton<ISettingsPlatformPolicy, LinuxSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, LinuxPlatformAppInfoProvider>();
         }
         else
         {
-            throw new PlatformNotSupportedException("Only Windows and Linux are currently supported.");
+            throw new PlatformNotSupportedException(
+                "Only Windows and Linux are currently supported."
+            );
         }
 
         services.AddSingleton<SystemInfoService>();

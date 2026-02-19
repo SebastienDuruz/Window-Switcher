@@ -48,7 +48,8 @@ internal sealed class FloatingWindowService
         IPreviewFrameProvider previewFrameProvider,
         IFloatingPreviewPolicy floatingPreviewPolicy,
         Image windowScreenshot,
-        Border previewBorder)
+        Border previewBorder
+    )
     {
         ArgumentNullException.ThrowIfNull(ownerWindow);
         ArgumentNullException.ThrowIfNull(windowConfig);
@@ -83,10 +84,12 @@ internal sealed class FloatingWindowService
     public void SetPreviewHighlight(bool isSelected)
     {
         _previewBorder.IsVisible = isSelected;
-        if (!isSelected &&
-            IsPreviewCaptureEnabled() &&
-            _streamingPreviewFrameProvider is null &&
-            _floatingPreviewPolicy.RefreshScreenshotWhenDeselected)
+        if (
+            !isSelected
+            && IsPreviewCaptureEnabled()
+            && _streamingPreviewFrameProvider is null
+            && _floatingPreviewPolicy.RefreshScreenshotWhenDeselected
+        )
         {
             _ = UpdateScreenshotForCurrentOperationAsync(PreviewRequestTimeoutMs, _cts.Token);
         }
@@ -197,15 +200,19 @@ internal sealed class FloatingWindowService
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
+                cancellationToken
+            );
             CancellationToken operationToken = operationCts.Token;
             try
             {
                 if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
 
-                await UpdateScreenshot(PreviewRequestTimeoutMs, operationToken).ConfigureAwait(false);
-                await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken).ConfigureAwait(false);
+                await UpdateScreenshot(PreviewRequestTimeoutMs, operationToken)
+                    .ConfigureAwait(false);
+                await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -229,7 +236,9 @@ internal sealed class FloatingWindowService
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
+                cancellationToken
+            );
             CancellationToken operationToken = operationCts.Token;
 
             try
@@ -241,12 +250,16 @@ internal sealed class FloatingWindowService
                 var request = new ScreenshotRequest(
                     MaxWidthPx: null,
                     MaxHeightPx: null,
-                    TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs));
+                    TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs)
+                );
 
-                await foreach (Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
-                                   _windowConfig.WindowId,
-                                   request,
-                                   operationToken))
+                await foreach (
+                    Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
+                        _windowConfig.WindowId,
+                        request,
+                        operationToken
+                    )
+                )
                 {
                     if (!IsPreviewCaptureEnabled())
                     {
@@ -258,7 +271,9 @@ internal sealed class FloatingWindowService
                     bool frameTransferred = false;
                     try
                     {
-                        await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        await _previewUpdateSemaphore
+                            .WaitAsync(cancellationToken)
+                            .ConfigureAwait(false);
                         lockTaken = true;
 
                         if (_isClosing || cancellationToken.IsCancellationRequested)
@@ -297,7 +312,8 @@ internal sealed class FloatingWindowService
                     }
 
                     if (frameTransferred)
-                        await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken).ConfigureAwait(false);
+                        await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken)
+                            .ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -346,7 +362,8 @@ internal sealed class FloatingWindowService
             var request = new ScreenshotRequest(
                 MaxWidthPx: widthPx > 0 ? widthPx : null,
                 MaxHeightPx: heightPx > 0 ? heightPx : null,
-                TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000));
+                TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000)
+            );
 
             appScreenshot = await _previewFrameProvider
                 .RequestAsync(_windowConfig.WindowId, request, cancellationToken)
@@ -387,22 +404,34 @@ internal sealed class FloatingWindowService
 
     private static bool IsPreviewCaptureEnabled()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config => !config.DisablePreviews && config.ActivateWindowsPreview);
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => !config.DisablePreviews && config.ActivateWindowsPreview);
     }
 
-    private async Task UpdateScreenshotForCurrentOperationAsync(int requestTimeoutMs, CancellationToken cancellationToken)
+    private async Task UpdateScreenshotForCurrentOperationAsync(
+        int requestTimeoutMs,
+        CancellationToken cancellationToken
+    )
     {
-        using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(cancellationToken);
+        using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
+            cancellationToken
+        );
         await UpdateScreenshot(requestTimeoutMs, operationCts.Token).ConfigureAwait(false);
     }
 
-    private CancellationTokenSource CreatePreviewOperationTokenSource(CancellationToken cancellationToken)
+    private CancellationTokenSource CreatePreviewOperationTokenSource(
+        CancellationToken cancellationToken
+    )
     {
         CancellationToken previewOperationToken;
         lock (_previewOperationCancellationSync)
             previewOperationToken = _previewOperationCancellation?.Token ?? CancellationToken.None;
 
-        return CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, previewOperationToken);
+        return CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            previewOperationToken
+        );
     }
 
     private void CancelPreviewOperations(bool recreateTokenSource)
@@ -524,10 +553,10 @@ internal sealed class FloatingWindowService
 
         DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new();
         props.dwFlags =
-            DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
-            DwmFunctions.DWM_TNP_VISIBLE |
-            DwmFunctions.DWM_TNP_OPACITY |
-            DwmFunctions.DWM_TNP_RECTDESTINATION;
+            DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY
+            | DwmFunctions.DWM_TNP_VISIBLE
+            | DwmFunctions.DWM_TNP_OPACITY
+            | DwmFunctions.DWM_TNP_RECTDESTINATION;
         props.fSourceClientAreaOnly = false;
         props.fVisible = true;
         props.opacity = 255;

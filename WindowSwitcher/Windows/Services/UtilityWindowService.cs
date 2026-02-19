@@ -11,7 +11,8 @@ internal sealed class UtilityWindowService
         Window window,
         CancelEventArgs e,
         bool hideWhenCanceled = true,
-        bool hideWhenAllowed = false)
+        bool hideWhenAllowed = false
+    )
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(e);

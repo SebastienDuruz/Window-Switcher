@@ -7,7 +7,5 @@ namespace WindowSwitcherLib.Data.Platform.Policies;
 /// </summary>
 public sealed class NoOpFloatingWindowHandleConfigurator : IFloatingWindowHandleConfigurator
 {
-    public void Configure(nint windowHandle)
-    {
-    }
+    public void Configure(nint windowHandle) { }
 }

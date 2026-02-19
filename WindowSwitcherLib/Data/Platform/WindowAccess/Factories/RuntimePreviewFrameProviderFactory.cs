@@ -11,10 +11,12 @@ namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
 /// <summary>
 /// Default preview provider factory selected from runtime capabilities.
 /// </summary>
-public sealed class RuntimePreviewFrameProviderFactory(ILinuxDependencyRegistry? linuxDependencies = null)
-    : IPreviewFrameProviderFactory
+public sealed class RuntimePreviewFrameProviderFactory(
+    ILinuxDependencyRegistry? linuxDependencies = null
+) : IPreviewFrameProviderFactory
 {
-    private readonly ILinuxDependencyRegistry _linuxDependencies = linuxDependencies ?? LinuxDependencies.Instance;
+    private readonly ILinuxDependencyRegistry _linuxDependencies =
+        linuxDependencies ?? LinuxDependencies.Instance;
 
     /// <inheritdoc />
     public IPreviewFrameProvider Create(WinAccessorBase accessorBase)
@@ -24,17 +26,26 @@ public sealed class RuntimePreviewFrameProviderFactory(ILinuxDependencyRegistry?
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
-        if (!EnsureLinuxDependency(
+        if (
+            !EnsureLinuxDependency(
                 dependencyName: "gst-launch-1.0",
-                isAvailable: _linuxDependencies.IsGstLaunchAvailable))
+                isAvailable: _linuxDependencies.IsGstLaunchAvailable
+            )
+        )
             return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (!EnsureLinuxDependency(
+        if (
+            !EnsureLinuxDependency(
                 dependencyName: "gstreamer-pipewire",
-                isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable))
+                isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable
+            )
+        )
             return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (!EnsureLinuxDependency(
+        if (
+            !EnsureLinuxDependency(
                 dependencyName: "pw-dump",
-                isAvailable: _linuxDependencies.IsPwDumpAvailable))
+                isAvailable: _linuxDependencies.IsPwDumpAvailable
+            )
+        )
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
         return new PipeWireFrameProvider(accessorBase);

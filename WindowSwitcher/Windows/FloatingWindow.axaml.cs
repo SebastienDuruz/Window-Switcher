@@ -31,7 +31,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WindowConfig windowConfig,
         WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
-        IFloatingWindowHost floatingWindowHost)
+        IFloatingWindowHost floatingWindowHost
+    )
     {
         ArgumentNullException.ThrowIfNull(windowConfig);
         ArgumentNullException.ThrowIfNull(winAccessorBase);
@@ -44,7 +45,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _winAccessorBase = winAccessorBase;
         _floatingWindowHost = floatingWindowHost;
         _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
-        _floatingWindowHandleConfigurator = AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
+        _floatingWindowHandleConfigurator =
+            AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
 
@@ -54,7 +56,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             previewFrameProvider,
             _floatingPreviewPolicy,
             WindowScreenshot,
-            PreviewBorder);
+            PreviewBorder
+        );
 
         Show();
         _service.UpdateLayout();
@@ -72,7 +75,9 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig);
+        WindowConfig? settingsConfig = ConfigFileAccessor
+            .GetInstance()
+            .GetFloatingWindowConfig(WindowConfig);
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -84,21 +89,31 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
 
         WindowScreenshot.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Add to blacklist",
-            Command = new ContextMenuCommand(() => _floatingWindowHost.AddToBlacklist(WindowConfig.WindowTitle))
-        });
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Add to temp blacklist",
-            Command = new ContextMenuCommand(() => _floatingWindowHost.AddToTempBlacklist(WindowConfig.WindowId))
-        });
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Rename window",
-            Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync())
-        });
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Add to blacklist",
+                Command = new ContextMenuCommand(() =>
+                    _floatingWindowHost.AddToBlacklist(WindowConfig.WindowTitle)
+                ),
+            }
+        );
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Add to temp blacklist",
+                Command = new ContextMenuCommand(() =>
+                    _floatingWindowHost.AddToTempBlacklist(WindowConfig.WindowId)
+                ),
+            }
+        );
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Rename window",
+                Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync()),
+            }
+        );
 
         ApplySettingsCore(refreshPreviewPipeline: false);
     }
@@ -125,7 +140,11 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             return;
 
         PointerPoint point = e.GetCurrentPoint(this);
-        if (point.Properties.IsLeftButtonPressed || point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
+        if (
+            point.Properties.IsLeftButtonPressed
+            || point.Properties.IsRightButtonPressed
+            || point.Properties.IsMiddleButtonPressed
+        )
             return;
 
         _floatingWindowHost.SetActivePreview(this);
@@ -196,15 +215,17 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void ApplySettingsCore(bool refreshPreviewPipeline)
     {
-        var configSnapshot = ConfigFileAccessor.GetInstance().ReadConfig(config => new
-        {
-            config.ResizeWindows,
-            config.UseFixedWindowSize,
-            config.WindowWidth,
-            config.WindowHeight,
-            config.ShowWindowDecorations,
-            config.PreviewHighlightColor
-        });
+        var configSnapshot = ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new
+            {
+                config.ResizeWindows,
+                config.UseFixedWindowSize,
+                config.WindowWidth,
+                config.WindowHeight,
+                config.ShowWindowDecorations,
+                config.PreviewHighlightColor,
+            });
 
         CanResize = configSnapshot.ResizeWindows;
         if (configSnapshot.UseFixedWindowSize)

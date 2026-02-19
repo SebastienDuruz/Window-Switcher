@@ -28,30 +28,38 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
+        <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
     </ItemGroup>
     <ItemGroup>
         <AvaloniaResource Include="Assets\WS_logo.ico" />
         <AvaloniaResource Include="Assets\WS_logo.png" />
-        <Content Include="Assets\WS_logo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-        <Content Include="Assets\WS_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+        <Content
+            Include="Assets\WS_logo.ico"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+        />
+        <Content
+            Include="Assets\WS_logo.png"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+        />
     </ItemGroup>
     <ItemGroup>
-      <Compile Update="Windows\FloatingWindow.axaml.cs">
-        <DependentUpon>FloatingWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\MainWindow.axaml.cs">
-        <DependentUpon>MainWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\PrefixesWindow.axaml.cs">
-        <DependentUpon>PrefixesWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\RenameWindow.axaml.cs">
-        <DependentUpon>RenameWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
+        <Compile Update="Windows\FloatingWindow.axaml.cs">
+            <DependentUpon>FloatingWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\MainWindow.axaml.cs">
+            <DependentUpon>MainWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\PrefixesWindow.axaml.cs">
+            <DependentUpon>PrefixesWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\RenameWindow.axaml.cs">
+            <DependentUpon>RenameWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
     </ItemGroup>
 </Project>

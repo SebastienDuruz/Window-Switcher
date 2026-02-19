@@ -8,20 +8,23 @@ public static class DwmFunctions
     public const int DWM_TNP_OPACITY = 0x00000004;
     public const int DWM_TNP_VISIBLE = 0x00000008;
     public const int DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
-    
-    [DllImport( "dwmapi.dll" )]
-    public static extern int DwmRegisterThumbnail( IntPtr dest, IntPtr src, out IntPtr thumb );
 
-    [DllImport( "dwmapi.dll" )]
-    public static extern int DwmUnregisterThumbnail( IntPtr thumb );
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmRegisterThumbnail(IntPtr dest, IntPtr src, out IntPtr thumb);
 
-    [DllImport( "dwmapi.dll" )]
-    public static extern int DwmQueryThumbnailSourceSize( IntPtr thumb, out PSIZE size );
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmUnregisterThumbnail(IntPtr thumb);
 
-    [DllImport( "dwmapi.dll" )]
-    public static extern int DwmUpdateThumbnailProperties( IntPtr hThumb, ref DWM_THUMBNAIL_PROPERTIES props );
-    
-    [StructLayout( LayoutKind.Sequential )]
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmQueryThumbnailSourceSize(IntPtr thumb, out PSIZE size);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmUpdateThumbnailProperties(
+        IntPtr hThumb,
+        ref DWM_THUMBNAIL_PROPERTIES props
+    );
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct DWM_THUMBNAIL_PROPERTIES
     {
         public int dwFlags;
@@ -31,14 +34,14 @@ public static class DwmFunctions
         public bool fVisible;
         public bool fSourceClientAreaOnly;
     }
-    
-    [StructLayout( LayoutKind.Sequential )]
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct PSIZE
     {
         public int x;
         public int y;
     }
-    
+
     public struct Rect(int left, int top, int right, int bottom)
     {
         public int Left = left;
@@ -48,18 +51,15 @@ public static class DwmFunctions
 
         public List<Rect> AsList() => new List<Rect> { this };
 
-        public Rect Scale( double percentage ) =>
+        public Rect Scale(double percentage) =>
             new Rect(
-                (int)( Left * percentage ),
-                (int)( Top * percentage ),
-                (int)( Right * percentage ),
-                (int)( Bottom * percentage ) );
+                (int)(Left * percentage),
+                (int)(Top * percentage),
+                (int)(Right * percentage),
+                (int)(Bottom * percentage)
+            );
 
-        public Rect MakeSmaller( int size ) =>
-            new Rect(
-                Left + size,
-                Top + size,
-                Right - size,
-                Bottom - size );
+        public Rect MakeSmaller(int size) =>
+            new Rect(Left + size, Top + size, Right - size, Bottom - size);
     }
 }

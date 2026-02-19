@@ -15,5 +15,4 @@ public class WmctrlWrapper() : CommandBase("wmctrl"), ICommandWrapper
 
         return ExecuteWithArguments(args, timeoutMs: 2_000);
     }
-
 }

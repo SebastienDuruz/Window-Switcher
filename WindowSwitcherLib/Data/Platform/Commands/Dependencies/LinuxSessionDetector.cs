@@ -11,8 +11,10 @@ public static class LinuxSessionDetector
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return null;
-        
-        string? environmentValue = Normalize(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"));
+
+        string? environmentValue = Normalize(
+            Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")
+        );
         if (!string.IsNullOrWhiteSpace(environmentValue))
             return environmentValue;
 

@@ -5,4 +5,3 @@ public readonly record struct ScreenshotRequest(
     int? MaxHeightPx = null,
     int TimeoutMs = 1500
 );
-

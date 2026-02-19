@@ -15,7 +15,11 @@ public sealed class ScreenshotPreviewFrameProvider : IPreviewFrameProvider
         _screenshotQueue = new ScreenshotQueue(accessorBase);
     }
 
-    public Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default)
+    public Task<Bitmap?> RequestAsync(
+        string windowId,
+        ScreenshotRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         return _screenshotQueue.RequestAsync(windowId, request, cancellationToken);
     }

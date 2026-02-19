@@ -11,7 +11,8 @@ public sealed class SystemInfoServiceTests
     public async Task GetCurrentUserAsync_ReturnsTrimmedValue_WhenRunnerSucceeds()
     {
         var commandRunner = new FakeCommandRunner(_ =>
-            Task.FromResult(new CommandResult(0, "alice\n", string.Empty, TimedOut: false)));
+            Task.FromResult(new CommandResult(0, "alice\n", string.Empty, TimedOut: false))
+        );
 
         var sut = new SystemInfoService(commandRunner);
 
@@ -26,7 +27,10 @@ public sealed class SystemInfoServiceTests
     public async Task GetDotnetVersionAsync_ReturnsEmpty_WhenRunnerFails()
     {
         var commandRunner = new FakeCommandRunner(_ =>
-            Task.FromResult(new CommandResult(127, string.Empty, "dotnet not found", TimedOut: false)));
+            Task.FromResult(
+                new CommandResult(127, string.Empty, "dotnet not found", TimedOut: false)
+            )
+        );
 
         var sut = new SystemInfoService(commandRunner);
 
@@ -37,11 +41,15 @@ public sealed class SystemInfoServiceTests
         Assert.Equal("dotnet", commandRunner.Requests[0].ExecutablePath);
     }
 
-    private sealed class FakeCommandRunner(Func<CommandRequest, Task<CommandResult>> callback) : ICommandRunner
+    private sealed class FakeCommandRunner(Func<CommandRequest, Task<CommandResult>> callback)
+        : ICommandRunner
     {
         public List<CommandRequest> Requests { get; } = [];
 
-        public Task<CommandResult> RunAsync(CommandRequest request, CancellationToken cancellationToken = default)
+        public Task<CommandResult> RunAsync(
+            CommandRequest request,
+            CancellationToken cancellationToken = default
+        )
         {
             Requests.Add(request);
             return callback(request);

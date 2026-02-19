@@ -10,5 +10,8 @@ public interface ICommandRunner
     /// <summary>
     /// Executes a command request.
     /// </summary>
-    Task<CommandResult> RunAsync(CommandRequest request, CancellationToken cancellationToken = default);
+    Task<CommandResult> RunAsync(
+        CommandRequest request,
+        CancellationToken cancellationToken = default
+    );
 }

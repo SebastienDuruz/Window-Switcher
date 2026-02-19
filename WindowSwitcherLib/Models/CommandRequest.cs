@@ -7,7 +7,11 @@ public sealed record CommandRequest
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
 
-    private CommandRequest(string? executablePath, IReadOnlyList<string> arguments, string? shellCommand)
+    private CommandRequest(
+        string? executablePath,
+        IReadOnlyList<string> arguments,
+        string? shellCommand
+    )
     {
         ExecutablePath = executablePath;
         Arguments = arguments;
@@ -42,8 +46,8 @@ public sealed record CommandRequest
     /// <summary>
     /// Optional environment variable overrides.
     /// </summary>
-    public IReadOnlyDictionary<string, string> EnvironmentVariables { get; init; }
-        = new Dictionary<string, string>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, string> EnvironmentVariables { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
     /// Creates a request for a direct executable invocation.
@@ -63,6 +67,10 @@ public sealed record CommandRequest
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shellCommand);
 
-        return new CommandRequest(executablePath: null, arguments: Array.Empty<string>(), shellCommand);
+        return new CommandRequest(
+            executablePath: null,
+            arguments: Array.Empty<string>(),
+            shellCommand
+        );
     }
 }

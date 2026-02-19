@@ -10,7 +10,9 @@ internal sealed class RenameDialogService
     public Task<string?> StartSession()
     {
         _pendingRenameCompletion?.TrySetResult(null);
-        _pendingRenameCompletion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingRenameCompletion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         return _pendingRenameCompletion.Task;
     }
 

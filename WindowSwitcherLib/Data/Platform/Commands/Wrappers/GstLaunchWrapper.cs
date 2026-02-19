@@ -19,10 +19,10 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
 
     public string Execute(string args)
     {
-        if (LinuxDependencies.IsGstLaunchAvailable) return ExecuteWithArguments(args, timeoutMs: 2_500);
+        if (LinuxDependencies.IsGstLaunchAvailable)
+            return ExecuteWithArguments(args, timeoutMs: 2_500);
         LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
         return string.Empty;
-
     }
 
     public Process? StartPipeWireJpegStream(string nodeId, int? pipeWireRemoteFd = null)
@@ -33,7 +33,11 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             return null;
         }
 
-        Process? optimized = TryStartPipeWireJpegStream(nodeId, pipeWireRemoteFd, useVideoRate: true);
+        Process? optimized = TryStartPipeWireJpegStream(
+            nodeId,
+            pipeWireRemoteFd,
+            useVideoRate: true
+        );
         if (optimized is null)
             return null;
 
@@ -45,7 +49,11 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         return TryStartPipeWireJpegStream(nodeId, pipeWireRemoteFd, useVideoRate: false);
     }
 
-    private Process? TryStartPipeWireJpegStream(string nodeId, int? pipeWireRemoteFd, bool useVideoRate)
+    private Process? TryStartPipeWireJpegStream(
+        string nodeId,
+        int? pipeWireRemoteFd,
+        bool useVideoRate
+    )
     {
         var process = CreateProcess();
         ConfigurePipeWireJpegPipeline(process.StartInfo, nodeId, pipeWireRemoteFd, useVideoRate);
@@ -76,7 +84,8 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         ProcessStartInfo startInfo,
         string nodeId,
         int? pipeWireRemoteFd,
-        bool useVideoRate)
+        bool useVideoRate
+    )
     {
         startInfo.ArgumentList.Clear();
         startInfo.ArgumentList.Add("-q");

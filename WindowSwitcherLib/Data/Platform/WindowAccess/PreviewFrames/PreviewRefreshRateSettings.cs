@@ -24,7 +24,10 @@ public static class PreviewRefreshRateSettings
     {
         const int baseDenominator = 10; // Matches UI precision (0.1 FPS steps).
         double clampedFps = Clamp(fps);
-        int scaledNumerator = Math.Max(1, (int)Math.Round(clampedFps * baseDenominator, MidpointRounding.AwayFromZero));
+        int scaledNumerator = Math.Max(
+            1,
+            (int)Math.Round(clampedFps * baseDenominator, MidpointRounding.AwayFromZero)
+        );
         int gcd = GreatestCommonDivisor(scaledNumerator, baseDenominator);
 
         numerator = scaledNumerator / gcd;

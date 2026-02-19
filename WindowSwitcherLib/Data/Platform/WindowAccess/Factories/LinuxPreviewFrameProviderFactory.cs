@@ -10,10 +10,12 @@ namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
 /// <summary>
 /// Linux preview provider factory selected from Linux runtime capabilities.
 /// </summary>
-public sealed class LinuxPreviewFrameProviderFactory(ILinuxDependencyRegistry? linuxDependencies = null)
-    : IPreviewFrameProviderFactory
+public sealed class LinuxPreviewFrameProviderFactory(
+    ILinuxDependencyRegistry? linuxDependencies = null
+) : IPreviewFrameProviderFactory
 {
-    private readonly ILinuxDependencyRegistry _linuxDependencies = linuxDependencies ?? LinuxDependencies.Instance;
+    private readonly ILinuxDependencyRegistry _linuxDependencies =
+        linuxDependencies ?? LinuxDependencies.Instance;
 
     /// <inheritdoc />
     public IPreviewFrameProvider Create(WinAccessorBase accessorBase)
@@ -21,9 +23,19 @@ public sealed class LinuxPreviewFrameProviderFactory(ILinuxDependencyRegistry? l
         ArgumentNullException.ThrowIfNull(accessorBase);
 
         if (
-            !EnsureLinuxDependency(dependencyName: "gst-launch-1.0", isAvailable: _linuxDependencies.IsGstLaunchAvailable)
-            || !EnsureLinuxDependency(dependencyName: "gstreamer-pipewire", isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable)
-            || !EnsureLinuxDependency(dependencyName: "pw-dump", isAvailable: _linuxDependencies.IsPwDumpAvailable))
+            !EnsureLinuxDependency(
+                dependencyName: "gst-launch-1.0",
+                isAvailable: _linuxDependencies.IsGstLaunchAvailable
+            )
+            || !EnsureLinuxDependency(
+                dependencyName: "gstreamer-pipewire",
+                isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable
+            )
+            || !EnsureLinuxDependency(
+                dependencyName: "pw-dump",
+                isAvailable: _linuxDependencies.IsPwDumpAvailable
+            )
+        )
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
         return new PipeWireFrameProvider(accessorBase);

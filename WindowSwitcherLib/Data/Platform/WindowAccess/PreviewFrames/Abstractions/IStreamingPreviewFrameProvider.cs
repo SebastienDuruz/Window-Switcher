@@ -18,5 +18,6 @@ public interface IStreamingPreviewFrameProvider
     IAsyncEnumerable<Bitmap> StreamAsync(
         string windowId,
         ScreenshotRequest request,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default
+    );
 }

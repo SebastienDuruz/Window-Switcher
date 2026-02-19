@@ -28,7 +28,8 @@ public abstract class WinAccessorBase
     /// Take a screenshot of a window with additional constraints (e.g. max size, timeout).
     /// Default implementation falls back to <see cref="TakeScreenshot(string)"/>.
     /// </summary>
-    public virtual Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request) => TakeScreenshot(windowId);
+    public virtual Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request) =>
+        TakeScreenshot(windowId);
 
     /// <summary>
     /// Async screenshot capture. Default implementation wraps the synchronous API.
@@ -36,8 +37,8 @@ public abstract class WinAccessorBase
     public virtual Task<Bitmap?> TakeScreenshotAsync(
         string windowId,
         ScreenshotRequest request,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult(TakeScreenshot(windowId, request));
+        CancellationToken cancellationToken = default
+    ) => Task.FromResult(TakeScreenshot(windowId, request));
 
     /// <summary>
     /// Rename a window title

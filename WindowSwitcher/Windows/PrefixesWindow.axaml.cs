@@ -14,7 +14,12 @@ public partial class PrefixesWindow : EditListWindow
     private readonly UtilityWindowService _windowService = new();
     private readonly PrefixListService _prefixListService;
 
-    public PrefixesWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType, string windowTitle) : base(listToEdit, prefixWindowType)
+    public PrefixesWindow(
+        List<string> listToEdit,
+        StaticData.PrefixWindowType prefixWindowType,
+        string windowTitle
+    )
+        : base(listToEdit, prefixWindowType)
     {
         InitializeComponent();
         _prefixListService = new PrefixListService(ListToEdit, PrefixWindowType);
@@ -43,13 +48,15 @@ public partial class PrefixesWindow : EditListWindow
     {
         Dispatcher.UIThread.Invoke(() =>
         {
-            PrefixListBox.Items.Add(new ListBoxItem()
-            {
-                Content = prefix.ToLower(),
-                Height = 22,
-                FontSize = 14,
-                Padding = new Thickness(8, 2)
-            });
+            PrefixListBox.Items.Add(
+                new ListBoxItem()
+                {
+                    Content = prefix.ToLower(),
+                    Height = 22,
+                    FontSize = 14,
+                    Padding = new Thickness(8, 2),
+                }
+            );
         });
     }
 
@@ -71,7 +78,10 @@ public partial class PrefixesWindow : EditListWindow
         if (selectedPrefix == null)
             return;
 
-        bool isRemoved = _prefixListService.TryRemovePrefix(selectedPrefix.Content as string, out _);
+        bool isRemoved = _prefixListService.TryRemovePrefix(
+            selectedPrefix.Content as string,
+            out _
+        );
         if (!isRemoved)
             return;
 

@@ -7,7 +7,10 @@ internal static class PipeWireTrace
 {
     private const long MaxLogFileBytes = 2 * 1024 * 1024;
     private static readonly object Sync = new();
-    private static readonly string LogPath = Path.Combine(Path.GetTempPath(), "window-switcher-pipewire.log");
+    private static readonly string LogPath = Path.Combine(
+        Path.GetTempPath(),
+        "window-switcher-pipewire.log"
+    );
     private static bool _sessionHeaderWritten;
 
     public static void Write(string message)
@@ -49,7 +52,8 @@ internal static class PipeWireTrace
             return;
 
         int pid = Process.GetCurrentProcess().Id;
-        string line = $"{DateTime.UtcNow:O} PipeWireTrace session-start pid={pid}{Environment.NewLine}";
+        string line =
+            $"{DateTime.UtcNow:O} PipeWireTrace session-start pid={pid}{Environment.NewLine}";
         File.AppendAllText(LogPath, line, Encoding.UTF8);
         _sessionHeaderWritten = true;
     }

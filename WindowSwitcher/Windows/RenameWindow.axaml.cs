@@ -40,7 +40,7 @@ public partial class RenameWindow : Window
         NewWindowTitle = renamedTitle ?? string.Empty;
         return IsUpdated;
     }
-    
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _ = _windowService.HandleClosing(this, e);

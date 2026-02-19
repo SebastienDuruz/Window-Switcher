@@ -27,7 +27,11 @@ internal static class AccentColorApplier
         SetAccentPalette(Application.Current.Resources, opaqueAccent, prefix: "AccentColor");
     }
 
-    private static void SetAccentPalette(IResourceDictionary resources, Color baseColor, string prefix)
+    private static void SetAccentPalette(
+        IResourceDictionary resources,
+        Color baseColor,
+        string prefix
+    )
     {
         resources[prefix] = baseColor;
 

@@ -10,4 +10,5 @@ public sealed record PlatformAppInfoSnapshot(
     string UiBackend,
     string ConfigPath,
     string PreviewMode,
-    string DependencyStatus);
+    string DependencyStatus
+);

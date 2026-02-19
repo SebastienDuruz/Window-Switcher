@@ -16,9 +16,16 @@ public sealed class PlatformCommandRunnerIntegrationTests
             return;
 
         CommandResult result = await runner.RunAsync(
-            CommandRequest.ForShell("whoami") with { Timeout = TimeSpan.FromSeconds(5) });
+            CommandRequest.ForShell("whoami") with
+            {
+                Timeout = TimeSpan.FromSeconds(5),
+            }
+        );
 
-        Assert.True(result.IsSuccess, $"ExitCode={result.ExitCode}, TimedOut={result.TimedOut}, Stderr={result.StandardError}");
+        Assert.True(
+            result.IsSuccess,
+            $"ExitCode={result.ExitCode}, TimedOut={result.TimedOut}, Stderr={result.StandardError}"
+        );
         Assert.False(string.IsNullOrWhiteSpace(result.StandardOutput));
     }
 

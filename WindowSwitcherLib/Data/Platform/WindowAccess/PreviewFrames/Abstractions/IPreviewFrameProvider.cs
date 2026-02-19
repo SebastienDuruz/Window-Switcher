@@ -5,6 +5,10 @@ namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstraction
 
 public interface IPreviewFrameProvider : IDisposable, IAsyncDisposable
 {
-    Task<Bitmap?> RequestAsync(string windowId, ScreenshotRequest request, CancellationToken cancellationToken = default);
+    Task<Bitmap?> RequestAsync(
+        string windowId,
+        ScreenshotRequest request,
+        CancellationToken cancellationToken = default
+    );
     void ForgetWindow(string windowId);
 }

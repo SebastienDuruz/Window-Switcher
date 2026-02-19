@@ -9,18 +9,24 @@ namespace WindowSwitcherLib.Data.Platform.Commands;
 /// </summary>
 public abstract class ProcessCommandRunnerBase : ICommandRunner
 {
-    public async Task<CommandResult> RunAsync(CommandRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommandResult> RunAsync(
+        CommandRequest request,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Timeout <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(request), "Timeout must be greater than zero.");
+            throw new ArgumentOutOfRangeException(
+                nameof(request),
+                "Timeout must be greater than zero."
+            );
 
         var startInfo = new ProcessStartInfo
         {
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = true,
         };
 
         if (!string.IsNullOrWhiteSpace(request.ShellCommand))
@@ -44,7 +50,9 @@ public abstract class ProcessCommandRunnerBase : ICommandRunner
         using var process = new Process { StartInfo = startInfo };
 
         if (!process.Start())
-            throw new InvalidOperationException($"Failed to start process for request '{request.ExecutablePath ?? request.ShellCommand}'.");
+            throw new InvalidOperationException(
+                $"Failed to start process for request '{request.ExecutablePath ?? request.ShellCommand}'."
+            );
 
         Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
         Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
@@ -57,7 +65,12 @@ public abstract class ProcessCommandRunnerBase : ICommandRunner
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             string standardOutput = await stdOutTask.ConfigureAwait(false);
             string standardError = await stdErrTask.ConfigureAwait(false);
-            return new CommandResult(process.ExitCode, standardOutput, standardError, TimedOut: false);
+            return new CommandResult(
+                process.ExitCode,
+                standardOutput,
+                standardError,
+                TimedOut: false
+            );
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

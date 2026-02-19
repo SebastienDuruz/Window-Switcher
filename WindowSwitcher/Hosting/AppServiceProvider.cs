@@ -18,10 +18,13 @@ internal static class AppServiceProvider
         _serviceProvider = services.BuildServiceProvider();
     }
 
-    public static T GetRequiredService<T>() where T : notnull
+    public static T GetRequiredService<T>()
+        where T : notnull
     {
         if (_serviceProvider is null)
-            throw new InvalidOperationException("AppServiceProvider.Initialize() must be called before resolving services.");
+            throw new InvalidOperationException(
+                "AppServiceProvider.Initialize() must be called before resolving services."
+            );
 
         return _serviceProvider.GetRequiredService<T>();
     }
