@@ -53,8 +53,6 @@ static class Program
                 {
                     RenderingMode =
                     [
-                        Win32RenderingMode.Vulkan,
-                        Win32RenderingMode.Wgl,
                         Win32RenderingMode.Software,
                     ],
                 }

@@ -3,6 +3,9 @@ using System.Text;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
+/// <summary>
+/// Logs the Pipewire events in temporary file for debug
+/// </summary>
 internal static class PipeWireTrace
 {
     private const long MaxLogFileBytes = 2 * 1024 * 1024;
