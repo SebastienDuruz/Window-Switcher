@@ -289,9 +289,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         if (!capture.FirstDeliveredFrameLogged)
                         {
                             string fingerprint = ComputeFrameFingerprint(snapshot.Value.Bytes);
-                            PipeWireTrace.Write(
-                                $"WaylandPreview frame delivered windowId={capture.WindowId} nodeId={capture.NodeId} seq={snapshot.Value.Sequence} sha256={fingerprint}"
-                            );
                             capture.FirstDeliveredFrameLogged = true;
                         }
 
@@ -447,15 +444,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 cancellationToken
             );
             creationCts.CancelAfter(CaptureCreationTimeoutMs);
-            PipeWireTrace.Write(
-                $"EnsureCaptureAsync create requested windowId={windowId} wayland={_isWaylandSession}"
-            );
             WindowCaptureContext? created = await CreateCaptureAsync(windowId, creationCts.Token)
                 .ConfigureAwait(false);
             if (created is null)
             {
                 ClearPendingNodeId(windowId);
-                PipeWireTrace.Write($"EnsureCaptureAsync create failed windowId={windowId}");
                 if (!_isWaylandSession)
                 {
                     lock (_capturesSync)
@@ -483,24 +476,17 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _failedWindows.Remove(windowId);
                 _pendingNodeIdsByWindow.Remove(windowId);
                 _captures[windowId] = created;
-                PipeWireTrace.Write(
-                    $"EnsureCaptureAsync create success windowId={windowId} nodeId={created.NodeId}"
-                );
                 return created;
             }
         }
         catch (OperationCanceledException)
         {
             ClearPendingNodeId(windowId);
-            PipeWireTrace.Write($"EnsureCaptureAsync create cancelled windowId={windowId}");
             return null;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             ClearPendingNodeId(windowId);
-            PipeWireTrace.Write(
-                $"EnsureCaptureAsync create exception windowId={windowId} type={exception.GetType().Name} message={exception.Message}"
-            );
             return null;
         }
         finally
@@ -529,7 +515,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     {
         if (!IsWindowStillAvailable(windowId))
         {
-            PipeWireTrace.Write($"CreateCaptureAsync skipped missing window windowId={windowId}");
             return null;
         }
 
@@ -590,10 +575,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             if (started is null)
             {
-                if (_isKdeDesktopSession)
-                    PipeWireTrace.Write(
-                        $"WaylandKdeBackend no capture available windowId={windowId} (no portal-desktop fallback)"
-                    );
                 return null;
             }
 
@@ -601,9 +582,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             portalSessionPath = started.Value.SessionPath;
             portalSessionDestination = started.Value.SessionDestination;
             pipeWireRemoteHandle = started.Value.PipeWireRemoteHandle;
-            PipeWireTrace.Write(
-                $"CreateCaptureAsync wayland bootstrap ok windowId={windowId} nodeId={nodeId} sessionPath={portalSessionPath} destination={portalSessionDestination ?? "null"}"
-            );
         }
         else
         {
@@ -1181,9 +1159,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             capture.ConsecutiveFailures++;
             if (capture.ConsecutiveFailures >= 1)
             {
-                PipeWireTrace.Write(
-                    $"Wayland no first frame after restart; recreating capture windowId={capture.WindowId} nodeId={capture.NodeId}"
-                );
                 MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
                 ResetCapture(capture);
             }
@@ -1246,9 +1221,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 capture.ConsecutiveFailures++;
                 if (capture.ConsecutiveFailures >= 2)
                 {
-                    PipeWireTrace.Write(
-                        $"Wayland restart loop without frame; recreating capture windowId={capture.WindowId} nodeId={capture.NodeId}"
-                    );
                     MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
                     ResetCapture(capture);
                     return false;
@@ -1315,7 +1287,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         string? sessionPath = null;
         CloseSafeHandle? pipeWireRemoteHandle = null;
-        PipeWireTrace.Write("WaylandPortal begin");
         try
         {
             IPipeWirePortalScreenCast screenCast =
@@ -1323,7 +1294,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     PortalDesktopDestination,
                     new ObjectPath("/org/freedesktop/portal/desktop")
                 );
-            PipeWireTrace.Write("WaylandPortal proxy created");
 
             string token = Guid.NewGuid().ToString("N");
             string sessionToken = $"ws_session_{token}";
@@ -1340,7 +1310,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
-            PipeWireTrace.Write($"WaylandPortal create requestPath={createRequestPath}");
 
             PortalRequestResponse? createResponse = await WaitForPortalRequestResponseAsync(
                     connection,
@@ -1349,9 +1318,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            PipeWireTrace.Write(
-                $"WaylandPortal create response={(createResponse?.ResponseCode.ToString(CultureInfo.InvariantCulture) ?? "null")}"
-            );
             if (createResponse is null || createResponse.Value.ResponseCode != 0)
                 return null;
 
@@ -1372,9 +1338,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (!string.IsNullOrWhiteSpace(restoreToken))
             {
                 selectOptions["restore_token"] = restoreToken;
-                PipeWireTrace.Write(
-                    $"WaylandPortal using stored restore token windowId={windowId}"
-                );
             }
 
             var sessionObjectPath = new ObjectPath(sessionPath);
@@ -1383,9 +1346,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 .SelectSourcesAsync(sessionObjectPath, selectOptions)
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
-            PipeWireTrace.Write(
-                $"WaylandPortal select requestPath={selectRequestPath} session={sessionPath}"
-            );
 
             PortalRequestResponse? selectResponse = await WaitForPortalRequestResponseAsync(
                     connection,
@@ -1394,9 +1354,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            PipeWireTrace.Write(
-                $"WaylandPortal select response={(selectResponse?.ResponseCode.ToString(CultureInfo.InvariantCulture) ?? "null")}"
-            );
             if (selectResponse is null || selectResponse.Value.ResponseCode != 0)
             {
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -1413,9 +1370,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
-            PipeWireTrace.Write(
-                $"WaylandPortal start requestPath={startRequestPath} session={sessionPath}"
-            );
 
             PortalRequestResponse? startResponse = await WaitForPortalRequestResponseAsync(
                     connection,
@@ -1424,9 +1378,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            PipeWireTrace.Write(
-                $"WaylandPortal start response={(startResponse?.ResponseCode.ToString(CultureInfo.InvariantCulture) ?? "null")}"
-            );
             if (startResponse is null || startResponse.Value.ResponseCode != 0)
             {
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -1437,16 +1388,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string? newRestoreToken = ExtractPortalRestoreToken(startResponse.Value.Results);
             if (string.IsNullOrWhiteSpace(newRestoreToken))
             {
-                PipeWireTrace.Write(
-                    $"WaylandPortal no restore token in start response windowId={windowId}"
-                );
             }
             else
             {
                 SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
-                PipeWireTrace.Write(
-                    $"WaylandPortal stored updated restore token windowId={windowId}"
-                );
             }
 
             string? nodeId = SelectPortalStreamNodeId(
@@ -1460,9 +1405,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 startResponse.Value.Results
             );
             string extractedSummary = DescribePortalStreams(extractedStreams);
-            PipeWireTrace.Write(
-                $"WaylandPortal streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}"
-            );
             if (string.IsNullOrWhiteSpace(nodeId))
             {
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -1490,9 +1432,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
 
             SetPendingNodeId(windowId, nodeId);
-            PipeWireTrace.Write(
-                $"WaylandPortal remote fd={pipeWireRemoteHandle.DangerousGetHandle().ToInt64()}"
-            );
             return new PortalCaptureBootstrap(
                 nodeId,
                 sessionPath,
@@ -1503,7 +1442,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         catch (TimeoutException)
         {
             ClearPendingNodeId(windowId);
-            PipeWireTrace.Write("WaylandPortal exception timeout");
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -1513,19 +1451,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         catch (OperationCanceledException)
         {
             ClearPendingNodeId(windowId);
-            PipeWireTrace.Write("WaylandPortal exception cancelled");
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
                     .ConfigureAwait(false);
             return null;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             ClearPendingNodeId(windowId);
-            PipeWireTrace.Write(
-                $"WaylandPortal exception {exception.GetType().FullName}: {exception.Message}"
-            );
             pipeWireRemoteHandle?.Dispose();
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -1555,14 +1489,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 .ConnectAsync()
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
                 .ConfigureAwait(false);
-            PipeWireTrace.Write("EnsureSessionBusConnectionAsync connected");
             return connection;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            PipeWireTrace.Write(
-                $"EnsureSessionBusConnectionAsync failed {exception.GetType().FullName}: {exception.Message}"
-            );
             return null;
         }
     }
@@ -1602,19 +1532,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         catch (TimeoutException)
         {
-            PipeWireTrace.Write($"WaylandPortal request timeout path={requestPath}");
             return null;
         }
         catch (OperationCanceledException)
         {
-            PipeWireTrace.Write($"WaylandPortal request cancelled path={requestPath}");
             return null;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            PipeWireTrace.Write(
-                $"WaylandPortal request exception path={requestPath} {exception.GetType().FullName}: {exception.Message}"
-            );
             return null;
         }
         finally
@@ -1953,9 +1878,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (exactTitleMatches.Length == 1)
             {
                 PortalStreamDescriptor matched = exactTitleMatches[0];
-                PipeWireTrace.Write(
-                    $"WaylandPortal selected via exact title match windowId={windowId} nodeId={matched.NodeId} streamId={matched.StableId ?? "null"}"
-                );
                 selectedStreamStableId = matched.StableId;
                 shouldPersistSelectedStreamStableId = true;
                 return matched.NodeId;
@@ -2028,15 +1950,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         && !IsLikelyAssignedToAnotherWindow(stream);
                     if (allowSingleMismatchByRestoreData)
                     {
-                        PipeWireTrace.Write(
-                            $"WaylandPortal stored stream id candidate accepted single stream via restore_data title match windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}"
-                        );
                     }
                     else
                     {
-                        PipeWireTrace.Write(
-                            $"WaylandPortal stored stream id candidate mismatched window title windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}"
-                        );
                         ClearStoredArtifactsForCurrentAttempt();
                         continue;
                     }
@@ -2044,16 +1960,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                 if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Unknown)
                 {
-                    PipeWireTrace.Write(
-                        $"WaylandPortal stored stream id candidate accepted despite missing title metadata windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}"
-                    );
                 }
 
                 if (IsLikelyAssignedToAnotherWindow(stream))
                 {
-                    PipeWireTrace.Write(
-                        $"WaylandPortal stored stream id candidate appears to belong to another window windowId={windowId} nodeId={stream.NodeId} streamId={stream.StableId ?? "null"}"
-                    );
                     ClearStoredArtifactsForCurrentAttempt();
                     continue;
                 }
@@ -2064,9 +1974,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return stream.NodeId;
             }
 
-            PipeWireTrace.Write(
-                $"WaylandPortal stored stream id mismatch windowId={windowId} expected={expectedStreamStableId}"
-            );
         }
 
         if (windowPatterns.Count > 0)
@@ -2078,9 +1985,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             );
             if (matchedByPortalMetadata is not null)
             {
-                PipeWireTrace.Write(
-                    $"WaylandPortal selected via stream metadata windowId={windowId} nodeId={matchedByPortalMetadata.Value.NodeId} streamId={matchedByPortalMetadata.Value.StableId ?? "null"}"
-                );
                 selectedStreamStableId = matchedByPortalMetadata.Value.StableId;
                 if (ShouldPersistSelectedStableId(matchedByPortalMetadata.Value.StableId))
                     shouldPersistSelectedStreamStableId = true;
@@ -2110,9 +2014,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             NodeCandidate? matchedNode = FindBestMatchingNode(matchingCandidates, windowPatterns);
             if (matchedNode is not null)
             {
-                PipeWireTrace.Write(
-                    $"WaylandPortal selected via pw-dump match windowId={windowId} nodeId={matchedNode.Value.Id}"
-                );
                 string? matchedStableId = streams
                     .FirstOrDefault(stream =>
                         string.Equals(stream.NodeId, matchedNode.Value.Id, StringComparison.Ordinal)
@@ -2162,9 +2063,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         restoreDataMatchesRequestedWindowTitle ? "restore_data title match"
                         : allowByStableId ? "stored stream id"
                         : "interactive selection without title metadata";
-                    PipeWireTrace.Write(
-                        $"WaylandPortal fallback candidate accepted single stream with {acceptanceReason} windowId={windowId} nodeId={stream.NodeId}"
-                    );
                 }
                 else
                 {
@@ -2172,17 +2070,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         titleMatchState is MatchState.Mismatch
                             ? "strict title mismatch"
                             : "missing strict title verification";
-                    PipeWireTrace.Write(
-                        $"WaylandPortal fallback candidate rejected by {rejectionReason} windowId={windowId} nodeId={stream.NodeId}"
-                    );
                     ClearStoredArtifactsForCurrentAttempt();
                     continue;
                 }
             }
 
-            PipeWireTrace.Write(
-                $"WaylandPortal selected via deterministic fallback windowId={windowId} nodeId={stream.NodeId}"
-            );
             selectedStreamStableId = stream.StableId;
             if (ShouldPersistSelectedStableId(stream.StableId))
                 shouldPersistSelectedStreamStableId = true;
@@ -2191,14 +2083,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         if (windowTitlePatterns.Count > 0)
         {
-            PipeWireTrace.Write(
-                $"WaylandPortal no verified stream candidate for strict title matching windowId={windowId}"
-            );
         }
 
-        PipeWireTrace.Write(
-            $"WaylandPortal all stream candidates excluded windowId={windowId} candidates={string.Join(',', streams.Select(stream => stream.NodeId))}"
-        );
         return null;
     }
 
@@ -2616,7 +2502,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (connection is null)
                 return null;
 
-            PipeWireTrace.Write($"WaylandKdeBackend begin windowId={windowId}");
 
             IKdePortalScreenCast screenCast = connection.CreateProxy<IKdePortalScreenCast>(
                 KdePortalBackendDestination,
@@ -2700,9 +2585,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     startResult.Value.Results
                 );
                 string extractedSummary = DescribePortalStreams(extractedStreams);
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend streams extracted={extractedSummary} selected={nodeId ?? "null"} streamId={selectedStreamStableId ?? "null"}"
-                );
 
                 if (
                     shouldPersistSelectedStreamStableId
@@ -2732,9 +2614,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 {
                     if (!retryWithoutStoredArtifacts && storedArtifacts.HasAny)
                     {
-                        PipeWireTrace.Write(
-                            $"WaylandKdeBackend stream list present but no eligible match windowId={windowId}; retrying once without stored artifacts"
-                        );
                         ClearStoredWaylandScreenCastArtifacts(windowId);
                         retryWithoutStoredArtifacts = true;
                         ClosePortalSession(sessionPath, KdePortalBackendDestination);
@@ -2748,9 +2627,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         storedArtifacts.RestoreToken,
                         startResult.Value.RestoreData,
                         startResult.Value.RestoreToken
-                    );
-                    PipeWireTrace.Write(
-                        $"WaylandKdeBackend stream list present but no eligible match windowId={windowId}; skipping node discovery wait"
                     );
                     ClosePortalSession(sessionPath, KdePortalBackendDestination);
                     return null;
@@ -2781,9 +2657,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         startResult.Value.RestoreToken
                     );
                     SetPendingNodeId(windowId, discoveredNodeId);
-                    PipeWireTrace.Write(
-                        $"WaylandKdeBackend selected={discoveredNodeId} discovered=true windowId={windowId}"
-                    );
                     return new PortalCaptureBootstrap(
                         discoveredNodeId,
                         sessionPath,
@@ -2792,32 +2665,24 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     );
                 }
 
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend all stream candidates excluded windowId={windowId} candidates={extractedSummary}"
-                );
                 ClosePortalSession(sessionPath, KdePortalBackendDestination);
                 return null;
             }
         }
         catch (TimeoutException)
         {
-            PipeWireTrace.Write($"WaylandKdeBackend timeout windowId={windowId}");
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
         }
         catch (OperationCanceledException)
         {
-            PipeWireTrace.Write($"WaylandKdeBackend cancelled windowId={windowId}");
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            PipeWireTrace.Write(
-                $"WaylandKdeBackend exception {exception.GetType().FullName}: {exception.Message}"
-            );
             if (!string.IsNullOrWhiteSpace(sessionPath))
                 ClosePortalSession(sessionPath, KdePortalBackendDestination);
             return null;
@@ -2857,9 +2722,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             )
             .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
             .ConfigureAwait(false);
-        PipeWireTrace.Write(
-            $"WaylandKdeBackend create response={createResponseCode} windowId={windowId}"
-        );
         return createResponseCode == 0;
     }
 
@@ -2887,15 +2749,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             )
             {
                 restoreData = parsedRestoreData;
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend using stored restore data windowId={windowId} provider={parsedRestoreData.Provider} version={parsedRestoreData.Version}"
-                );
             }
             else
             {
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend stored restore data invalid format windowId={windowId}"
-                );
             }
         }
 
@@ -2919,22 +2775,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             if (retryWithoutStoredArtifacts)
             {
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend retrying without stored restore artifacts windowId={windowId}; requesting interactive source selection"
-                );
             }
             else
             {
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend no stored restore artifacts windowId={windowId}; requesting interactive source selection"
-                );
             }
         }
         else if (storedArtifacts.RestoreData is null)
         {
-            PipeWireTrace.Write(
-                $"WaylandKdeBackend using stored restore token windowId={windowId}"
-            );
         }
     }
 
@@ -2984,9 +2831,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             )
             .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
             .ConfigureAwait(false);
-        PipeWireTrace.Write(
-            $"WaylandKdeBackend select response={selectResponseCode} windowId={windowId}"
-        );
         return selectResponseCode == 0;
     }
 
@@ -3008,23 +2852,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             )
             .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
             .ConfigureAwait(false);
-        PipeWireTrace.Write(
-            $"WaylandKdeBackend start response={startResponseCode} windowId={windowId}"
-        );
         if (startResponseCode != 0)
             return null;
 
         PortalRestoreData? restoreData = ExtractPortalRestoreData(startResults);
-        PipeWireTrace.Write(
-            $"WaylandKdeBackend restore data from start={(restoreData is null ? "null" : "present")} windowId={windowId}"
-        );
 
         string? restoreToken = ExtractPortalRestoreToken(startResults);
         if (restoreData is null && string.IsNullOrWhiteSpace(restoreToken))
         {
-            PipeWireTrace.Write(
-                $"WaylandKdeBackend start result keys windowId={windowId} keys={DescribePortalResultKeys(startResults)}"
-            );
         }
 
         return new KdePortalStartResult(startResults, restoreData, restoreToken);
@@ -3046,9 +2881,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     windowId,
                     SerializePortalRestoreData(typedNewRestoreData)
                 );
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend stored initial restore data windowId={windowId}"
-                );
             }
             else if (
                 !ArePortalRestoreDataEquivalent(previousRestoreData.Value, typedNewRestoreData)
@@ -3057,9 +2889,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 SaveStoredWaylandScreenCastRestoreData(
                     windowId,
                     SerializePortalRestoreData(typedNewRestoreData)
-                );
-                PipeWireTrace.Write(
-                    $"WaylandKdeBackend refreshed restore data windowId={windowId}"
                 );
             }
         }
@@ -3070,14 +2899,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(previousRestoreToken))
         {
             SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
-            PipeWireTrace.Write(
-                $"WaylandKdeBackend stored initial restore token windowId={windowId}"
-            );
         }
         else if (!string.Equals(previousRestoreToken, newRestoreToken, StringComparison.Ordinal))
         {
             SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
-            PipeWireTrace.Write($"WaylandKdeBackend refreshed restore token windowId={windowId}");
         }
     }
 
@@ -3301,9 +3126,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         if (bestNewCandidate is not null && !allowUnmatchedFallback)
         {
-            PipeWireTrace.Write(
-                $"WaylandPortal new node discovered but rejected (no title match) windowId={windowId} nodeId={bestNewCandidate.Value.Id}"
-            );
         }
 
         return null;
@@ -4741,9 +4563,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 }
 
                 cts.Dispose();
-                PipeWireTrace.Write(
-                    $"PipeWireStream restart failed nodeId={_nodeId} remoteFd={(remoteFd?.ToString(CultureInfo.InvariantCulture) ?? "null")}"
-                );
                 return;
             }
 
@@ -4758,9 +4577,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _restartInProgress = false;
             }
 
-            PipeWireTrace.Write(
-                $"PipeWireStream started nodeId={_nodeId} remoteFd={(remoteFd?.ToString(CultureInfo.InvariantCulture) ?? "null")} pid={process.Id}"
-            );
 
             DrainFrameSignal();
         }
@@ -4868,9 +4684,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (!string.IsNullOrWhiteSpace(stderr))
                 {
                     string reduced = stderr.Length > 4_000 ? stderr[..4_000] : stderr;
-                    PipeWireTrace.Write(
-                        $"PipeWireStream stderr nodeId={_nodeId}: {reduced.Replace('\n', ' ').Replace('\r', ' ')}"
-                    );
                 }
             }
             catch { }
@@ -4945,9 +4758,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                                 if (_latestFrameSequence == 1)
                                 {
                                     string fingerprint = ComputeFrameFingerprint(frame);
-                                    PipeWireTrace.Write(
-                                        $"PipeWireStream first frame nodeId={_nodeId} bytes={frame.Length} sha256={fingerprint}"
-                                    );
                                 }
                                 SignalFrameReady();
 
