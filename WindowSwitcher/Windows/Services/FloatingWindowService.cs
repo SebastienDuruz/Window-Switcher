@@ -310,9 +310,6 @@ internal sealed class FloatingWindowService
                             _previewUpdateSemaphore.Release();
                     }
 
-                    if (frameTransferred)
-                        await Task.Delay(DefaultPreviewRefreshIntervalMs, operationToken)
-                            .ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

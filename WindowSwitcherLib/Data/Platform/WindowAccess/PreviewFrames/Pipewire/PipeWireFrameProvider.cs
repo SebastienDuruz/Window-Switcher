@@ -28,7 +28,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
-    private const int PipeWireReaderFrameIntervalMs = 100;
+    private const int PipeWireReaderFrameIntervalMs = 33;
     private const int WaylandInlineRequestRetries = 2;
     private const int WaylandInlineRetryDelayMs = 250;
     private const int WaylandInlineCaptureRetries = 2;
@@ -610,11 +610,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             nodeId = ResolveNodeIdFromPwDump(windowId, excludedNodeIds, allowBestCandidate: false);
             if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
             {
-                nodeId = TryStartPortalWindowScreencast(
-                    windowId,
-                    excludedNodeIds,
-                    out portalSessionPath
-                );
+                (nodeId, portalSessionPath) = await TryStartPortalWindowScreencastAsync(
+                        windowId,
+                        excludedNodeIds,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(portalSessionPath))
                     portalSessionDestination = PortalDesktopDestination;
             }
@@ -629,11 +630,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 );
                 if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
                 {
-                    nodeId = TryStartPortalWindowScreencast(
-                        windowId,
-                        Array.Empty<string>(),
-                        out portalSessionPath
-                    );
+                    (nodeId, portalSessionPath) = await TryStartPortalWindowScreencastAsync(
+                            windowId,
+                            Array.Empty<string>(),
+                            cancellationToken
+                        )
+                        .ConfigureAwait(false);
                     if (!string.IsNullOrWhiteSpace(portalSessionPath))
                         portalSessionDestination = PortalDesktopDestination;
                 }
@@ -2761,13 +2763,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 foreach (string activeNodeId in SnapshotActiveNodeIds())
                     _ = allExcludedNodeIds.Add(activeNodeId);
 
-                string? discoveredNodeId = WaitForNewPipeWireNodeId(
+                string? discoveredNodeId = await WaitForNewPipeWireNodeIdAsync(
                     baselineIds,
                     TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
                     windowId,
                     allExcludedNodeIds,
-                    allowUnmatchedFallback: false
-                );
+                    allowUnmatchedFallback: false,
+                    cancellationToken
+                ).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(discoveredNodeId))
                 {
                     PersistUpdatedKdeRestoreArtifacts(
@@ -3090,16 +3093,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         );
     }
 
-    private string? TryStartPortalWindowScreencast(
+    private async Task<(string? NodeId, string? SessionPath)> TryStartPortalWindowScreencastAsync(
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds,
-        out string? sessionPath
+        CancellationToken cancellationToken
     )
     {
-        sessionPath = null;
+        string? sessionPath = null;
 
         if (!LinuxDependencies.IsGdbusAvailable || !LinuxDependencies.IsPwDumpAvailable)
-            return null;
+            return (null, null);
 
         IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
         HashSet<string> baselineIds = baseline
@@ -3121,22 +3124,24 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         string? createRequestPath = ExtractObjectPath(createResult);
         if (string.IsNullOrWhiteSpace(createRequestPath))
-            return null;
+            return (null, null);
 
-        string? createPayload = WaitForPortalRequestResponse(
-            createRequestPath,
-            TimeSpan.FromMilliseconds(10_000),
-            out uint createResponseCode
-        );
+        (string? createPayload, uint createResponseCode) =
+            await WaitForPortalRequestResponseViaMonitorAsync(
+                    createRequestPath,
+                    TimeSpan.FromMilliseconds(10_000),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         if (createResponseCode != uint.MaxValue && createResponseCode != 0)
-            return null;
+            return (null, null);
 
         sessionPath = ExtractSessionHandle(createPayload);
         if (string.IsNullOrWhiteSpace(sessionPath))
         {
             string? sender = ExtractRequestSender(createRequestPath);
             if (string.IsNullOrWhiteSpace(sender))
-                return null;
+                return (null, null);
             sessionPath = $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
         }
 
@@ -3151,20 +3156,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(selectRequestPath))
         {
             ClosePortalSession(sessionPath);
-            sessionPath = null;
-            return null;
+            return (null, null);
         }
 
-        _ = WaitForPortalRequestResponse(
-            selectRequestPath,
-            TimeSpan.FromMilliseconds(10_000),
-            out uint selectResponseCode
-        );
+        (_, uint selectResponseCode) = await WaitForPortalRequestResponseViaMonitorAsync(
+                selectRequestPath,
+                TimeSpan.FromMilliseconds(10_000),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
         if (selectResponseCode != uint.MaxValue && selectResponseCode != 0)
         {
             ClosePortalSession(sessionPath);
-            sessionPath = null;
-            return null;
+            return (null, null);
         }
 
         string startOptions = $"{{'handle_token': <'{startToken}'>}}";
@@ -3177,20 +3181,20 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(startRequestPath))
         {
             ClosePortalSession(sessionPath);
-            sessionPath = null;
-            return null;
+            return (null, null);
         }
 
-        string? startPayload = WaitForPortalRequestResponse(
-            startRequestPath,
-            TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-            out uint startResponseCode
-        );
+        (string? startPayload, uint startResponseCode) =
+            await WaitForPortalRequestResponseViaMonitorAsync(
+                    startRequestPath,
+                    TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         if (startResponseCode != uint.MaxValue && startResponseCode != 0)
         {
             ClosePortalSession(sessionPath);
-            sessionPath = null;
-            return null;
+            return (null, null);
         }
 
         IReadOnlyList<string> portalStreamNodeIds = ExtractStreamNodeIds(startPayload);
@@ -3198,21 +3202,22 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             string streamNodeId = portalStreamNodeIds[index];
             if (!excludedNodeIds.Contains(streamNodeId))
-                return streamNodeId;
+                return (streamNodeId, sessionPath);
         }
 
-        string? nodeId = WaitForNewPipeWireNodeId(
-            baselineIds,
-            TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-            windowId,
-            excludedNodeIds
-        );
+        string? nodeId = await WaitForNewPipeWireNodeIdAsync(
+                baselineIds,
+                TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+                windowId,
+                excludedNodeIds,
+                cancellationToken: cancellationToken
+            )
+            .ConfigureAwait(false);
         if (!string.IsNullOrWhiteSpace(nodeId))
-            return nodeId;
+            return (nodeId, sessionPath);
 
         ClosePortalSession(sessionPath);
-        sessionPath = null;
-        return null;
+        return (null, null);
     }
 
     private string? ResolveNodeIdFromPwDump(
@@ -3241,12 +3246,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return matching.Value.Id;
     }
 
-    private string? WaitForNewPipeWireNodeId(
+    private async Task<string?> WaitForNewPipeWireNodeIdAsync(
         HashSet<string> baselineIds,
         TimeSpan timeout,
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds,
-        bool allowUnmatchedFallback = true
+        bool allowUnmatchedFallback = true,
+        CancellationToken cancellationToken = default
     )
     {
         string? windowTitle = TryGetWindowTitleById(windowId);
@@ -3279,7 +3285,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             )
                 bestNewCandidate = bestThisRound;
 
-            Thread.Sleep(PipeWireNodePollIntervalMs);
+            try
+            {
+                await Task.Delay(PipeWireNodePollIntervalMs, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
         }
 
         if (bestNewCandidate is not null && allowUnmatchedFallback)
@@ -3295,30 +3309,35 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return null;
     }
 
-    private static string? WaitForPortalRequestResponse(
+    private static async Task<(string? Payload, uint ResponseCode)> WaitForPortalRequestResponseViaMonitorAsync(
         string requestPath,
         TimeSpan timeout,
-        out uint responseCode
+        CancellationToken cancellationToken
     )
     {
-        responseCode = uint.MaxValue;
         if (string.IsNullOrWhiteSpace(requestPath) || !LinuxDependencies.IsGdbusAvailable)
-            return null;
+            return (null, uint.MaxValue);
 
         using Process? monitor = StartPortalRequestMonitor(requestPath);
         if (monitor is null)
-            return null;
+            return (null, uint.MaxValue);
 
         var buffer = new StringBuilder(capacity: 256);
         bool capturing = false;
         DateTime deadline = DateTime.UtcNow + timeout;
+        uint responseCode = uint.MaxValue;
 
         try
         {
-            while (DateTime.UtcNow < deadline)
+            while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
             {
                 TimeSpan remaining = deadline - DateTime.UtcNow;
-                string? line = ReadLineWithTimeout(monitor, remaining);
+                string? line = await ReadLineWithTimeoutAsync(
+                        monitor,
+                        remaining,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
                 if (line is null)
                     break;
 
@@ -3345,7 +3364,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (
                     TryParsePortalResponse(buffer.ToString(), out responseCode, out string? payload)
                 )
-                    return payload;
+                    return (payload, responseCode);
 
                 if (line.TrimEnd().EndsWith(")", StringComparison.Ordinal))
                     capturing = false;
@@ -3361,7 +3380,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             catch { }
         }
 
-        return null;
+        return (null, responseCode);
     }
 
     private static Process? StartPortalRequestMonitor(string requestPath)
@@ -3405,18 +3424,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
-    private static string? ReadLineWithTimeout(Process process, TimeSpan timeout)
+    private static async Task<string?> ReadLineWithTimeoutAsync(
+        Process process,
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    )
     {
         if (timeout <= TimeSpan.Zero)
             return null;
 
         try
         {
-            Task<string?> readTask = Task.Run(() => process.StandardOutput.ReadLine());
-            if (!readTask.Wait(timeout))
-                return null;
-
-            return readTask.Result;
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken
+            );
+            timeoutCts.CancelAfter(timeout);
+            return await process.StandardOutput.ReadLineAsync(timeoutCts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch
         {
@@ -4950,13 +4978,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             Process? process;
             CancellationTokenSource? cts;
-            Task? readerTask;
 
             lock (_syncRoot)
             {
                 process = _process;
                 cts = _cts;
-                readerTask = _readerTask;
                 _process = null;
                 _cts = null;
                 _readerTask = null;
@@ -4989,14 +5015,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 process.Dispose();
             }
 
-            if (readerTask is not null)
-            {
-                try
-                {
-                    readerTask.Wait(250);
-                }
-                catch { }
-            }
         }
 
         public void Dispose()
