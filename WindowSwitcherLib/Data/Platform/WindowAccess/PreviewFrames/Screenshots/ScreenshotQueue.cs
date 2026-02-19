@@ -3,7 +3,7 @@ using Avalonia.Media.Imaging;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
+namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 
 public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
 {

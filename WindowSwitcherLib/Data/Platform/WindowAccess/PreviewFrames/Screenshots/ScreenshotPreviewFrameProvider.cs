@@ -3,7 +3,7 @@ using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
+namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 
 public sealed class ScreenshotPreviewFrameProvider : IPreviewFrameProvider
 {

@@ -30,7 +30,7 @@ internal sealed class FloatingWindowService
     private readonly Image _windowScreenshot;
     private readonly Border _previewBorder;
     private readonly CancellationTokenSource _cts = new();
-    private readonly object _previewOperationCancellationSync = new();
+    private readonly Lock _previewOperationCancellationSync = new();
     private readonly SemaphoreSlim _previewUpdateSemaphore = new(1, 1);
     private CancellationTokenSource? _previewOperationCancellation = new();
     private Bitmap? _currentScreenshot;
@@ -211,7 +211,7 @@ internal sealed class FloatingWindowService
 
                 await UpdateScreenshot(PreviewRequestTimeoutMs, operationToken)
                     .ConfigureAwait(false);
-                await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken)
+                await Task.Delay(DefaultPreviewRefreshIntervalMs, operationToken)
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -245,12 +245,11 @@ internal sealed class FloatingWindowService
             {
                 if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
-
-                int timeoutMs = Math.Clamp(PreviewRequestTimeoutMs, 100, 10_000);
+                
                 var request = new ScreenshotRequest(
                     MaxWidthPx: null,
                     MaxHeightPx: null,
-                    TimeoutMs: GetStreamRequestTimeoutMs(timeoutMs)
+                    TimeoutMs: DefaultPreviewRefreshIntervalMs * 3
                 );
 
                 await foreach (
@@ -312,7 +311,7 @@ internal sealed class FloatingWindowService
                     }
 
                     if (frameTransferred)
-                        await Task.Delay(GetPreviewRefreshIntervalMs(), operationToken)
+                        await Task.Delay(DefaultPreviewRefreshIntervalMs, operationToken)
                             .ConfigureAwait(false);
                 }
             }
@@ -329,17 +328,6 @@ internal sealed class FloatingWindowService
                 await Task.Delay(500, cancellationToken).ConfigureAwait(false);
             }
         }
-    }
-
-    private static int GetPreviewRefreshIntervalMs()
-    {
-        return DefaultPreviewRefreshIntervalMs;
-    }
-
-    private static int GetStreamRequestTimeoutMs(int defaultTimeoutMs)
-    {
-        int basedOnPreviewLoop = checked(GetPreviewRefreshIntervalMs() * 3);
-        return Math.Clamp(Math.Max(defaultTimeoutMs, basedOnPreviewLoop), 100, 30_000);
     }
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
@@ -477,7 +465,7 @@ internal sealed class FloatingWindowService
         }
 
         await ClearPreviewSurfaceAsync(cancellationToken).ConfigureAwait(false);
-        await Task.Delay(GetPreviewRefreshIntervalMs(), cancellationToken).ConfigureAwait(false);
+        await Task.Delay(DefaultPreviewRefreshIntervalMs, cancellationToken).ConfigureAwait(false);
         return false;
     }
 

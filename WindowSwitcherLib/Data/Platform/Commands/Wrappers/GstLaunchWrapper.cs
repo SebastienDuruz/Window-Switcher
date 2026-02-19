@@ -10,9 +10,9 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
     private const int FGetFd = 1;
     private const int FSetFd = 2;
     private const int FdCloExec = 1;
-    private const int OptimizedPipeWireMaxFps = 30;
-    private const int OptimizedPipeWireJpegQuality = 70;
-    private const int OptimizedQueueBufferCount = 1;
+    private const int PipeWireMaxFps = 30;
+    private const int PipeWireJpegQuality = 70;
+    private const int QueueBufferCount = 1;
 
     [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static extern int Fcntl(int fd, int cmd, int arg);
@@ -100,7 +100,7 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         {
             startInfo.ArgumentList.Add("videorate");
             startInfo.ArgumentList.Add("drop-only=true");
-            startInfo.ArgumentList.Add($"max-rate={OptimizedPipeWireMaxFps}");
+            startInfo.ArgumentList.Add($"max-rate={PipeWireMaxFps}");
             startInfo.ArgumentList.Add("!");
         }
 
@@ -108,12 +108,12 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         startInfo.ArgumentList.Add("!");
         startInfo.ArgumentList.Add("queue");
         startInfo.ArgumentList.Add("leaky=downstream");
-        startInfo.ArgumentList.Add($"max-size-buffers={OptimizedQueueBufferCount}");
+        startInfo.ArgumentList.Add($"max-size-buffers={QueueBufferCount}");
         startInfo.ArgumentList.Add("max-size-bytes=0");
         startInfo.ArgumentList.Add("max-size-time=0");
         startInfo.ArgumentList.Add("!");
         startInfo.ArgumentList.Add("jpegenc");
-        startInfo.ArgumentList.Add($"quality={OptimizedPipeWireJpegQuality}");
+        startInfo.ArgumentList.Add($"quality={PipeWireJpegQuality}");
         startInfo.ArgumentList.Add("!");
         startInfo.ArgumentList.Add("fdsink");
         startInfo.ArgumentList.Add("fd=1");

@@ -9,15 +9,16 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia.Media.Imaging;
 using Tmds.DBus;
-using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
 using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 using WindowSwitcherLib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
+namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPreviewFrameProvider
 {
@@ -64,9 +65,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly IPwDumpWrapper _pwDump;
     private readonly IGdbusWrapper _gdbus;
     private readonly IGstLaunchWrapper _gstLaunch;
-    private readonly object _capturesSync = new();
-    private readonly object _nodeCacheSync = new();
-    private readonly object _dbusSync = new();
+    private readonly Lock _capturesSync = new();
+    private readonly Lock _nodeCacheSync = new();
+    private readonly Lock _dbusSync = new();
     private readonly SemaphoreSlim _waylandPortalSessionGate = new(initialCount: 1, maxCount: 1);
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(
         StringComparer.Ordinal
@@ -234,8 +235,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 yield return fallbackFrame;
             yield break;
         }
-
-        int timeoutMs = Math.Clamp(request.TimeoutMs, 100, 30_000);
+        
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
             WindowCaptureContext? capture = await EnsureCaptureAsync(windowId, cancellationToken)
@@ -277,7 +277,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 capture.Stream.EnsureRunning();
 
                 PipeWireWindowStream.FrameSnapshot? snapshot = await capture
-                    .Stream.WaitForNextFrameAsync(latestSequence, timeoutMs, cancellationToken)
+                    .Stream.WaitForNextFrameAsync(latestSequence, request.TimeoutMs, cancellationToken)
                     .ConfigureAwait(false);
 
                 if (snapshot is not null)
@@ -305,7 +305,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                 bool keepStreaming = await TryRecoverCaptureAsync(
                         capture,
-                        timeoutMs,
+                        request.TimeoutMs,
                         cancellationToken
                     )
                     .ConfigureAwait(false);

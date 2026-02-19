@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
+namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
 internal static class PipeWireTrace
 {
