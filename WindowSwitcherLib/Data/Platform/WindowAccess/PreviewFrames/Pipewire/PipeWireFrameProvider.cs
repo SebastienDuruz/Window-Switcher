@@ -29,6 +29,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
     private const int PipeWireForcedNodeRefreshCooldownMs = 1_000;
+    private const int MaxConcurrentWaylandPortalSessionCreations = 1;
     private const int PipeWireReaderFrameIntervalMs = 33;
     private const int WaylandInlineRequestRetries = 2;
     private const int WaylandInlineRetryDelayMs = 250;
@@ -69,7 +70,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly Lock _capturesSync = new();
     private readonly Lock _nodeCacheSync = new();
     private readonly Lock _dbusSync = new();
-    private readonly SemaphoreSlim _waylandPortalSessionGate = new(initialCount: 1, maxCount: 1);
+    private readonly SemaphoreSlim _waylandPortalSessionGate = new(
+        initialCount: MaxConcurrentWaylandPortalSessionCreations,
+        maxCount: MaxConcurrentWaylandPortalSessionCreations
+    );
     private readonly Dictionary<string, WindowCaptureContext> _captures = new(
         StringComparer.Ordinal
     );
