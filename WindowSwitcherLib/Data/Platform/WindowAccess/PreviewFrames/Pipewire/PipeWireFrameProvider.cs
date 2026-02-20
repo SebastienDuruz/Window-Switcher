@@ -7,7 +7,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Tmds.DBus;
 using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
 using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
@@ -298,7 +300,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (snapshot is not null)
                 {
                     latestSequence = snapshot.Value.Sequence;
-                    Bitmap? bitmap = CreateBitmap(snapshot.Value.Bytes);
+                    Bitmap? bitmap = CreateBitmap(snapshot.Value);
                     if (bitmap is not null)
                     {
                         if (!capture.FirstDeliveredFrameLogged)
@@ -3878,6 +3880,78 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
+    private static Bitmap? CreateBitmap(PipeWireWindowStream.FrameSnapshot snapshot)
+    {
+        if (snapshot.Format == PipeWireWindowStream.FrameFormat.Bgra32)
+        {
+            return CreateBitmapFromBgra(snapshot.Bytes, snapshot.WidthPx, snapshot.HeightPx);
+        }
+
+        return CreateBitmap(snapshot.Bytes);
+    }
+
+    private static Bitmap? CreateBitmapFromBgra(byte[] bytes, int widthPx, int heightPx)
+    {
+        if (bytes.Length == 0 || widthPx <= 0 || heightPx <= 0)
+            return null;
+
+        int srcStride;
+        int requiredBytes;
+        try
+        {
+            srcStride = checked(widthPx * 4);
+            requiredBytes = checked(srcStride * heightPx);
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+
+        if (bytes.Length < requiredBytes)
+            return null;
+
+        try
+        {
+            var bitmap = new WriteableBitmap(
+                new PixelSize(widthPx, heightPx),
+                new Vector(96, 96),
+                PixelFormat.Bgra8888,
+                AlphaFormat.Opaque
+            );
+            using ILockedFramebuffer framebuffer = bitmap.Lock();
+            IntPtr destination = framebuffer.Address;
+            if (destination == IntPtr.Zero)
+            {
+                bitmap.Dispose();
+                return null;
+            }
+
+            int destinationStride = framebuffer.RowBytes;
+            if (destinationStride == srcStride)
+            {
+                Marshal.Copy(bytes, 0, destination, requiredBytes);
+            }
+            else
+            {
+                for (int row = 0; row < heightPx; row++)
+                {
+                    Marshal.Copy(
+                        bytes,
+                        row * srcStride,
+                        IntPtr.Add(destination, row * destinationStride),
+                        srcStride
+                    );
+                }
+            }
+
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string ComputeFrameFingerprint(byte[] bytes)
     {
         if (bytes.Length == 0)
@@ -4588,7 +4662,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     {
         private const int MaxFrameBytes = 16 * 1024 * 1024;
 
-        public readonly record struct FrameSnapshot(long Sequence, byte[] Bytes);
+        public enum FrameFormat
+        {
+            Jpeg = 0,
+            Bgra32 = 1,
+        }
+
+        public readonly record struct FrameSnapshot(
+            long Sequence,
+            byte[] Bytes,
+            FrameFormat Format,
+            int WidthPx,
+            int HeightPx
+        );
 
         private readonly string _nodeId;
         private readonly IGstLaunchWrapper _gstLaunch;
@@ -4601,6 +4687,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         private CancellationTokenSource? _cts;
         private Task? _readerTask;
         private byte[]? _latestFrameBytes;
+        private FrameFormat _latestFrameFormat;
+        private int _latestFrameWidthPx;
+        private int _latestFrameHeightPx;
         private long _latestFrameSequence;
         private long _activeGeneration;
         private bool _hasReceivedFrame;
@@ -4622,12 +4711,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
             _minFrameIntervalMs = Math.Clamp(minFrameIntervalMs, 0, 1000);
-            _maxWidthPx = NormalizeTargetDimension(maxWidthPx);
-            _maxHeightPx = NormalizeTargetDimension(maxHeightPx);
+            int? normalizedMaxWidthPx = NormalizeTargetDimension(maxWidthPx);
+            int? normalizedMaxHeightPx = NormalizeTargetDimension(maxHeightPx);
+            _rawFrameWidthPx = normalizedMaxWidthPx ?? DefaultRawFrameWidthPx;
+            _rawFrameHeightPx = normalizedMaxHeightPx ?? DefaultRawFrameHeightPx;
         }
 
-        private readonly int? _maxWidthPx;
-        private readonly int? _maxHeightPx;
+        private readonly int _rawFrameWidthPx;
+        private readonly int _rawFrameHeightPx;
+        private const int DefaultRawFrameWidthPx = 640;
+        private const int DefaultRawFrameHeightPx = 360;
 
         public void EnsureRunning()
         {
@@ -4674,12 +4767,21 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             Stop();
 
             int? remoteFd = GetPipeWireRemoteFd();
-            Process? process = _gstLaunch.StartPipeWireJpegStream(
-                _nodeId,
-                remoteFd,
-                _maxWidthPx,
-                _maxHeightPx
-            );
+            Process? process = null;
+            if (
+                _rawFrameWidthPx > 0
+                && _rawFrameHeightPx > 0
+                && TryComputeRawFrameByteCount(_rawFrameWidthPx, _rawFrameHeightPx, out int rawBytes)
+                && rawBytes <= MaxFrameBytes
+            )
+            {
+                process = _gstLaunch.StartPipeWireRawBgraStream(
+                    _nodeId,
+                    _rawFrameWidthPx,
+                    _rawFrameHeightPx,
+                    remoteFd
+                );
+            }
             var cts = new CancellationTokenSource();
             if (process is null)
             {
@@ -4700,9 +4802,21 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 generation = _activeGeneration;
                 _faulted = false;
                 _hasReceivedFrame = false;
+                _latestFrameFormat = FrameFormat.Bgra32;
+                _latestFrameWidthPx = _rawFrameWidthPx;
+                _latestFrameHeightPx = _rawFrameHeightPx;
                 _process = process;
                 _cts = cts;
-                _readerTask = Task.Run(() => ReadLoop(process, cts.Token, generation));
+                _readerTask = Task.Run(
+                    () =>
+                        ReadRawLoop(
+                            process,
+                            cts.Token,
+                            generation,
+                            _rawFrameWidthPx,
+                            _rawFrameHeightPx
+                        )
+                );
                 _ = Task.Run(() => DrainErrors(process, cts.Token));
                 _restartInProgress = false;
             }
@@ -4724,7 +4838,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 FrameSnapshot? snapshot = GetFrameSnapshotAfter(-1);
                 if (snapshot is not null)
                 {
-                    return CreateBitmap(snapshot.Value.Bytes);
+                    return CreateBitmap(snapshot.Value);
                 }
 
                 if (IsFaulted())
@@ -4792,8 +4906,51 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (_latestFrameBytes is null || _latestFrameSequence <= afterSequence)
                     return null;
 
-                return new FrameSnapshot(_latestFrameSequence, _latestFrameBytes);
+                return new FrameSnapshot(
+                    _latestFrameSequence,
+                    _latestFrameBytes,
+                    _latestFrameFormat,
+                    _latestFrameWidthPx,
+                    _latestFrameHeightPx
+                );
             }
+        }
+
+        private static bool TryComputeRawFrameByteCount(
+            int frameWidthPx,
+            int frameHeightPx,
+            out int frameByteCount
+        )
+        {
+            frameByteCount = 0;
+            if (frameWidthPx <= 0 || frameHeightPx <= 0)
+                return false;
+
+            try
+            {
+                int stride = checked(frameWidthPx * 4);
+                frameByteCount = checked(stride * frameHeightPx);
+                return frameByteCount > 0;
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadExact(Stream stream, byte[] buffer, int length)
+        {
+            int offset = 0;
+            while (offset < length)
+            {
+                int read = stream.Read(buffer, offset, length - offset);
+                if (read <= 0)
+                    return false;
+
+                offset += read;
+            }
+
+            return true;
         }
 
         private bool IsFaulted()
@@ -4819,7 +4976,74 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             catch { }
         }
 
-        private void ReadLoop(Process process, CancellationToken cancellationToken, long generation)
+        private void ReadRawLoop(
+            Process process,
+            CancellationToken cancellationToken,
+            long generation,
+            int frameWidthPx,
+            int frameHeightPx
+        )
+        {
+            try
+            {
+                if (
+                    !TryComputeRawFrameByteCount(
+                        frameWidthPx,
+                        frameHeightPx,
+                        out int frameByteCount
+                    )
+                    || frameByteCount > MaxFrameBytes
+                )
+                {
+                    return;
+                }
+
+                byte[] readBuffer = new byte[frameByteCount];
+                Stream output = process.StandardOutput.BaseStream;
+                long nextAcceptedFrameAtMs = 0;
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    if (!TryReadExact(output, readBuffer, frameByteCount))
+                        break;
+
+                    long now = Environment.TickCount64;
+                    if (_minFrameIntervalMs > 0 && now < nextAcceptedFrameAtMs)
+                        continue;
+
+                    var frame = new byte[frameByteCount];
+                    Buffer.BlockCopy(readBuffer, 0, frame, 0, frameByteCount);
+
+                    lock (_syncRoot)
+                    {
+                        _latestFrameBytes = frame;
+                        _latestFrameFormat = FrameFormat.Bgra32;
+                        _latestFrameWidthPx = frameWidthPx;
+                        _latestFrameHeightPx = frameHeightPx;
+                        _latestFrameSequence++;
+                        _hasReceivedFrame = true;
+                    }
+
+                    SignalFrameReady();
+
+                    if (_minFrameIntervalMs > 0)
+                        nextAcceptedFrameAtMs = now + _minFrameIntervalMs;
+                }
+            }
+            catch (Exception) { }
+            finally
+            {
+                lock (_syncRoot)
+                {
+                    // Ignore stale readers from older generations after a restart.
+                    if (_activeGeneration == generation)
+                        _faulted = true;
+                }
+                SignalFrameReady();
+            }
+        }
+
+        private void ReadJpegLoop(Process process, CancellationToken cancellationToken, long generation)
         {
             try
             {
@@ -4882,6 +5106,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                                 lock (_syncRoot)
                                 {
                                     _latestFrameBytes = frame;
+                                    _latestFrameFormat = FrameFormat.Jpeg;
+                                    _latestFrameWidthPx = 0;
+                                    _latestFrameHeightPx = 0;
                                     _latestFrameSequence++;
                                     _hasReceivedFrame = true;
                                 }
@@ -4932,6 +5159,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _cts = null;
                 _readerTask = null;
                 _latestFrameBytes = null;
+                _latestFrameFormat = FrameFormat.Jpeg;
+                _latestFrameWidthPx = 0;
+                _latestFrameHeightPx = 0;
                 _hasReceivedFrame = false;
                 _faulted = true;
             }
