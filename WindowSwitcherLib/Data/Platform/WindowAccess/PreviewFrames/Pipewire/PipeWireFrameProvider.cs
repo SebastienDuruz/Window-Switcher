@@ -4334,12 +4334,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(sessionPath))
             return;
 
+        _ = ClosePortalSessionBestEffortAsync(sessionPath, sessionDestination);
+    }
+
+    private async Task ClosePortalSessionBestEffortAsync(
+        string sessionPath,
+        string? sessionDestination
+    )
+    {
         try
         {
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            ClosePortalSessionAsync(sessionPath, sessionDestination, timeoutCts.Token)
-                .GetAwaiter()
-                .GetResult();
+            await ClosePortalSessionAsync(sessionPath, sessionDestination, timeoutCts.Token)
+                .ConfigureAwait(false);
         }
         catch
         {
