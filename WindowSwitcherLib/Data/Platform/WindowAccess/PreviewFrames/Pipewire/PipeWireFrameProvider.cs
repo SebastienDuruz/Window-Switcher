@@ -28,6 +28,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
+    private const int PipeWireForcedNodeRefreshCooldownMs = 1_000;
     private const int PipeWireReaderFrameIntervalMs = 33;
     private const int WaylandInlineRequestRetries = 2;
     private const int WaylandInlineRetryDelayMs = 250;
@@ -88,6 +89,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
+    private bool _nodeCandidatesRefreshInProgress;
     private readonly bool _isWaylandSession;
     private readonly bool _isKdeDesktopSession;
     private Connection? _sessionBusConnection;
@@ -1813,11 +1815,24 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             restoreData is PortalRestoreData typedRestoreData
             && MatchesRestoreDataWindowTitle(typedRestoreData, windowTitlePatterns);
         IReadOnlyList<NodeCandidate>? discoveredNodes = null;
+        bool discoveredNodesForceRefreshed = false;
         IReadOnlyCollection<WindowConfig>? windowsSnapshot = null;
 
         NodeCandidate? FindNodeCandidate(string nodeId)
         {
-            discoveredNodes ??= GetPipeWireNodeCandidates(forceRefresh: true);
+            discoveredNodes ??= GetPipeWireNodeCandidates(forceRefresh: false);
+            for (int index = 0; index < discoveredNodes.Count; index++)
+            {
+                NodeCandidate candidate = discoveredNodes[index];
+                if (string.Equals(candidate.Id, nodeId, StringComparison.Ordinal))
+                    return candidate;
+            }
+
+            if (discoveredNodesForceRefreshed)
+                return null;
+
+            discoveredNodes = GetPipeWireNodeCandidates(forceRefresh: true);
+            discoveredNodesForceRefreshed = true;
             for (int index = 0; index < discoveredNodes.Count; index++)
             {
                 NodeCandidate candidate = discoveredNodes[index];
@@ -2053,8 +2068,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (windowPatterns.Count > 0)
         {
             IReadOnlyList<NodeCandidate> nodes = discoveredNodes ??= GetPipeWireNodeCandidates(
-                forceRefresh: true
+                forceRefresh: false
             );
+            if (nodes.Count == 0 && !discoveredNodesForceRefreshed)
+            {
+                nodes = GetPipeWireNodeCandidates(forceRefresh: true);
+                discoveredNodes = nodes;
+                discoveredNodesForceRefreshed = true;
+            }
             var matchingCandidates = new List<NodeCandidate>(capacity: streams.Count);
             for (int index = 0; index < nodes.Count; index++)
             {
@@ -3992,24 +4013,47 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private IReadOnlyList<NodeCandidate> GetPipeWireNodeCandidates(bool forceRefresh = false)
     {
-        if (!forceRefresh)
-        {
-            lock (_nodeCacheSync)
-            {
-                if (
-                    _cachedNodeCandidates.Count > 0
-                    && DateTime.UtcNow - _nodeCandidatesCachedAtUtc
-                        < TimeSpan.FromMilliseconds(PipeWireNodeCacheTtlMs)
-                )
-                {
-                    return _cachedNodeCandidates;
-                }
-            }
-        }
-
-        IReadOnlyList<NodeCandidate> freshCandidates = LoadPipeWireNodeCandidates();
+        DateTime nowUtc = DateTime.UtcNow;
         lock (_nodeCacheSync)
         {
+            bool hasCache = _cachedNodeCandidates.Count > 0;
+            if (hasCache)
+            {
+                TimeSpan cacheAge = nowUtc - _nodeCandidatesCachedAtUtc;
+                if (
+                    !forceRefresh
+                    && cacheAge < TimeSpan.FromMilliseconds(PipeWireNodeCacheTtlMs)
+                )
+                    return _cachedNodeCandidates;
+
+                if (
+                    forceRefresh
+                    && cacheAge < TimeSpan.FromMilliseconds(PipeWireForcedNodeRefreshCooldownMs)
+                )
+                    return _cachedNodeCandidates;
+            }
+
+            // If a refresh is already in progress, reuse the latest snapshot to avoid parallel pw-dump calls.
+            if (_nodeCandidatesRefreshInProgress)
+                return _cachedNodeCandidates;
+
+            _nodeCandidatesRefreshInProgress = true;
+        }
+
+        IReadOnlyList<NodeCandidate> freshCandidates = Array.Empty<NodeCandidate>();
+        try
+        {
+            freshCandidates = LoadPipeWireNodeCandidates();
+        }
+        catch
+        {
+            // Fallback to an empty snapshot on loader failures.
+            freshCandidates = Array.Empty<NodeCandidate>();
+        }
+
+        lock (_nodeCacheSync)
+        {
+            _nodeCandidatesRefreshInProgress = false;
             _cachedNodeCandidates = freshCandidates;
             _nodeCandidatesCachedAtUtc = DateTime.UtcNow;
             return _cachedNodeCandidates;
