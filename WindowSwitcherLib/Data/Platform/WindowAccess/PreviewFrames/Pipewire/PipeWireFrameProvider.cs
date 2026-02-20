@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -17,7 +16,6 @@ using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -26,45 +24,17 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 {
     private const int PipeWireReconnectDelayMs = 300;
     private const int PipeWireNodePollIntervalMs = 300;
-    private const int FallbackPreviewDelayMs = 100;
     private const int PipeWireNodeDiscoveryTimeoutMs = 20_000;
     private const int CaptureCreationTimeoutMs = 30_000;
     private const int PipeWireNodeCacheTtlMs = 500;
     private const int PipeWireForcedNodeRefreshCooldownMs = 1_000;
     private const int MaxConcurrentWaylandPortalSessionCreations = 1;
     private const int PipeWireReaderFrameIntervalMs = 33;
-    private const int WaylandInlineRequestRetries = 2;
-    private const int WaylandInlineRetryDelayMs = 250;
-    private const int WaylandInlineCaptureRetries = 2;
-    private const int WaylandInlineCaptureRetryDelayMs = 250;
-    private const bool EnablePortalFallback = true;
     private const string PortalDesktopDestination = "org.freedesktop.portal.Desktop";
     private const string KdePortalBackendDestination = "org.freedesktop.impl.portal.desktop.kde";
     private const string KdePortalScreenCastInterface = "org.freedesktop.impl.portal.ScreenCast";
     private const string KdePortalAppId = "windowswitcher";
-    private static readonly Regex ObjectPathRegex = new(@"'(/org/[^']+)'", RegexOptions.Compiled);
-    private static readonly Regex PortalCallReplyCodeRegex = new(
-        @"\(\s*uint32\s+(?<code>\d+)\s*,",
-        RegexOptions.Compiled | RegexOptions.Singleline
-    );
-    private static readonly Regex PortalResponseRegex = new(
-        @"Response\s*\(\s*uint32\s+(?<code>\d+)\s*,\s*(?<payload>.*)\)\s*$",
-        RegexOptions.Compiled | RegexOptions.Singleline
-    );
-    private static readonly Regex PortalSessionHandleRegex = new(
-        @"'session_handle'\s*:\s*<'(?<path>/org/[^']+)'>",
-        RegexOptions.Compiled
-    );
-    private static readonly Regex PortalStreamsRegex = new(
-        @"'streams'\s*:\s*<\[(?<streams>.*)\]>",
-        RegexOptions.Compiled | RegexOptions.Singleline
-    );
-    private static readonly Regex PortalStreamNodeIdRegex = new(
-        @"\(\s*uint32\s+(?<id>\d+)\s*,",
-        RegexOptions.Compiled
-    );
 
-    private readonly ScreenshotPreviewFrameProvider _fallbackProvider;
     private readonly WinAccessorBase _accessorBase;
     private readonly IPwDumpWrapper _pwDump;
     private readonly IGdbusWrapper _gdbus;
@@ -92,7 +62,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly Dictionary<string, HashSet<string>> _excludedNodesByWindow = new(
         StringComparer.Ordinal
     );
-    private readonly HashSet<string> _failedWindows = new(StringComparer.Ordinal);
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private bool _nodeCandidatesRefreshInProgress;
@@ -111,7 +80,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         ArgumentNullException.ThrowIfNull(accessorBase);
 
         _accessorBase = accessorBase;
-        _fallbackProvider = new ScreenshotPreviewFrameProvider(accessorBase);
         _pwDump = pwDump ?? new PwDumpWrapper();
         _gdbus = gdbus ?? new GdbusWrapper();
         _gstLaunch = gstLaunch ?? new GstLaunchWrapper();
@@ -135,8 +103,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 string.IsNullOrWhiteSpace(windowId)
                 || !RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
             )
-                return await RequestFallbackAsync(windowId, request, cancellationToken)
-                    .ConfigureAwait(false);
+                return null;
 
             WindowCaptureContext? capture = await EnsureCaptureAsync(
                     windowId,
@@ -144,76 +111,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            if (_isWaylandSession && (capture is null || capture.ForceFallback))
-            {
-                for (int attempt = 0; attempt < WaylandInlineCaptureRetries; attempt++)
-                {
-                    try
-                    {
-                        await Task.Delay(WaylandInlineCaptureRetryDelayMs, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return null;
-                    }
 
-                    capture = await EnsureCaptureAsync(windowId, request, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (capture is not null && !capture.ForceFallback)
-                        break;
-                }
-            }
+            if (capture is null)
+                return null;
 
-            if (capture is null || capture.ForceFallback)
-                return _isWaylandSession
-                    ? null
-                    : await RequestFallbackAsync(windowId, request, cancellationToken)
-                        .ConfigureAwait(false);
-
-            Bitmap? frame = await TryRequestCaptureFrameAsync(capture, request, cancellationToken)
+            return await TryRequestCaptureFrameAsync(capture, request, cancellationToken)
                 .ConfigureAwait(false);
-            if (frame is not null)
-                return frame;
-
-            if (_isWaylandSession)
-            {
-                for (int attempt = 0; attempt < WaylandInlineRequestRetries; attempt++)
-                {
-                    try
-                    {
-                        await Task.Delay(WaylandInlineRetryDelayMs, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return null;
-                    }
-
-                    WindowCaptureContext? retryCapture = await EnsureCaptureAsync(
-                            windowId,
-                            request,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                    if (retryCapture is null || retryCapture.ForceFallback)
-                        continue;
-
-                    frame = await TryRequestCaptureFrameAsync(
-                            retryCapture,
-                            request,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                    if (frame is not null)
-                        return frame;
-                }
-            }
-
-            return _isWaylandSession
-                ? null
-                : await RequestFallbackAsync(windowId, request, cancellationToken)
-                    .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -221,10 +124,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         catch (Exception)
         {
-            return _isWaylandSession
-                ? null
-                : await RequestFallbackAsync(windowId, request, cancellationToken)
-                    .ConfigureAwait(false);
+            return null;
         }
     }
 
@@ -241,14 +141,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string.IsNullOrWhiteSpace(windowId)
             || !RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
         )
-        {
-            await foreach (
-                Bitmap fallbackFrame in StreamFallbackAsync(windowId, request, cancellationToken)
-            )
-                yield return fallbackFrame;
             yield break;
-        }
-        
+
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
             WindowCaptureContext? capture = await EnsureCaptureAsync(
@@ -257,38 +151,24 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            if (capture is null || capture.ForceFallback)
+            if (capture is null)
             {
-                if (_isWaylandSession)
+                try
                 {
-                    try
-                    {
-                        await Task.Delay(PipeWireNodePollIntervalMs, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        yield break;
-                    }
-                    continue;
+                    await Task.Delay(PipeWireNodePollIntervalMs, cancellationToken)
+                        .ConfigureAwait(false);
                 }
-
-                await foreach (
-                    Bitmap fallbackFrame in StreamFallbackAsync(
-                        windowId,
-                        request,
-                        cancellationToken
-                    )
-                )
-                    yield return fallbackFrame;
-                yield break;
+                catch (OperationCanceledException)
+                {
+                    yield break;
+                }
+                continue;
             }
 
             long latestSequence = 0;
             while (
                 !cancellationToken.IsCancellationRequested
                 && !capture.IsDisposed
-                && !capture.ForceFallback
             )
             {
                 capture.Stream.EnsureRunning();
@@ -326,23 +206,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (!keepStreaming)
                     break;
             }
-
-            if (!_isWaylandSession)
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    await foreach (
-                        Bitmap fallbackFrame in StreamFallbackAsync(
-                            windowId,
-                            request,
-                            cancellationToken
-                        )
-                    )
-                        yield return fallbackFrame;
-                }
-
-                yield break;
-            }
         }
     }
 
@@ -351,13 +214,10 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (string.IsNullOrWhiteSpace(windowId))
             return;
 
-        _fallbackProvider.ForgetWindow(windowId);
-
         WindowCaptureContext? capture = null;
         CancellationTokenSource? captureCreationCancellation = null;
         lock (_capturesSync)
         {
-            _failedWindows.Remove(windowId);
             _excludedNodesByWindow.Remove(windowId);
             _pendingNodeIdsByWindow.Remove(windowId);
             if (
@@ -391,7 +251,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _captureCreationTasks.Clear();
             _captureCreationCancellationSources.Clear();
             _pendingNodeIdsByWindow.Clear();
-            _failedWindows.Clear();
             _excludedNodesByWindow.Clear();
         }
 
@@ -402,8 +261,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             cancellation.Cancel();
             cancellation.Dispose();
         }
-
-        _fallbackProvider.Dispose();
         lock (_dbusSync)
             _sessionBusConnection = null;
     }
@@ -411,7 +268,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     public async ValueTask DisposeAsync()
     {
         Dispose();
-        await _fallbackProvider.DisposeAsync().ConfigureAwait(false);
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     private async Task<WindowCaptureContext?> EnsureCaptureAsync(
@@ -424,16 +281,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         Task<WindowCaptureContext?> createTask;
         lock (_capturesSync)
         {
-            if (!_isWaylandSession && _failedWindows.Contains(windowId))
-                return null;
-
             if (_captures.TryGetValue(windowId, out WindowCaptureContext? existing))
             {
                 if (CaptureMatchesRequest(existing, request))
                     return existing;
 
                 _captures.Remove(windowId);
-                _failedWindows.Remove(windowId);
                 _pendingNodeIdsByWindow.Remove(windowId);
                 staleCapture = existing;
             }
@@ -484,12 +337,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (created is null)
             {
                 ClearPendingNodeId(windowId);
-                if (!_isWaylandSession)
-                {
-                    lock (_capturesSync)
-                        _failedWindows.Add(windowId);
-                }
-
                 return null;
             }
 
@@ -508,7 +355,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     return existing;
                 }
 
-                _failedWindows.Remove(windowId);
                 _pendingNodeIdsByWindow.Remove(windowId);
                 _captures[windowId] = created;
                 return created;
@@ -576,40 +422,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     )
                     .ConfigureAwait(false);
             }
-
-            if (started is null && excludedNodeIds.Count > 0)
+            else
             {
-                ClearExcludedNodes(windowId);
-                if (_isKdeDesktopSession)
-                {
-                    started = await TryStartKdeBackendWindowScreencastAsync(
-                            windowId,
-                            Array.Empty<string>(),
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                }
-            }
-
-            if (!_isKdeDesktopSession)
-            {
-                started ??= await TryStartWaylandPortalWindowScreencastAsync(
+                started = await TryStartWaylandPortalWindowScreencastAsync(
                         windowId,
                         excludedNodeIds,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
-
-                if (started is null && excludedNodeIds.Count > 0)
-                {
-                    ClearExcludedNodes(windowId);
-                    started = await TryStartWaylandPortalWindowScreencastAsync(
-                            windowId,
-                            Array.Empty<string>(),
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                }
             }
 
             if (started is null)
@@ -625,38 +445,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         else
         {
             nodeId = ResolveNodeIdFromPwDump(windowId, excludedNodeIds, allowBestCandidate: false);
-            if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
-            {
-                (nodeId, portalSessionPath) = await TryStartPortalWindowScreencastAsync(
-                        windowId,
-                        excludedNodeIds,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(portalSessionPath))
-                    portalSessionDestination = PortalDesktopDestination;
-            }
-
-            if (string.IsNullOrWhiteSpace(nodeId) && excludedNodeIds.Count > 0)
-            {
-                ClearExcludedNodes(windowId);
-                nodeId = ResolveNodeIdFromPwDump(
-                    windowId,
-                    Array.Empty<string>(),
-                    allowBestCandidate: false
-                );
-                if (string.IsNullOrWhiteSpace(nodeId) && EnablePortalFallback)
-                {
-                    (nodeId, portalSessionPath) = await TryStartPortalWindowScreencastAsync(
-                            windowId,
-                            Array.Empty<string>(),
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                    if (!string.IsNullOrWhiteSpace(portalSessionPath))
-                        portalSessionDestination = PortalDesktopDestination;
-                }
-            }
         }
 
         if (string.IsNullOrWhiteSpace(nodeId))
@@ -1152,7 +940,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         CancellationToken cancellationToken
     )
     {
-        if (capture.IsDisposed || capture.ForceFallback)
+        if (capture.IsDisposed)
             return null;
 
         capture.Stream.EnsureRunning();
@@ -1220,12 +1008,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
 
             capture.ConsecutiveFailures++;
-            if (capture.ConsecutiveFailures >= 1)
-            {
-                MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
-                ResetCapture(capture);
-            }
-
             return null;
         }
 
@@ -1233,18 +1015,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (capture.ConsecutiveFailures < 3)
             return null;
 
-        if (_isWaylandSession)
-        {
-            MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
-            ResetCapture(capture);
-            return null;
-        }
-
-        capture.ForceFallback = true;
-        capture.Stream.Dispose();
-        if (!string.IsNullOrWhiteSpace(capture.PortalSessionPath))
-            ClosePortalSession(capture.PortalSessionPath);
-
+        capture.Stream.Restart();
+        capture.ConsecutiveFailures = 0;
+        capture.ConsecutiveNoFrameTimeouts = 0;
         return null;
     }
 
@@ -1282,11 +1055,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             if (_isWaylandSession && !capture.Stream.HasReceivedFrame())
             {
                 capture.ConsecutiveFailures++;
-                if (capture.ConsecutiveFailures >= 2)
+                if (capture.ConsecutiveFailures >= 3)
                 {
-                    MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
-                    ResetCapture(capture);
-                    return false;
+                    capture.Stream.Restart();
+                    capture.ConsecutiveFailures = 0;
+                    capture.ConsecutiveNoFrameTimeouts = 0;
                 }
 
                 return true;
@@ -1298,39 +1071,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
 
         capture.ConsecutiveFailures++;
-        if (capture.ConsecutiveFailures < 3)
-            return true;
-
-        if (_isWaylandSession)
+        if (capture.ConsecutiveFailures >= 3)
         {
-            MarkNodeAsExcluded(capture.WindowId, capture.NodeId);
-            ResetCapture(capture);
-            return false;
+            capture.Stream.Restart();
+            capture.ConsecutiveFailures = 0;
+            capture.ConsecutiveNoFrameTimeouts = 0;
         }
 
-        capture.ForceFallback = true;
-        capture.Stream.Dispose();
-        if (!string.IsNullOrWhiteSpace(capture.PortalSessionPath))
-            ClosePortalSession(capture.PortalSessionPath);
-
-        return false;
-    }
-
-    private void ResetCapture(WindowCaptureContext capture)
-    {
-        ArgumentNullException.ThrowIfNull(capture);
-
-        lock (_capturesSync)
-        {
-            if (
-                _captures.TryGetValue(capture.WindowId, out WindowCaptureContext? existing)
-                && ReferenceEquals(existing, capture)
-            )
-                _captures.Remove(capture.WindowId);
-            _failedWindows.Remove(capture.WindowId);
-        }
-
-        capture.Dispose(ClosePortalSession);
+        return true;
     }
 
     private async Task<PortalCaptureBootstrap?> TryStartWaylandPortalWindowScreencastAsync(
@@ -2590,166 +2338,143 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 new ObjectPath("/org/freedesktop/portal/desktop")
             );
 
-            bool retryWithoutStoredArtifacts = false;
-            while (true)
-            {
-                KdePortalRequestPaths requestPaths = BuildKdePortalRequestPaths();
-                sessionPath = requestPaths.SessionPath;
+            KdePortalRequestPaths requestPaths = BuildKdePortalRequestPaths();
+            sessionPath = requestPaths.SessionPath;
 
-                IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(
-                    forceRefresh: true
-                );
-                HashSet<string> baselineIds = baseline
-                    .Select(candidate => candidate.Id)
-                    .ToHashSet(StringComparer.Ordinal);
+            IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
+            HashSet<string> baselineIds = baseline
+                .Select(candidate => candidate.Id)
+                .ToHashSet(StringComparer.Ordinal);
 
-                if (
-                    !await TryCreateKdePortalSessionAsync(
-                            screenCast,
-                            requestPaths,
-                            windowId,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false)
-                )
-                    return null;
-
-                KdeStoredArtifacts storedArtifacts = LoadKdeStoredArtifactsForAttempt(
-                    windowId,
-                    retryWithoutStoredArtifacts
-                );
-                LogKdeStoredArtifactsForAttempt(
-                    windowId,
-                    retryWithoutStoredArtifacts,
-                    storedArtifacts
-                );
-
-                Dictionary<string, object> selectOptions = BuildKdeSelectOptions(
-                    storedArtifacts.RestoreData,
-                    storedArtifacts.RestoreToken
-                );
-                if (
-                    !await TrySelectKdePortalSourcesAsync(
-                            screenCast,
-                            requestPaths,
-                            selectOptions,
-                            windowId,
-                            cancellationToken
-                        )
-                        .ConfigureAwait(false)
-                )
-                {
-                    ClosePortalSession(sessionPath, KdePortalBackendDestination);
-                    return null;
-                }
-
-                KdePortalStartResult? startResult = await TryStartKdePortalSessionAsync(
+            if (
+                !await TryCreateKdePortalSessionAsync(
                         screenCast,
                         requestPaths,
                         windowId,
                         cancellationToken
                     )
-                    .ConfigureAwait(false);
-                if (startResult is null)
-                {
-                    ClosePortalSession(sessionPath, KdePortalBackendDestination);
-                    return null;
-                }
+                    .ConfigureAwait(false)
+            )
+                return null;
 
-                string? nodeId = SelectPortalStreamNodeId(
-                    windowId,
-                    startResult.Value.Results,
-                    excludedNodeIds,
-                    out string? selectedStreamStableId,
-                    out bool shouldPersistSelectedStreamStableId
-                );
-                IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(
-                    startResult.Value.Results
-                );
-                string extractedSummary = DescribePortalStreams(extractedStreams);
+            KdeStoredArtifacts storedArtifacts = LoadKdeStoredArtifactsForAttempt(windowId);
+            LogKdeStoredArtifactsForAttempt(windowId, storedArtifacts);
 
-                if (
-                    shouldPersistSelectedStreamStableId
-                    && !string.IsNullOrWhiteSpace(selectedStreamStableId)
-                )
-                    SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
-
-                if (!string.IsNullOrWhiteSpace(nodeId))
-                {
-                    PersistUpdatedKdeRestoreArtifacts(
+            Dictionary<string, object> selectOptions = BuildKdeSelectOptions(
+                storedArtifacts.RestoreData,
+                storedArtifacts.RestoreToken
+            );
+            if (
+                !await TrySelectKdePortalSourcesAsync(
+                        screenCast,
+                        requestPaths,
+                        selectOptions,
                         windowId,
-                        storedArtifacts.RestoreData,
-                        storedArtifacts.RestoreToken,
-                        startResult.Value.RestoreData,
-                        startResult.Value.RestoreToken
-                    );
-                    SetPendingNodeId(windowId, nodeId);
-                    return new PortalCaptureBootstrap(
-                        nodeId,
-                        sessionPath,
-                        KdePortalBackendDestination,
-                        PipeWireRemoteHandle: null
-                    );
-                }
-
-                if (extractedStreams.Count > 0)
-                {
-                    if (!retryWithoutStoredArtifacts && storedArtifacts.HasAny)
-                    {
-                        ClearStoredWaylandScreenCastArtifacts(windowId);
-                        retryWithoutStoredArtifacts = true;
-                        ClosePortalSession(sessionPath, KdePortalBackendDestination);
-                        sessionPath = null;
-                        continue;
-                    }
-
-                    PersistUpdatedKdeRestoreArtifacts(
-                        windowId,
-                        storedArtifacts.RestoreData,
-                        storedArtifacts.RestoreToken,
-                        startResult.Value.RestoreData,
-                        startResult.Value.RestoreToken
-                    );
-                    ClosePortalSession(sessionPath, KdePortalBackendDestination);
-                    return null;
-                }
-
-                var allExcludedNodeIds = new HashSet<string>(
-                    excludedNodeIds,
-                    StringComparer.Ordinal
-                );
-                foreach (string activeNodeId in SnapshotActiveNodeIds())
-                    _ = allExcludedNodeIds.Add(activeNodeId);
-
-                string? discoveredNodeId = await WaitForNewPipeWireNodeIdAsync(
-                    baselineIds,
-                    TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-                    windowId,
-                    allExcludedNodeIds,
-                    allowUnmatchedFallback: false,
-                    cancellationToken
-                ).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(discoveredNodeId))
-                {
-                    PersistUpdatedKdeRestoreArtifacts(
-                        windowId,
-                        storedArtifacts.RestoreData,
-                        storedArtifacts.RestoreToken,
-                        startResult.Value.RestoreData,
-                        startResult.Value.RestoreToken
-                    );
-                    SetPendingNodeId(windowId, discoveredNodeId);
-                    return new PortalCaptureBootstrap(
-                        discoveredNodeId,
-                        sessionPath,
-                        KdePortalBackendDestination,
-                        PipeWireRemoteHandle: null
-                    );
-                }
-
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false)
+            )
+            {
                 ClosePortalSession(sessionPath, KdePortalBackendDestination);
                 return null;
             }
+
+            KdePortalStartResult? startResult = await TryStartKdePortalSessionAsync(
+                    screenCast,
+                    requestPaths,
+                    windowId,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            if (startResult is null)
+            {
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
+            }
+
+            string? nodeId = SelectPortalStreamNodeId(
+                windowId,
+                startResult.Value.Results,
+                excludedNodeIds,
+                out string? selectedStreamStableId,
+                out bool shouldPersistSelectedStreamStableId
+            );
+            IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(
+                startResult.Value.Results
+            );
+            string extractedSummary = DescribePortalStreams(extractedStreams);
+
+            if (
+                shouldPersistSelectedStreamStableId
+                && !string.IsNullOrWhiteSpace(selectedStreamStableId)
+            )
+                SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
+
+            if (!string.IsNullOrWhiteSpace(nodeId))
+            {
+                PersistUpdatedKdeRestoreArtifacts(
+                    windowId,
+                    storedArtifacts.RestoreData,
+                    storedArtifacts.RestoreToken,
+                    startResult.Value.RestoreData,
+                    startResult.Value.RestoreToken
+                );
+                SetPendingNodeId(windowId, nodeId);
+                return new PortalCaptureBootstrap(
+                    nodeId,
+                    sessionPath,
+                    KdePortalBackendDestination,
+                    PipeWireRemoteHandle: null
+                );
+            }
+
+            if (extractedStreams.Count > 0)
+            {
+                PersistUpdatedKdeRestoreArtifacts(
+                    windowId,
+                    storedArtifacts.RestoreData,
+                    storedArtifacts.RestoreToken,
+                    startResult.Value.RestoreData,
+                    startResult.Value.RestoreToken
+                );
+                ClosePortalSession(sessionPath, KdePortalBackendDestination);
+                return null;
+            }
+
+            var allExcludedNodeIds = new HashSet<string>(
+                excludedNodeIds,
+                StringComparer.Ordinal
+            );
+            foreach (string activeNodeId in SnapshotActiveNodeIds())
+                _ = allExcludedNodeIds.Add(activeNodeId);
+
+            string? discoveredNodeId = await WaitForNewPipeWireNodeIdAsync(
+                baselineIds,
+                TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+                windowId,
+                allExcludedNodeIds,
+                cancellationToken
+            ).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(discoveredNodeId))
+            {
+                PersistUpdatedKdeRestoreArtifacts(
+                    windowId,
+                    storedArtifacts.RestoreData,
+                    storedArtifacts.RestoreToken,
+                    startResult.Value.RestoreData,
+                    startResult.Value.RestoreToken
+                );
+                SetPendingNodeId(windowId, discoveredNodeId);
+                return new PortalCaptureBootstrap(
+                    discoveredNodeId,
+                    sessionPath,
+                    KdePortalBackendDestination,
+                    PipeWireRemoteHandle: null
+                );
+            }
+
+            ClosePortalSession(sessionPath, KdePortalBackendDestination);
+            return null;
         }
         catch (TimeoutException)
         {
@@ -2807,18 +2532,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return createResponseCode == 0;
     }
 
-    private KdeStoredArtifacts LoadKdeStoredArtifactsForAttempt(
-        string windowId,
-        bool retryWithoutStoredArtifacts
-    )
+    private KdeStoredArtifacts LoadKdeStoredArtifactsForAttempt(string windowId)
     {
-        if (retryWithoutStoredArtifacts)
-            return new KdeStoredArtifacts(
-                RestoreData: null,
-                RestoreToken: null,
-                StreamStableId: null
-            );
-
         PortalRestoreData? restoreData = null;
         string? storedRestoreDataValue = GetStoredWaylandScreenCastRestoreData(windowId);
         if (!string.IsNullOrWhiteSpace(storedRestoreDataValue))
@@ -2846,25 +2561,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private static void LogKdeStoredArtifactsForAttempt(
         string windowId,
-        bool retryWithoutStoredArtifacts,
         KdeStoredArtifacts storedArtifacts
     )
     {
-        if (
-            storedArtifacts.RestoreData is null
-            && string.IsNullOrWhiteSpace(storedArtifacts.RestoreToken)
-        )
-        {
-            if (retryWithoutStoredArtifacts)
-            {
-            }
-            else
-            {
-            }
-        }
-        else if (storedArtifacts.RestoreData is null)
-        {
-        }
+        _ = windowId;
+        _ = storedArtifacts;
     }
 
     private static Dictionary<string, object> BuildKdeSelectOptions(
@@ -3000,133 +2701,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         );
     }
 
-    private async Task<(string? NodeId, string? SessionPath)> TryStartPortalWindowScreencastAsync(
-        string windowId,
-        IReadOnlyCollection<string> excludedNodeIds,
-        CancellationToken cancellationToken
-    )
-    {
-        string? sessionPath = null;
-
-        if (!LinuxDependencies.IsGdbusAvailable || !LinuxDependencies.IsPwDumpAvailable)
-            return (null, null);
-
-        IReadOnlyList<NodeCandidate> baseline = GetPipeWireNodeCandidates(forceRefresh: true);
-        HashSet<string> baselineIds = baseline
-            .Select(candidate => candidate.Id)
-            .ToHashSet(StringComparer.Ordinal);
-
-        string sessionToken = $"ws_session_{Guid.NewGuid():N}";
-        string createToken = $"ws_create_{Guid.NewGuid():N}";
-        string selectToken = $"ws_select_{Guid.NewGuid():N}";
-        string startToken = $"ws_start_{Guid.NewGuid():N}";
-
-        string createOptions =
-            $"{{'session_handle_token': <'{sessionToken}'>, 'handle_token': <'{createToken}'>}}";
-        string createResult = RunPortalDesktopMethod(
-            "org.freedesktop.portal.ScreenCast.CreateSession",
-            [createOptions],
-            timeoutMs: 5_000
-        );
-
-        string? createRequestPath = ExtractObjectPath(createResult);
-        if (string.IsNullOrWhiteSpace(createRequestPath))
-            return (null, null);
-
-        (string? createPayload, uint createResponseCode) =
-            await WaitForPortalRequestResponseViaMonitorAsync(
-                    createRequestPath,
-                    TimeSpan.FromMilliseconds(10_000),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-        if (createResponseCode != uint.MaxValue && createResponseCode != 0)
-            return (null, null);
-
-        sessionPath = ExtractSessionHandle(createPayload);
-        if (string.IsNullOrWhiteSpace(sessionPath))
-        {
-            string? sender = ExtractRequestSender(createRequestPath);
-            if (string.IsNullOrWhiteSpace(sender))
-                return (null, null);
-            sessionPath = $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
-        }
-
-        string selectOptions =
-            $"{{'types': <uint32 2>, 'multiple': <false>, 'handle_token': <'{selectToken}'>}}";
-        string selectResult = RunPortalDesktopMethod(
-            "org.freedesktop.portal.ScreenCast.SelectSources",
-            [sessionPath, selectOptions],
-            timeoutMs: 5_000
-        );
-        string? selectRequestPath = ExtractObjectPath(selectResult);
-        if (string.IsNullOrWhiteSpace(selectRequestPath))
-        {
-            ClosePortalSession(sessionPath);
-            return (null, null);
-        }
-
-        (_, uint selectResponseCode) = await WaitForPortalRequestResponseViaMonitorAsync(
-                selectRequestPath,
-                TimeSpan.FromMilliseconds(10_000),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        if (selectResponseCode != uint.MaxValue && selectResponseCode != 0)
-        {
-            ClosePortalSession(sessionPath);
-            return (null, null);
-        }
-
-        string startOptions = $"{{'handle_token': <'{startToken}'>}}";
-        string startResult = RunPortalDesktopMethod(
-            "org.freedesktop.portal.ScreenCast.Start",
-            [sessionPath, string.Empty, startOptions],
-            timeoutMs: 5_000
-        );
-        string? startRequestPath = ExtractObjectPath(startResult);
-        if (string.IsNullOrWhiteSpace(startRequestPath))
-        {
-            ClosePortalSession(sessionPath);
-            return (null, null);
-        }
-
-        (string? startPayload, uint startResponseCode) =
-            await WaitForPortalRequestResponseViaMonitorAsync(
-                    startRequestPath,
-                    TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-        if (startResponseCode != uint.MaxValue && startResponseCode != 0)
-        {
-            ClosePortalSession(sessionPath);
-            return (null, null);
-        }
-
-        IReadOnlyList<string> portalStreamNodeIds = ExtractStreamNodeIds(startPayload);
-        for (int index = 0; index < portalStreamNodeIds.Count; index++)
-        {
-            string streamNodeId = portalStreamNodeIds[index];
-            if (!excludedNodeIds.Contains(streamNodeId))
-                return (streamNodeId, sessionPath);
-        }
-
-        string? nodeId = await WaitForNewPipeWireNodeIdAsync(
-                baselineIds,
-                TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-                windowId,
-                excludedNodeIds,
-                cancellationToken: cancellationToken
-            )
-            .ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(nodeId))
-            return (nodeId, sessionPath);
-
-        ClosePortalSession(sessionPath);
-        return (null, null);
-    }
-
     private string? ResolveNodeIdFromPwDump(
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds,
@@ -3158,7 +2732,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         TimeSpan timeout,
         string windowId,
         IReadOnlyCollection<string> excludedNodeIds,
-        bool allowUnmatchedFallback = true,
         CancellationToken cancellationToken = default
     )
     {
@@ -3203,243 +2776,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
         }
 
-        if (bestNewCandidate is not null && allowUnmatchedFallback)
-            return bestNewCandidate.Value.Id;
-
-        if (bestNewCandidate is not null && !allowUnmatchedFallback)
-        {
-        }
-
         return null;
-    }
-
-    private static async Task<(string? Payload, uint ResponseCode)> WaitForPortalRequestResponseViaMonitorAsync(
-        string requestPath,
-        TimeSpan timeout,
-        CancellationToken cancellationToken
-    )
-    {
-        if (string.IsNullOrWhiteSpace(requestPath) || !LinuxDependencies.IsGdbusAvailable)
-            return (null, uint.MaxValue);
-
-        using Process? monitor = StartPortalRequestMonitor(requestPath);
-        if (monitor is null)
-            return (null, uint.MaxValue);
-
-        var buffer = new StringBuilder(capacity: 256);
-        bool capturing = false;
-        DateTime deadline = DateTime.UtcNow + timeout;
-        uint responseCode = uint.MaxValue;
-
-        try
-        {
-            while (DateTime.UtcNow < deadline && !cancellationToken.IsCancellationRequested)
-            {
-                TimeSpan remaining = deadline - DateTime.UtcNow;
-                string? line = await ReadLineWithTimeoutAsync(
-                        monitor,
-                        remaining,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-                if (line is null)
-                    break;
-
-                if (!capturing)
-                {
-                    if (
-                        !line.Contains(
-                            "org.freedesktop.portal.Request.Response",
-                            StringComparison.Ordinal
-                        )
-                    )
-                        continue;
-
-                    capturing = true;
-                    buffer.Clear();
-                    buffer.Append(line);
-                }
-                else
-                {
-                    buffer.Append('\n');
-                    buffer.Append(line);
-                }
-
-                if (
-                    TryParsePortalResponse(buffer.ToString(), out responseCode, out string? payload)
-                )
-                    return (payload, responseCode);
-
-                if (line.TrimEnd().EndsWith(")", StringComparison.Ordinal))
-                    capturing = false;
-            }
-        }
-        finally
-        {
-            try
-            {
-                if (!monitor.HasExited)
-                    monitor.Kill(entireProcessTree: true);
-            }
-            catch { }
-        }
-
-        return (null, responseCode);
-    }
-
-    private static Process? StartPortalRequestMonitor(string requestPath)
-    {
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "gdbus",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            },
-        };
-
-        process.StartInfo.ArgumentList.Add("monitor");
-        process.StartInfo.ArgumentList.Add("--session");
-        process.StartInfo.ArgumentList.Add("--dest");
-        process.StartInfo.ArgumentList.Add("org.freedesktop.portal.Desktop");
-        process.StartInfo.ArgumentList.Add("--object-path");
-        process.StartInfo.ArgumentList.Add(requestPath);
-
-        try
-        {
-            process.Start();
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    _ = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
-                }
-                catch { }
-            });
-            return process;
-        }
-        catch
-        {
-            process.Dispose();
-            return null;
-        }
-    }
-
-    private static async Task<string?> ReadLineWithTimeoutAsync(
-        Process process,
-        TimeSpan timeout,
-        CancellationToken cancellationToken
-    )
-    {
-        if (timeout <= TimeSpan.Zero)
-            return null;
-
-        try
-        {
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken
-            );
-            timeoutCts.CancelAfter(timeout);
-            return await process.StandardOutput.ReadLineAsync(timeoutCts.Token)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool TryParsePortalResponse(
-        string text,
-        out uint responseCode,
-        out string? payload
-    )
-    {
-        responseCode = uint.MaxValue;
-        payload = null;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        Match match = PortalResponseRegex.Match(text);
-        if (!match.Success)
-            return false;
-
-        if (
-            !uint.TryParse(
-                match.Groups["code"].Value,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out responseCode
-            )
-        )
-            return false;
-
-        payload = match.Groups["payload"].Value;
-        return true;
-    }
-
-    private static bool IsPortalCallSuccessful(string output)
-    {
-        return TryExtractPortalCallResponseCode(output, out uint responseCode) && responseCode == 0;
-    }
-
-    private static bool TryExtractPortalCallResponseCode(string output, out uint responseCode)
-    {
-        responseCode = uint.MaxValue;
-        if (string.IsNullOrWhiteSpace(output))
-            return false;
-
-        Match match = PortalCallReplyCodeRegex.Match(output);
-        if (!match.Success)
-            return false;
-
-        return uint.TryParse(
-            match.Groups["code"].Value,
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out responseCode
-        );
-    }
-
-    private static string? ExtractSessionHandle(string? payload)
-    {
-        if (string.IsNullOrWhiteSpace(payload))
-            return null;
-
-        Match match = PortalSessionHandleRegex.Match(payload);
-        if (!match.Success)
-            return null;
-
-        return match.Groups["path"].Value;
-    }
-
-    private static IReadOnlyList<string> ExtractStreamNodeIds(string? payload)
-    {
-        if (string.IsNullOrWhiteSpace(payload))
-            return Array.Empty<string>();
-
-        Match streamsMatch = PortalStreamsRegex.Match(payload);
-        string source = streamsMatch.Success ? streamsMatch.Groups["streams"].Value : payload;
-
-        var ids = new List<string>(capacity: 4);
-        MatchCollection matches = PortalStreamNodeIdRegex.Matches(source);
-        for (int index = 0; index < matches.Count; index++)
-        {
-            string candidate = matches[index].Groups["id"].Value;
-            if (string.IsNullOrWhiteSpace(candidate))
-                continue;
-            if (!ids.Contains(candidate, StringComparer.Ordinal))
-                ids.Add(candidate);
-        }
-
-        return ids;
     }
 
     private static bool MatchesWindowId(
@@ -3961,53 +3298,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
     }
 
-    private async IAsyncEnumerable<Bitmap> StreamFallbackAsync(
-        string windowId,
-        ScreenshotRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken
-    )
-    {
-        if (_isWaylandSession)
-            yield break;
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            Bitmap? fallbackFrame = await RequestFallbackAsync(windowId, request, cancellationToken)
-                .ConfigureAwait(false);
-            if (fallbackFrame is not null)
-                yield return fallbackFrame;
-
-            try
-            {
-                await Task.Delay(FallbackPreviewDelayMs, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                yield break;
-            }
-        }
-    }
-
-    private async Task<Bitmap?> RequestFallbackAsync(
-        string windowId,
-        ScreenshotRequest request,
-        CancellationToken cancellationToken
-    )
-    {
-        if (_isWaylandSession)
-            return null;
-
-        var safeRequest = new ScreenshotRequest(
-            MaxWidthPx: request.MaxWidthPx,
-            MaxHeightPx: request.MaxHeightPx,
-            TimeoutMs: Math.Clamp(Math.Max(request.TimeoutMs, 1_500), 100, 10_000)
-        );
-
-        return await _fallbackProvider
-            .RequestAsync(windowId, safeRequest, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
     private static NodeCandidate? FindBestMatchingNode(
         IReadOnlyList<NodeCandidate> candidates,
         IReadOnlyCollection<string> normalizedWindowIds
@@ -4298,26 +3588,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
-    private void MarkNodeAsExcluded(string windowId, string nodeId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId) || string.IsNullOrWhiteSpace(nodeId))
-            return;
-
-        lock (_capturesSync)
-        {
-            if (!_excludedNodesByWindow.TryGetValue(windowId, out HashSet<string>? excludedNodeIds))
-            {
-                excludedNodeIds = new HashSet<string>(StringComparer.Ordinal);
-                _excludedNodesByWindow[windowId] = excludedNodeIds;
-            }
-
-            if (excludedNodeIds.Count >= 24)
-                excludedNodeIds.Clear();
-
-            _ = excludedNodeIds.Add(nodeId);
-        }
-    }
-
     private void ClearExcludedNodes(string windowId)
     {
         if (string.IsNullOrWhiteSpace(windowId))
@@ -4354,53 +3624,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             return string.Empty;
 
         return GetJsonScalarString(value);
-    }
-
-    private string RunPortalDesktopMethod(
-        string method,
-        IReadOnlyList<string> methodArguments,
-        int timeoutMs,
-        string destination = PortalDesktopDestination
-    )
-    {
-        var args = new List<string>
-        {
-            "call",
-            "--session",
-            "--dest",
-            destination,
-            "--object-path",
-            "/org/freedesktop/portal/desktop",
-            "--method",
-            method,
-        };
-        args.AddRange(methodArguments);
-
-        return _gdbus.Execute(args, timeoutMs);
-    }
-
-    private static string? ExtractObjectPath(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        Match match = ObjectPathRegex.Match(value);
-        if (!match.Success)
-            return null;
-
-        return match.Groups[1].Value;
-    }
-
-    private static string? ExtractRequestSender(string requestPath)
-    {
-        if (string.IsNullOrWhiteSpace(requestPath))
-            return null;
-
-        string[] parts = requestPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2)
-            return null;
-
-        return parts[^2];
     }
 
     private void ClosePortalSession(string sessionPath, string? sessionDestination = null)
@@ -4642,7 +3865,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public int? TargetHeightPx { get; } = targetHeightPx;
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
-        public bool ForceFallback { get; set; }
         public bool FirstDeliveredFrameLogged { get; set; }
         public bool IsDisposed { get; private set; }
 

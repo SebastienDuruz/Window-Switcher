@@ -45,35 +45,20 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         if (!normalizedWidthPx.HasValue || !normalizedHeightPx.HasValue)
             return null;
 
-        Process? optimized = TryStartPipeWireRawBgraStream(
+        Process? process = TryStartPipeWireRawBgraStream(
             nodeId,
             pipeWireRemoteFd,
             useVideoRate: true,
             widthPx: normalizedWidthPx.Value,
             heightPx: normalizedHeightPx.Value
         );
-        if (optimized is null)
+        if (process is null)
             return null;
 
-        // If the optimized pipeline exits right away (e.g. missing videorate), retry with a compatible pipeline.
-        if (!optimized.WaitForExit(milliseconds: 150))
-            return optimized;
+        if (!process.WaitForExit(milliseconds: 150))
+            return process;
 
-        optimized.Dispose();
-        Process? compatible = TryStartPipeWireRawBgraStream(
-            nodeId,
-            pipeWireRemoteFd,
-            useVideoRate: false,
-            widthPx: normalizedWidthPx.Value,
-            heightPx: normalizedHeightPx.Value
-        );
-        if (compatible is null)
-            return null;
-
-        if (!compatible.WaitForExit(milliseconds: 150))
-            return compatible;
-
-        compatible.Dispose();
+        process.Dispose();
         return null;
     }
 
@@ -93,47 +78,21 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         int? normalizedMaxWidthPx = NormalizePipeWireDimension(maxWidthPx);
         int? normalizedMaxHeightPx = NormalizePipeWireDimension(maxHeightPx);
 
-        Process? optimized = TryStartPipeWireJpegStream(
+        Process? process = TryStartPipeWireJpegStream(
             nodeId,
             pipeWireRemoteFd,
             useVideoRate: true,
             maxWidthPx: normalizedMaxWidthPx,
             maxHeightPx: normalizedMaxHeightPx
         );
-        if (optimized is null)
+        if (process is null)
             return null;
 
-        // If the optimized pipeline exits right away (e.g. missing videorate), retry with a compatible pipeline.
-        if (!optimized.WaitForExit(milliseconds: 150))
-            return optimized;
+        if (!process.WaitForExit(milliseconds: 150))
+            return process;
 
-        optimized.Dispose();
-        Process? compatible = TryStartPipeWireJpegStream(
-            nodeId,
-            pipeWireRemoteFd,
-            useVideoRate: false,
-            maxWidthPx: normalizedMaxWidthPx,
-            maxHeightPx: normalizedMaxHeightPx
-        );
-        if (compatible is null)
-            return null;
-
-        if (!compatible.WaitForExit(milliseconds: 150))
-            return compatible;
-
-        compatible.Dispose();
-
-        // Last-resort fallback when videoscale/caps negotiation fails on some environments.
-        if (!normalizedMaxWidthPx.HasValue && !normalizedMaxHeightPx.HasValue)
-            return null;
-
-        return TryStartPipeWireJpegStream(
-            nodeId,
-            pipeWireRemoteFd,
-            useVideoRate: false,
-            maxWidthPx: null,
-            maxHeightPx: null
-        );
+        process.Dispose();
+        return null;
     }
 
     private Process? TryStartPipeWireJpegStream(
