@@ -126,8 +126,8 @@ internal sealed class FloatingWindowService
         double scale = _ownerWindow.RenderScaling;
         if (scale <= 0)
             scale = 1;
-        int widthPx = (int)Math.Clamp(Math.Round(previewWidth * scale), 1, 8192);
-        int heightPx = (int)Math.Clamp(Math.Round(previewHeight * scale), 1, 8192);
+        int widthPx = (int)Math.Round(previewWidth * scale);
+        int heightPx = (int)Math.Round(previewHeight * scale);
         Volatile.Write(ref _targetScreenshotWidthPx, widthPx);
         Volatile.Write(ref _targetScreenshotHeightPx, heightPx);
     }
@@ -353,7 +353,7 @@ internal sealed class FloatingWindowService
             var request = new ScreenshotRequest(
                 MaxWidthPx: widthPx > 0 ? widthPx : null,
                 MaxHeightPx: heightPx > 0 ? heightPx : null,
-                TimeoutMs: Math.Clamp(requestTimeoutMs, 100, 10_000)
+                TimeoutMs: requestTimeoutMs
             );
 
             appScreenshot = await _previewFrameProvider

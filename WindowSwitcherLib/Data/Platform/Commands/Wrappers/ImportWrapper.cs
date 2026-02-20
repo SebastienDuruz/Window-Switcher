@@ -33,7 +33,7 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 
         int quality = 80;
 
-        int timeoutMs = Math.Clamp(request.TimeoutMs, 100, 10_000);
+        int timeoutMs = request.TimeoutMs;
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         linkedCts.CancelAfter(timeoutMs);
         CancellationToken linkedToken = linkedCts.Token;

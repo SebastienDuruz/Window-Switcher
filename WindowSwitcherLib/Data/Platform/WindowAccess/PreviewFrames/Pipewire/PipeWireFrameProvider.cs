@@ -919,7 +919,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (!value.HasValue || value.Value <= 0)
             return null;
 
-        return Math.Clamp(value.Value, 1, 8192);
+        return value.Value;
     }
 
     private static bool CaptureMatchesRequest(
@@ -945,7 +945,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         capture.Stream.EnsureRunning();
 
-        int timeoutMs = Math.Clamp(request.TimeoutMs, 100, 10_000);
+        int timeoutMs = request.TimeoutMs;
         Bitmap? frame = await capture
             .Stream.GetFrameAsync(timeoutMs, cancellationToken)
             .ConfigureAwait(false);
@@ -995,7 +995,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         if (_isWaylandSession && !capture.Stream.HasReceivedFrame())
         {
-            int bootstrapTimeoutMs = Math.Clamp(Math.Max(timeoutMs, 1_200), 300, 3_000);
+            int bootstrapTimeoutMs = Math.Max(timeoutMs, 1_200);
             frame = await capture
                 .Stream.GetFrameAsync(bootstrapTimeoutMs, cancellationToken)
                 .ConfigureAwait(false);
@@ -3932,7 +3932,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _nodeId = nodeId;
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
-            _minFrameIntervalMs = Math.Clamp(minFrameIntervalMs, 0, 1000);
+            _minFrameIntervalMs = minFrameIntervalMs;
             int? normalizedMaxWidthPx = NormalizeTargetDimension(maxWidthPx);
             int? normalizedMaxHeightPx = NormalizeTargetDimension(maxHeightPx);
             _rawFrameWidthPx = normalizedMaxWidthPx ?? DefaultRawFrameWidthPx;
@@ -4052,7 +4052,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken
             );
-            linkedCts.CancelAfter(Math.Clamp(timeoutMs, 100, 10_000));
+            linkedCts.CancelAfter(timeoutMs);
             CancellationToken token = linkedCts.Token;
 
             while (!token.IsCancellationRequested)
@@ -4092,7 +4092,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken
             );
-            linkedCts.CancelAfter(Math.Clamp(timeoutMs, 100, 10_000));
+            linkedCts.CancelAfter(timeoutMs);
             CancellationToken token = linkedCts.Token;
 
             while (!token.IsCancellationRequested)

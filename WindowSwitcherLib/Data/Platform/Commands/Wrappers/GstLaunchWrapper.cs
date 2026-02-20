@@ -14,7 +14,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
     // Keep 30 FPS but lower JPEG complexity/size to reduce encode+decode CPU cost.
     private const int PipeWireJpegQuality = 55;
     private const int QueueBufferCount = 1;
-    private const int MaxScaledDimensionPx = 8192;
 
     [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static extern int Fcntl(int fd, int cmd, int arg);
@@ -279,7 +278,7 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         if (!value.HasValue || value.Value <= 0)
             return null;
 
-        return Math.Clamp(value.Value, 1, MaxScaledDimensionPx);
+        return value.Value;
     }
 
     private static string BuildScaledVideoCaps(int? maxWidthPx, int? maxHeightPx)
