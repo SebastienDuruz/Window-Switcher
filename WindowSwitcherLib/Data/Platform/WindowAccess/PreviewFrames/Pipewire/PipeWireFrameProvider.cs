@@ -4488,6 +4488,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         private Task? _readerTask;
         private byte[]? _latestFrameBytes;
         private long _latestFrameSequence;
+        private long _activeGeneration;
         private bool _hasReceivedFrame;
         private bool _disposed;
         private bool _faulted;
@@ -4566,13 +4567,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return;
             }
 
+            long generation;
             lock (_syncRoot)
             {
+                _activeGeneration++;
+                generation = _activeGeneration;
                 _faulted = false;
                 _hasReceivedFrame = false;
                 _process = process;
                 _cts = cts;
-                _readerTask = Task.Run(() => ReadLoop(process, cts.Token));
+                _readerTask = Task.Run(() => ReadLoop(process, cts.Token, generation));
                 _ = Task.Run(() => DrainErrors(process, cts.Token));
                 _restartInProgress = false;
             }
@@ -4689,7 +4693,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             catch { }
         }
 
-        private void ReadLoop(Process process, CancellationToken cancellationToken)
+        private void ReadLoop(Process process, CancellationToken cancellationToken, long generation)
         {
             try
             {
@@ -4779,7 +4783,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             finally
             {
                 lock (_syncRoot)
-                    _faulted = true;
+                {
+                    // Ignore stale readers from older generations after a restart.
+                    if (_activeGeneration == generation)
+                        _faulted = true;
+                }
                 SignalFrameReady();
             }
         }
@@ -4791,6 +4799,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             lock (_syncRoot)
             {
+                _activeGeneration++;
                 process = _process;
                 cts = _cts;
                 _process = null;
