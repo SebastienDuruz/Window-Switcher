@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Buffers;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -179,7 +180,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (snapshot is not null)
                 {
                     latestSequence = snapshot.Value.Sequence;
-                    Bitmap? bitmap = CreateBitmap(snapshot.Value);
+                    Bitmap? bitmap;
+                    try
+                    {
+                        bitmap = CreateBitmap(snapshot.Value);
+                    }
+                    finally
+                    {
+                        capture.Stream.ReleaseSnapshot(snapshot.Value);
+                    }
                     if (bitmap is not null)
                     {
                         capture.ConsecutiveFailures = 0;
@@ -3851,8 +3860,34 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             byte[] Bytes,
             FrameFormat Format,
             int WidthPx,
-            int HeightPx
+            int HeightPx,
+            FrameBufferLease? Lease
         );
+
+        public sealed class FrameBufferLease(ArrayPool<byte> pool, byte[] buffer)
+        {
+            private byte[]? _buffer = buffer;
+            private int _refCount = 1;
+
+            public byte[] Buffer => _buffer ?? Array.Empty<byte>();
+
+            public void AddRef()
+            {
+                _ = Interlocked.Increment(ref _refCount);
+            }
+
+            public void Release()
+            {
+                if (Interlocked.Decrement(ref _refCount) != 0)
+                    return;
+
+                byte[]? released = Interlocked.Exchange(ref _buffer, null);
+                if (released is null)
+                    return;
+
+                pool.Return(released);
+            }
+        }
 
         private readonly string _nodeId;
         private readonly IGstLaunchWrapper _gstLaunch;
@@ -3860,11 +3895,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         private readonly int _minFrameIntervalMs;
         private readonly object _syncRoot = new();
         private readonly SemaphoreSlim _frameReadySignal = new(initialCount: 0, maxCount: 1);
+        private readonly ArrayPool<byte> _framePool = ArrayPool<byte>.Shared;
 
         private Process? _process;
         private CancellationTokenSource? _cts;
         private Task? _readerTask;
         private byte[]? _latestFrameBytes;
+        private FrameBufferLease? _latestFrameLease;
         private FrameFormat _latestFrameFormat;
         private int _latestFrameWidthPx;
         private int _latestFrameHeightPx;
@@ -4005,18 +4042,22 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         public async Task<Bitmap?> GetFrameAsync(int timeoutMs, CancellationToken cancellationToken)
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken
-            );
-            linkedCts.CancelAfter(timeoutMs);
-            CancellationToken token = linkedCts.Token;
+            bool hasFiniteTimeout = timeoutMs >= 0;
+            long deadlineMs = hasFiniteTimeout ? Environment.TickCount64 + timeoutMs : 0;
 
-            while (!token.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 FrameSnapshot? snapshot = GetFrameSnapshotAfter(-1);
                 if (snapshot is not null)
                 {
-                    return CreateBitmap(snapshot.Value);
+                    try
+                    {
+                        return CreateBitmap(snapshot.Value);
+                    }
+                    finally
+                    {
+                        ReleaseSnapshot(snapshot.Value);
+                    }
                 }
 
                 if (IsFaulted())
@@ -4024,7 +4065,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                 try
                 {
-                    await _frameReadySignal.WaitAsync(token).ConfigureAwait(false);
+                    if (hasFiniteTimeout)
+                    {
+                        long remainingMs = deadlineMs - Environment.TickCount64;
+                        if (remainingMs <= 0)
+                            return null;
+
+                        bool signaled = await _frameReadySignal
+                            .WaitAsync(
+                                millisecondsTimeout: remainingMs > int.MaxValue
+                                    ? int.MaxValue
+                                    : (int)remainingMs,
+                                cancellationToken
+                            )
+                            .ConfigureAwait(false);
+                        if (!signaled)
+                            return null;
+                    }
+                    else
+                    {
+                        await _frameReadySignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -4039,19 +4100,21 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             return null;
         }
 
+        public void ReleaseSnapshot(FrameSnapshot snapshot)
+        {
+            snapshot.Lease?.Release();
+        }
+
         public async Task<FrameSnapshot?> WaitForNextFrameAsync(
             long afterSequence,
             int timeoutMs,
             CancellationToken cancellationToken
         )
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken
-            );
-            linkedCts.CancelAfter(timeoutMs);
-            CancellationToken token = linkedCts.Token;
+            bool hasFiniteTimeout = timeoutMs >= 0;
+            long deadlineMs = hasFiniteTimeout ? Environment.TickCount64 + timeoutMs : 0;
 
-            while (!token.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 FrameSnapshot? snapshot = GetFrameSnapshotAfter(afterSequence);
                 if (snapshot is not null)
@@ -4062,7 +4125,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                 try
                 {
-                    await _frameReadySignal.WaitAsync(token).ConfigureAwait(false);
+                    if (hasFiniteTimeout)
+                    {
+                        long remainingMs = deadlineMs - Environment.TickCount64;
+                        if (remainingMs <= 0)
+                            return null;
+
+                        bool signaled = await _frameReadySignal
+                            .WaitAsync(
+                                millisecondsTimeout: remainingMs > int.MaxValue
+                                    ? int.MaxValue
+                                    : (int)remainingMs,
+                                cancellationToken
+                            )
+                            .ConfigureAwait(false);
+                        if (!signaled)
+                            return null;
+                    }
+                    else
+                    {
+                        await _frameReadySignal.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -4084,12 +4167,16 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 if (_latestFrameBytes is null || _latestFrameSequence <= afterSequence)
                     return null;
 
+                FrameBufferLease? lease = _latestFrameLease;
+                lease?.AddRef();
+
                 return new FrameSnapshot(
                     _latestFrameSequence,
                     _latestFrameBytes,
                     _latestFrameFormat,
                     _latestFrameWidthPx,
-                    _latestFrameHeightPx
+                    _latestFrameHeightPx,
+                    lease
                 );
             }
         }
@@ -4189,17 +4276,31 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     if (_minFrameIntervalMs > 0 && now < nextAcceptedFrameAtMs)
                         continue;
 
-                    var frame = new byte[frameByteCount];
-                    Buffer.BlockCopy(readBuffer, 0, frame, 0, frameByteCount);
-
-                    lock (_syncRoot)
+                    byte[] frame = _framePool.Rent(frameByteCount);
+                    try
                     {
-                        _latestFrameBytes = frame;
-                        _latestFrameFormat = FrameFormat.Bgra32;
-                        _latestFrameWidthPx = frameWidthPx;
-                        _latestFrameHeightPx = frameHeightPx;
-                        _latestFrameSequence++;
-                        _hasReceivedFrame = true;
+                        Buffer.BlockCopy(readBuffer, 0, frame, 0, frameByteCount);
+                        var lease = new FrameBufferLease(_framePool, frame);
+                        FrameBufferLease? previousLease;
+
+                        lock (_syncRoot)
+                        {
+                            previousLease = _latestFrameLease;
+                            _latestFrameLease = lease;
+                            _latestFrameBytes = frame;
+                            _latestFrameFormat = FrameFormat.Bgra32;
+                            _latestFrameWidthPx = frameWidthPx;
+                            _latestFrameHeightPx = frameHeightPx;
+                            _latestFrameSequence++;
+                            _hasReceivedFrame = true;
+                        }
+
+                        previousLease?.Release();
+                    }
+                    catch
+                    {
+                        _framePool.Return(frame);
+                        throw;
                     }
 
                     SignalFrameReady();
@@ -4281,8 +4382,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                             if (!dropCurrentFrame)
                             {
                                 byte[] frame = frameBuffer.ToArray();
+                                FrameBufferLease? previousLease;
                                 lock (_syncRoot)
                                 {
+                                    previousLease = _latestFrameLease;
+                                    _latestFrameLease = null;
                                     _latestFrameBytes = frame;
                                     _latestFrameFormat = FrameFormat.Jpeg;
                                     _latestFrameWidthPx = 0;
@@ -4290,6 +4394,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                                     _latestFrameSequence++;
                                     _hasReceivedFrame = true;
                                 }
+                                previousLease?.Release();
                                 SignalFrameReady();
 
                                 if (_minFrameIntervalMs > 0)
@@ -4323,22 +4428,27 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             Process? process;
             CancellationTokenSource? cts;
+            FrameBufferLease? latestLease;
 
             lock (_syncRoot)
             {
                 _activeGeneration++;
                 process = _process;
                 cts = _cts;
+                latestLease = _latestFrameLease;
                 _process = null;
                 _cts = null;
                 _readerTask = null;
                 _latestFrameBytes = null;
+                _latestFrameLease = null;
                 _latestFrameFormat = FrameFormat.Jpeg;
                 _latestFrameWidthPx = 0;
                 _latestFrameHeightPx = 0;
                 _hasReceivedFrame = false;
                 _faulted = true;
             }
+
+            latestLease?.Release();
 
             SignalFrameReady();
             DrainFrameSignal();
