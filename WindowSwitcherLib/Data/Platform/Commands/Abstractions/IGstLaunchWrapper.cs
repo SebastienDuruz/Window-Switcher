@@ -10,11 +10,4 @@ public interface IGstLaunchWrapper : ICommandWrapper
         int heightPx,
         int? pipeWireRemoteFd = null
     );
-
-    Process? StartPipeWireJpegStream(
-        string nodeId,
-        int? pipeWireRemoteFd = null,
-        int? maxWidthPx = null,
-        int? maxHeightPx = null
-    );
 }

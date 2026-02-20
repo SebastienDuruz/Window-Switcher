@@ -11,8 +11,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
     private const int FSetFd = 2;
     private const int FdCloExec = 1;
     private const int PipeWireMaxFps = 30;
-    // Keep 30 FPS but lower JPEG complexity/size to reduce encode+decode CPU cost.
-    private const int PipeWireJpegQuality = 55;
     private const int QueueBufferCount = 1;
 
     [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
@@ -61,79 +59,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         return null;
     }
 
-    public Process? StartPipeWireJpegStream(
-        string nodeId,
-        int? pipeWireRemoteFd = null,
-        int? maxWidthPx = null,
-        int? maxHeightPx = null
-    )
-    {
-        if (!LinuxDependencies.IsGstLaunchAvailable)
-        {
-            LinuxDependencies.ReportMissingOnce("gst-launch-1.0");
-            return null;
-        }
-
-        int? normalizedMaxWidthPx = NormalizePipeWireDimension(maxWidthPx);
-        int? normalizedMaxHeightPx = NormalizePipeWireDimension(maxHeightPx);
-
-        Process? process = TryStartPipeWireJpegStream(
-            nodeId,
-            pipeWireRemoteFd,
-            useVideoRate: true,
-            maxWidthPx: normalizedMaxWidthPx,
-            maxHeightPx: normalizedMaxHeightPx
-        );
-        if (process is null)
-            return null;
-
-        if (!process.WaitForExit(milliseconds: 150))
-            return process;
-
-        process.Dispose();
-        return null;
-    }
-
-    private Process? TryStartPipeWireJpegStream(
-        string nodeId,
-        int? pipeWireRemoteFd,
-        bool useVideoRate,
-        int? maxWidthPx,
-        int? maxHeightPx
-    )
-    {
-        var process = CreateProcess();
-        ConfigurePipeWireJpegPipeline(
-            process.StartInfo,
-            nodeId,
-            pipeWireRemoteFd,
-            useVideoRate,
-            maxWidthPx,
-            maxHeightPx
-        );
-
-        try
-        {
-            if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-                SetCloseOnExec(pipeWireRemoteFd.Value, enabled: false);
-
-            process.Start();
-
-            if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-                SetCloseOnExec(pipeWireRemoteFd.Value, enabled: true);
-
-            return process;
-        }
-        catch
-        {
-            if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-                SetCloseOnExec(pipeWireRemoteFd.Value, enabled: true);
-
-            process.Dispose();
-            return null;
-        }
-    }
-
     private Process? TryStartPipeWireRawBgraStream(
         string nodeId,
         int? pipeWireRemoteFd,
@@ -172,58 +97,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             process.Dispose();
             return null;
         }
-    }
-
-    private static void ConfigurePipeWireJpegPipeline(
-        ProcessStartInfo startInfo,
-        string nodeId,
-        int? pipeWireRemoteFd,
-        bool useVideoRate,
-        int? maxWidthPx,
-        int? maxHeightPx
-    )
-    {
-        startInfo.ArgumentList.Clear();
-        startInfo.ArgumentList.Add("-q");
-        startInfo.ArgumentList.Add("pipewiresrc");
-        startInfo.ArgumentList.Add($"path={nodeId}");
-        if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-            startInfo.ArgumentList.Add($"fd={pipeWireRemoteFd.Value}");
-        startInfo.ArgumentList.Add("always-copy=true");
-        startInfo.ArgumentList.Add("use-bufferpool=false");
-        startInfo.ArgumentList.Add("do-timestamp=true");
-        startInfo.ArgumentList.Add("!");
-        if (useVideoRate)
-        {
-            startInfo.ArgumentList.Add("videorate");
-            startInfo.ArgumentList.Add("drop-only=true");
-            startInfo.ArgumentList.Add($"max-rate={PipeWireMaxFps}");
-            startInfo.ArgumentList.Add("!");
-        }
-
-        startInfo.ArgumentList.Add("videoconvert");
-        startInfo.ArgumentList.Add("!");
-        if (maxWidthPx.HasValue || maxHeightPx.HasValue)
-        {
-            startInfo.ArgumentList.Add("videoscale");
-            startInfo.ArgumentList.Add("add-borders=true");
-            startInfo.ArgumentList.Add("!");
-            startInfo.ArgumentList.Add(BuildScaledVideoCaps(maxWidthPx, maxHeightPx));
-            startInfo.ArgumentList.Add("!");
-        }
-
-        startInfo.ArgumentList.Add("queue");
-        startInfo.ArgumentList.Add("leaky=downstream");
-        startInfo.ArgumentList.Add($"max-size-buffers={QueueBufferCount}");
-        startInfo.ArgumentList.Add("max-size-bytes=0");
-        startInfo.ArgumentList.Add("max-size-time=0");
-        startInfo.ArgumentList.Add("!");
-        startInfo.ArgumentList.Add("jpegenc");
-        startInfo.ArgumentList.Add($"quality={PipeWireJpegQuality}");
-        startInfo.ArgumentList.Add("!");
-        startInfo.ArgumentList.Add("fdsink");
-        startInfo.ArgumentList.Add("fd=1");
-        startInfo.ArgumentList.Add("sync=false");
     }
 
     private static void ConfigurePipeWireRawBgraPipeline(
@@ -279,17 +152,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             return null;
 
         return value.Value;
-    }
-
-    private static string BuildScaledVideoCaps(int? maxWidthPx, int? maxHeightPx)
-    {
-        string caps = "video/x-raw,pixel-aspect-ratio=1/1";
-        if (maxWidthPx.HasValue)
-            caps += $",width={maxWidthPx.Value}";
-        if (maxHeightPx.HasValue)
-            caps += $",height={maxHeightPx.Value}";
-
-        return caps;
     }
 
     private static void SetCloseOnExec(int fileDescriptor, bool enabled)

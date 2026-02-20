@@ -3152,27 +3152,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             patterns.Add(normalized);
     }
 
-    private static Bitmap? CreateBitmap(byte[] bytes)
-    {
-        try
-        {
-            using var stream = new MemoryStream(bytes, writable: false);
-            return new Bitmap(stream);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static Bitmap? CreateBitmap(PipeWireWindowStream.FrameSnapshot snapshot)
     {
-        if (snapshot.Format == PipeWireWindowStream.FrameFormat.Bgra32)
-        {
-            return CreateBitmapFromBgra(snapshot.Bytes, snapshot.WidthPx, snapshot.HeightPx);
-        }
-
-        return CreateBitmap(snapshot.Bytes);
+        return CreateBitmapFromBgra(snapshot.Bytes, snapshot.WidthPx, snapshot.HeightPx);
     }
 
     private static Bitmap? CreateBitmapFromBgra(byte[] bytes, int widthPx, int heightPx)
@@ -3777,8 +3759,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         public enum FrameFormat
         {
-            Jpeg = 0,
-            Bgra32 = 1,
+            Bgra32 = 0,
         }
 
         public readonly record struct FrameSnapshot(
@@ -4248,108 +4229,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
         }
 
-        private void ReadJpegLoop(Process process, CancellationToken cancellationToken, long generation)
-        {
-            try
-            {
-                var frameBuffer = new List<byte>(256 * 1024);
-                byte[] readBuffer = new byte[16 * 1024];
-                Stream output = process.StandardOutput.BaseStream;
-
-                bool inFrame = false;
-                bool dropCurrentFrame = false;
-                byte previous = 0;
-                long nextAcceptedFrameAtMs = 0;
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    int read = output.Read(readBuffer, 0, readBuffer.Length);
-                    if (read <= 0)
-                        break;
-
-                    for (int i = 0; i < read; i++)
-                    {
-                        byte current = readBuffer[i];
-
-                        if (!inFrame)
-                        {
-                            if (previous == 0xFF && current == 0xD8)
-                            {
-                                inFrame = true;
-                                long now = Environment.TickCount64;
-                                dropCurrentFrame =
-                                    _minFrameIntervalMs > 0 && now < nextAcceptedFrameAtMs;
-                                frameBuffer.Clear();
-                                if (!dropCurrentFrame)
-                                {
-                                    frameBuffer.Add(0xFF);
-                                    frameBuffer.Add(0xD8);
-                                }
-                            }
-
-                            previous = current;
-                            continue;
-                        }
-
-                        if (!dropCurrentFrame)
-                            frameBuffer.Add(current);
-
-                        if (!dropCurrentFrame && frameBuffer.Count > MaxFrameBytes)
-                        {
-                            inFrame = false;
-                            dropCurrentFrame = false;
-                            frameBuffer.Clear();
-                            previous = current;
-                            continue;
-                        }
-
-                        if (previous == 0xFF && current == 0xD9)
-                        {
-                            if (!dropCurrentFrame)
-                            {
-                                byte[] frame = frameBuffer.ToArray();
-                                FrameBufferLease? previousLease;
-                                lock (_syncRoot)
-                                {
-                                    previousLease = _latestFrameLease;
-                                    _latestFrameLease = null;
-                                    _latestFrameBytes = frame;
-                                    _latestFrameFormat = FrameFormat.Jpeg;
-                                    _latestFrameWidthPx = 0;
-                                    _latestFrameHeightPx = 0;
-                                    _latestFrameSequence++;
-                                    _hasReceivedFrame = true;
-                                }
-                                previousLease?.Release();
-                                SignalFrameReady();
-
-                                if (_minFrameIntervalMs > 0)
-                                    nextAcceptedFrameAtMs =
-                                        Environment.TickCount64 + _minFrameIntervalMs;
-                            }
-
-                            inFrame = false;
-                            dropCurrentFrame = false;
-                            frameBuffer.Clear();
-                        }
-
-                        previous = current;
-                    }
-                }
-            }
-            catch (Exception) { }
-            finally
-            {
-                lock (_syncRoot)
-                {
-                    // Ignore stale readers from older generations after a restart.
-                    if (_activeGeneration == generation)
-                        _faulted = true;
-                }
-                SignalFrameReady();
-            }
-        }
-
         private void Stop()
         {
             Process? process;
@@ -4367,7 +4246,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _readerTask = null;
                 _latestFrameBytes = null;
                 _latestFrameLease = null;
-                _latestFrameFormat = FrameFormat.Jpeg;
+                _latestFrameFormat = FrameFormat.Bgra32;
                 _latestFrameWidthPx = 0;
                 _latestFrameHeightPx = 0;
                 _hasReceivedFrame = false;
