@@ -39,8 +39,6 @@ static class Program
                 {
                     RenderingMode =
                     [
-                        X11RenderingMode.Vulkan,
-                        X11RenderingMode.Egl,
                         X11RenderingMode.Software,
                     ],
                 }

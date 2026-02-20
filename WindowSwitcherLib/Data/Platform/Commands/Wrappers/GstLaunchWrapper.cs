@@ -13,6 +13,7 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
     private const int PipeWireMaxFps = 30;
     private const int PipeWireJpegQuality = 70;
     private const int QueueBufferCount = 1;
+    private const int MaxScaledDimensionPx = 8192;
 
     [DllImport("libc", EntryPoint = "fcntl", SetLastError = true)]
     private static extern int Fcntl(int fd, int cmd, int arg);
@@ -25,7 +26,12 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         return string.Empty;
     }
 
-    public Process? StartPipeWireJpegStream(string nodeId, int? pipeWireRemoteFd = null)
+    public Process? StartPipeWireJpegStream(
+        string nodeId,
+        int? pipeWireRemoteFd = null,
+        int? maxWidthPx = null,
+        int? maxHeightPx = null
+    )
     {
         if (!LinuxDependencies.IsGstLaunchAvailable)
         {
@@ -33,10 +39,15 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             return null;
         }
 
+        int? normalizedMaxWidthPx = NormalizePipeWireDimension(maxWidthPx);
+        int? normalizedMaxHeightPx = NormalizePipeWireDimension(maxHeightPx);
+
         Process? optimized = TryStartPipeWireJpegStream(
             nodeId,
             pipeWireRemoteFd,
-            useVideoRate: true
+            useVideoRate: true,
+            maxWidthPx: normalizedMaxWidthPx,
+            maxHeightPx: normalizedMaxHeightPx
         );
         if (optimized is null)
             return null;
@@ -46,17 +57,51 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             return optimized;
 
         optimized.Dispose();
-        return TryStartPipeWireJpegStream(nodeId, pipeWireRemoteFd, useVideoRate: false);
+        Process? compatible = TryStartPipeWireJpegStream(
+            nodeId,
+            pipeWireRemoteFd,
+            useVideoRate: false,
+            maxWidthPx: normalizedMaxWidthPx,
+            maxHeightPx: normalizedMaxHeightPx
+        );
+        if (compatible is null)
+            return null;
+
+        if (!compatible.WaitForExit(milliseconds: 150))
+            return compatible;
+
+        compatible.Dispose();
+
+        // Last-resort fallback when videoscale/caps negotiation fails on some environments.
+        if (!normalizedMaxWidthPx.HasValue && !normalizedMaxHeightPx.HasValue)
+            return null;
+
+        return TryStartPipeWireJpegStream(
+            nodeId,
+            pipeWireRemoteFd,
+            useVideoRate: false,
+            maxWidthPx: null,
+            maxHeightPx: null
+        );
     }
 
     private Process? TryStartPipeWireJpegStream(
         string nodeId,
         int? pipeWireRemoteFd,
-        bool useVideoRate
+        bool useVideoRate,
+        int? maxWidthPx,
+        int? maxHeightPx
     )
     {
         var process = CreateProcess();
-        ConfigurePipeWireJpegPipeline(process.StartInfo, nodeId, pipeWireRemoteFd, useVideoRate);
+        ConfigurePipeWireJpegPipeline(
+            process.StartInfo,
+            nodeId,
+            pipeWireRemoteFd,
+            useVideoRate,
+            maxWidthPx,
+            maxHeightPx
+        );
 
         try
         {
@@ -84,7 +129,9 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         ProcessStartInfo startInfo,
         string nodeId,
         int? pipeWireRemoteFd,
-        bool useVideoRate
+        bool useVideoRate,
+        int? maxWidthPx,
+        int? maxHeightPx
     )
     {
         startInfo.ArgumentList.Clear();
@@ -94,6 +141,7 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
             startInfo.ArgumentList.Add($"fd={pipeWireRemoteFd.Value}");
         startInfo.ArgumentList.Add("always-copy=true");
+        startInfo.ArgumentList.Add("use-bufferpool=false");
         startInfo.ArgumentList.Add("do-timestamp=true");
         startInfo.ArgumentList.Add("!");
         if (useVideoRate)
@@ -106,6 +154,15 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
 
         startInfo.ArgumentList.Add("videoconvert");
         startInfo.ArgumentList.Add("!");
+        if (maxWidthPx.HasValue || maxHeightPx.HasValue)
+        {
+            startInfo.ArgumentList.Add("videoscale");
+            startInfo.ArgumentList.Add("add-borders=true");
+            startInfo.ArgumentList.Add("!");
+            startInfo.ArgumentList.Add(BuildScaledVideoCaps(maxWidthPx, maxHeightPx));
+            startInfo.ArgumentList.Add("!");
+        }
+
         startInfo.ArgumentList.Add("queue");
         startInfo.ArgumentList.Add("leaky=downstream");
         startInfo.ArgumentList.Add($"max-size-buffers={QueueBufferCount}");
@@ -118,6 +175,25 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         startInfo.ArgumentList.Add("fdsink");
         startInfo.ArgumentList.Add("fd=1");
         startInfo.ArgumentList.Add("sync=false");
+    }
+
+    private static int? NormalizePipeWireDimension(int? value)
+    {
+        if (!value.HasValue || value.Value <= 0)
+            return null;
+
+        return Math.Clamp(value.Value, 1, MaxScaledDimensionPx);
+    }
+
+    private static string BuildScaledVideoCaps(int? maxWidthPx, int? maxHeightPx)
+    {
+        string caps = "video/x-raw,pixel-aspect-ratio=1/1";
+        if (maxWidthPx.HasValue)
+            caps += $",width={maxWidthPx.Value}";
+        if (maxHeightPx.HasValue)
+            caps += $",height={maxHeightPx.Value}";
+
+        return caps;
     }
 
     private static void SetCloseOnExec(int fileDescriptor, bool enabled)

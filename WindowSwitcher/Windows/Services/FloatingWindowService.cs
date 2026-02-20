@@ -77,6 +77,9 @@ internal sealed class FloatingWindowService
     {
         UpdateLayout();
 
+        if (_streamingPreviewFrameProvider is not null)
+            CancelPreviewOperations(recreateTokenSource: true);
+
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview && IsPreviewCaptureEnabled())
             RegisterWindowThumbnail();
     }
@@ -246,9 +249,11 @@ internal sealed class FloatingWindowService
                 if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
                 
+                int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
+                int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
                 var request = new ScreenshotRequest(
-                    MaxWidthPx: null,
-                    MaxHeightPx: null,
+                    MaxWidthPx: widthPx > 0 ? widthPx : null,
+                    MaxHeightPx: heightPx > 0 ? heightPx : null,
                     TimeoutMs: DefaultPreviewRefreshIntervalMs * 3
                 );
 

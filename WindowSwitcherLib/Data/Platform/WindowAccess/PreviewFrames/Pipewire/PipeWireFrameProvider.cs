@@ -130,7 +130,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return await RequestFallbackAsync(windowId, request, cancellationToken)
                     .ConfigureAwait(false);
 
-            WindowCaptureContext? capture = await EnsureCaptureAsync(windowId, cancellationToken)
+            WindowCaptureContext? capture = await EnsureCaptureAsync(
+                    windowId,
+                    request,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             if (_isWaylandSession && (capture is null || capture.ForceFallback))
             {
@@ -146,7 +150,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                         return null;
                     }
 
-                    capture = await EnsureCaptureAsync(windowId, cancellationToken)
+                    capture = await EnsureCaptureAsync(windowId, request, cancellationToken)
                         .ConfigureAwait(false);
                     if (capture is not null && !capture.ForceFallback)
                         break;
@@ -180,6 +184,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
                     WindowCaptureContext? retryCapture = await EnsureCaptureAsync(
                             windowId,
+                            request,
                             cancellationToken
                         )
                         .ConfigureAwait(false);
@@ -238,7 +243,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
-            WindowCaptureContext? capture = await EnsureCaptureAsync(windowId, cancellationToken)
+            WindowCaptureContext? capture = await EnsureCaptureAsync(
+                    windowId,
+                    request,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
             if (capture is null || capture.ForceFallback)
             {
@@ -399,9 +408,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task<WindowCaptureContext?> EnsureCaptureAsync(
         string windowId,
+        ScreenshotRequest request,
         CancellationToken cancellationToken
     )
     {
+        WindowCaptureContext? staleCapture = null;
         Task<WindowCaptureContext?> createTask;
         lock (_capturesSync)
         {
@@ -409,7 +420,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
 
             if (_captures.TryGetValue(windowId, out WindowCaptureContext? existing))
-                return existing;
+            {
+                if (CaptureMatchesRequest(existing, request))
+                    return existing;
+
+                _captures.Remove(windowId);
+                _failedWindows.Remove(windowId);
+                _pendingNodeIdsByWindow.Remove(windowId);
+                staleCapture = existing;
+            }
 
             if (!_captureCreationTasks.TryGetValue(windowId, out createTask!))
             {
@@ -417,11 +436,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _captureCreationCancellationSources[windowId] = createCancellationSource;
                 createTask = CreateAndRegisterCaptureAsync(
                     windowId,
+                    request,
                     createCancellationSource.Token
                 );
                 _captureCreationTasks[windowId] = createTask;
             }
         }
+
+        staleCapture?.Dispose(ClosePortalSession);
 
         try
         {
@@ -435,6 +457,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task<WindowCaptureContext?> CreateAndRegisterCaptureAsync(
         string windowId,
+        ScreenshotRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -444,7 +467,11 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 cancellationToken
             );
             creationCts.CancelAfter(CaptureCreationTimeoutMs);
-            WindowCaptureContext? created = await CreateCaptureAsync(windowId, creationCts.Token)
+            WindowCaptureContext? created = await CreateCaptureAsync(
+                    windowId,
+                    request,
+                    creationCts.Token
+                )
                 .ConfigureAwait(false);
             if (created is null)
             {
@@ -510,6 +537,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task<WindowCaptureContext?> CreateCaptureAsync(
         string windowId,
+        ScreenshotRequest request,
         CancellationToken cancellationToken
     )
     {
@@ -517,6 +545,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             return null;
         }
+
+        int? targetWidthPx = NormalizeTargetDimension(request.MaxWidthPx);
+        int? targetHeightPx = NormalizeTargetDimension(request.MaxHeightPx);
 
         string? nodeId = null;
         string? portalSessionPath = null;
@@ -627,14 +658,18 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             nodeId,
             _gstLaunch,
             pipeWireRemoteHandle,
-            PipeWireReaderFrameIntervalMs
+            PipeWireReaderFrameIntervalMs,
+            targetWidthPx,
+            targetHeightPx
         );
         return new WindowCaptureContext(
             windowId,
             nodeId,
             portalSessionPath,
             portalSessionDestination,
-            stream
+            stream,
+            targetWidthPx,
+            targetHeightPx
         );
     }
 
@@ -1081,6 +1116,26 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return string.IsNullOrWhiteSpace(windowId)
             ? string.Empty
             : windowId.Trim().ToLowerInvariant();
+    }
+
+    private static int? NormalizeTargetDimension(int? value)
+    {
+        if (!value.HasValue || value.Value <= 0)
+            return null;
+
+        return Math.Clamp(value.Value, 1, 8192);
+    }
+
+    private static bool CaptureMatchesRequest(
+        WindowCaptureContext capture,
+        ScreenshotRequest request
+    )
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+
+        int? requestWidth = NormalizeTargetDimension(request.MaxWidthPx);
+        int? requestHeight = NormalizeTargetDimension(request.MaxHeightPx);
+        return capture.TargetWidthPx == requestWidth && capture.TargetHeightPx == requestHeight;
     }
 
     private async Task<Bitmap?> TryRequestCaptureFrameAsync(
@@ -4444,7 +4499,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         string nodeId,
         string? portalSessionPath,
         string? portalSessionDestination,
-        PipeWireWindowStream stream
+        PipeWireWindowStream stream,
+        int? targetWidthPx,
+        int? targetHeightPx
     )
     {
         public string WindowId { get; } = windowId;
@@ -4452,6 +4509,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public string? PortalSessionPath { get; } = portalSessionPath;
         public string? PortalSessionDestination { get; } = portalSessionDestination;
         public PipeWireWindowStream Stream { get; } = stream;
+        public int? TargetWidthPx { get; } = targetWidthPx;
+        public int? TargetHeightPx { get; } = targetHeightPx;
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
         public bool ForceFallback { get; set; }
@@ -4498,7 +4557,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string nodeId,
             IGstLaunchWrapper gstLaunch,
             CloseSafeHandle? pipeWireRemoteHandle,
-            int minFrameIntervalMs
+            int minFrameIntervalMs,
+            int? maxWidthPx,
+            int? maxHeightPx
         )
         {
             ArgumentNullException.ThrowIfNull(gstLaunch);
@@ -4506,7 +4567,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
             _minFrameIntervalMs = Math.Clamp(minFrameIntervalMs, 0, 1000);
+            _maxWidthPx = NormalizeTargetDimension(maxWidthPx);
+            _maxHeightPx = NormalizeTargetDimension(maxHeightPx);
         }
+
+        private readonly int? _maxWidthPx;
+        private readonly int? _maxHeightPx;
 
         public void EnsureRunning()
         {
@@ -4553,7 +4619,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             Stop();
 
             int? remoteFd = GetPipeWireRemoteFd();
-            Process? process = _gstLaunch.StartPipeWireJpegStream(_nodeId, remoteFd);
+            Process? process = _gstLaunch.StartPipeWireJpegStream(
+                _nodeId,
+                remoteFd,
+                _maxWidthPx,
+                _maxHeightPx
+            );
             var cts = new CancellationTokenSource();
             if (process is null)
             {
