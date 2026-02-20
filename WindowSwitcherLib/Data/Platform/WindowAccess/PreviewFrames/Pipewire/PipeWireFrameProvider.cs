@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Avalonia;
@@ -183,12 +182,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     Bitmap? bitmap = CreateBitmap(snapshot.Value);
                     if (bitmap is not null)
                     {
-                        if (!capture.FirstDeliveredFrameLogged)
-                        {
-                            string fingerprint = ComputeFrameFingerprint(snapshot.Value.Bytes);
-                            capture.FirstDeliveredFrameLogged = true;
-                        }
-
                         capture.ConsecutiveFailures = 0;
                         capture.ConsecutiveNoFrameTimeouts = 0;
                         ClearExcludedNodes(capture.WindowId);
@@ -1212,10 +1205,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 out string? selectedStreamStableId,
                 out bool shouldPersistSelectedStreamStableId
             );
-            IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(
-                startResponse.Value.Results
-            );
-            string extractedSummary = DescribePortalStreams(extractedStreams);
             if (string.IsNullOrWhiteSpace(nodeId))
             {
                 await ClosePortalSessionAsync(sessionPath, CancellationToken.None)
@@ -2358,7 +2347,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
 
             KdeStoredArtifacts storedArtifacts = LoadKdeStoredArtifactsForAttempt(windowId);
-            LogKdeStoredArtifactsForAttempt(windowId, storedArtifacts);
 
             Dictionary<string, object> selectOptions = BuildKdeSelectOptions(
                 storedArtifacts.RestoreData,
@@ -2402,7 +2390,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             IReadOnlyList<PortalStreamDescriptor> extractedStreams = ExtractPortalStreams(
                 startResult.Value.Results
             );
-            string extractedSummary = DescribePortalStreams(extractedStreams);
 
             if (
                 shouldPersistSelectedStreamStableId
@@ -2559,15 +2546,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         );
     }
 
-    private static void LogKdeStoredArtifactsForAttempt(
-        string windowId,
-        KdeStoredArtifacts storedArtifacts
-    )
-    {
-        _ = windowId;
-        _ = storedArtifacts;
-    }
-
     private static Dictionary<string, object> BuildKdeSelectOptions(
         PortalRestoreData? restoreData,
         string? restoreToken
@@ -2687,18 +2665,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
         }
-    }
-
-    private static string DescribePortalStreams(IReadOnlyList<PortalStreamDescriptor> streams)
-    {
-        return string.Join(
-            ',',
-            streams.Select(stream =>
-                string.IsNullOrWhiteSpace(stream.StableId)
-                    ? stream.NodeId
-                    : $"{stream.NodeId}({stream.StableId})"
-            )
-        );
     }
 
     private string? ResolveNodeIdFromPwDump(
@@ -3289,15 +3255,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
-    private static string ComputeFrameFingerprint(byte[] bytes)
-    {
-        if (bytes.Length == 0)
-            return "empty";
-
-        byte[] hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
-    }
-
     private static NodeCandidate? FindBestMatchingNode(
         IReadOnlyList<NodeCandidate> candidates,
         IReadOnlyCollection<string> normalizedWindowIds
@@ -3865,7 +3822,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public int? TargetHeightPx { get; } = targetHeightPx;
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
-        public bool FirstDeliveredFrameLogged { get; set; }
         public bool IsDisposed { get; private set; }
 
         public void Dispose(Action<string, string?> closePortalSession)
@@ -4334,10 +4290,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                                     _latestFrameSequence++;
                                     _hasReceivedFrame = true;
                                 }
-                                if (_latestFrameSequence == 1)
-                                {
-                                    string fingerprint = ComputeFrameFingerprint(frame);
-                                }
                                 SignalFrameReady();
 
                                 if (_minFrameIntervalMs > 0)
@@ -4436,15 +4388,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             long value = _pipeWireRemoteHandle.DangerousGetHandle().ToInt64();
             return value is >= 0 and <= int.MaxValue ? (int)value : null;
-        }
-
-        private static string ComputeFrameFingerprint(byte[] bytes)
-        {
-            if (bytes.Length == 0)
-                return "empty";
-
-            byte[] hash = SHA256.HashData(bytes);
-            return Convert.ToHexString(hash.AsSpan(0, 8)).ToLowerInvariant();
         }
 
         private void SignalFrameReady()
