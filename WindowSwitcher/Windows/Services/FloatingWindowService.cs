@@ -21,6 +21,7 @@ internal sealed class FloatingWindowService
     private const double PreviewBorderThickness = 2;
     private const int DefaultPreviewRefreshIntervalMs = 100;
     private const int PreviewRequestTimeoutMs = 1_500;
+    private const int StreamPreviewRequestTimeoutMs = 1_500;
 
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
@@ -254,7 +255,7 @@ internal sealed class FloatingWindowService
                 var request = new ScreenshotRequest(
                     MaxWidthPx: widthPx > 0 ? widthPx : null,
                     MaxHeightPx: heightPx > 0 ? heightPx : null,
-                    TimeoutMs: DefaultPreviewRefreshIntervalMs * 3
+                    TimeoutMs: StreamPreviewRequestTimeoutMs
                 );
 
                 await foreach (
