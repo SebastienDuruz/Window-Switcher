@@ -59,9 +59,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private readonly Dictionary<string, string> _pendingNodeIdsByWindow = new(
         StringComparer.Ordinal
     );
-    private readonly Dictionary<string, HashSet<string>> _excludedNodesByWindow = new(
-        StringComparer.Ordinal
-    );
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private bool _nodeCandidatesRefreshInProgress;
@@ -193,7 +190,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     {
                         capture.ConsecutiveFailures = 0;
                         capture.ConsecutiveNoFrameTimeouts = 0;
-                        ClearExcludedNodes(capture.WindowId);
                         yield return bitmap;
                         continue;
                     }
@@ -220,7 +216,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         CancellationTokenSource? captureCreationCancellation = null;
         lock (_capturesSync)
         {
-            _excludedNodesByWindow.Remove(windowId);
             _pendingNodeIdsByWindow.Remove(windowId);
             if (
                 _captureCreationCancellationSources.TryGetValue(
@@ -253,7 +248,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _captureCreationTasks.Clear();
             _captureCreationCancellationSources.Clear();
             _pendingNodeIdsByWindow.Clear();
-            _excludedNodesByWindow.Clear();
         }
 
         foreach (WindowCaptureContext capture in captures)
@@ -409,7 +403,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         string? portalSessionPath = null;
         string? portalSessionDestination = null;
         CloseSafeHandle? pipeWireRemoteHandle = null;
-        IReadOnlyCollection<string> excludedNodeIds = SnapshotExcludedNodeIds(windowId);
 
         if (_isWaylandSession)
         {
@@ -419,7 +412,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             {
                 started = await TryStartKdeBackendWindowScreencastAsync(
                         windowId,
-                        excludedNodeIds,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -428,7 +420,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             {
                 started = await TryStartWaylandPortalWindowScreencastAsync(
                         windowId,
-                        excludedNodeIds,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -446,7 +437,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         else
         {
-            nodeId = ResolveNodeIdFromPwDump(windowId, excludedNodeIds, allowBestCandidate: false);
+            nodeId = ResolveNodeIdFromPwDump(windowId, allowBestCandidate: false);
         }
 
         if (string.IsNullOrWhiteSpace(nodeId))
@@ -955,7 +946,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             capture.ConsecutiveFailures = 0;
             capture.ConsecutiveNoFrameTimeouts = 0;
-            ClearExcludedNodes(capture.WindowId);
             return frame;
         }
 
@@ -991,7 +981,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             capture.ConsecutiveFailures = 0;
             capture.ConsecutiveNoFrameTimeouts = 0;
-            ClearExcludedNodes(capture.WindowId);
             return frame;
         }
 
@@ -1005,7 +994,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             {
                 capture.ConsecutiveFailures = 0;
                 capture.ConsecutiveNoFrameTimeouts = 0;
-                ClearExcludedNodes(capture.WindowId);
                 return frame;
             }
 
@@ -1085,7 +1073,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task<PortalCaptureBootstrap?> TryStartWaylandPortalWindowScreencastAsync(
         string windowId,
-        IReadOnlyCollection<string> excludedNodeIds,
         CancellationToken cancellationToken
     )
     {
@@ -1210,7 +1197,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string? nodeId = SelectPortalStreamNodeId(
                 windowId,
                 startResponse.Value.Results,
-                excludedNodeIds,
                 out string? selectedStreamStableId,
                 out bool shouldPersistSelectedStreamStableId
             );
@@ -1539,7 +1525,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private string? SelectPortalStreamNodeId(
         string windowId,
         IDictionary<string, object> results,
-        IReadOnlyCollection<string> excludedNodeIds,
         out string? selectedStreamStableId,
         out bool shouldPersistSelectedStreamStableId
     )
@@ -1551,9 +1536,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         if (streams.Count == 0)
             return null;
 
-        var allExcludedNodeIds = new HashSet<string>(excludedNodeIds, StringComparer.Ordinal);
-        foreach (string activeNodeId in SnapshotActiveNodeIds())
-            _ = allExcludedNodeIds.Add(activeNodeId);
+        HashSet<string> blockedNodeIds = SnapshotActiveNodeIds()
+            .ToHashSet(StringComparer.Ordinal);
 
         string? windowTitle = TryGetWindowTitleById(windowId);
         IReadOnlyCollection<string> windowPatterns = BuildWindowMatchPatterns(
@@ -1691,7 +1675,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             PortalStreamDescriptor[] exactTitleMatches = streams
                 .Where(stream =>
-                    !allExcludedNodeIds.Contains(stream.NodeId)
+                    !blockedNodeIds.Contains(stream.NodeId)
                     && MatchesExactRequestedWindowTitle(stream)
                 )
                 .OrderBy(stream => stream.NodeId, Comparer<string>.Create(CompareNodeId))
@@ -1761,7 +1745,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                     )
                 )
                     continue;
-                if (allExcludedNodeIds.Contains(stream.NodeId))
+                if (blockedNodeIds.Contains(stream.NodeId))
                     continue;
                 MatchState storedStreamMatchState = EvaluateWindowTitleMatchState(stream);
                 if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Mismatch)
@@ -1802,7 +1786,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         {
             PortalStreamDescriptor? matchedByPortalMetadata = FindBestMatchingPortalStream(
                 streams,
-                allExcludedNodeIds,
+                blockedNodeIds,
                 windowPatterns
             );
             if (matchedByPortalMetadata is not null)
@@ -1834,7 +1818,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 NodeCandidate node = nodes[index];
                 if (!candidateIds.Contains(node.Id))
                     continue;
-                if (allExcludedNodeIds.Contains(node.Id))
+                if (blockedNodeIds.Contains(node.Id))
                     continue;
                 matchingCandidates.Add(node);
             }
@@ -1859,7 +1843,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         for (int index = 0; index < orderedFallbackStreams.Count; index++)
         {
             PortalStreamDescriptor stream = orderedFallbackStreams[index];
-            if (allExcludedNodeIds.Contains(stream.NodeId))
+            if (blockedNodeIds.Contains(stream.NodeId))
                 continue;
 
             MatchState titleMatchState = EvaluateWindowTitleMatchState(stream);
@@ -2314,7 +2298,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private async Task<PortalCaptureBootstrap?> TryStartKdeBackendWindowScreencastAsync(
         string windowId,
-        IReadOnlyCollection<string> excludedNodeIds,
         CancellationToken cancellationToken
     )
     {
@@ -2392,7 +2375,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             string? nodeId = SelectPortalStreamNodeId(
                 windowId,
                 startResult.Value.Results,
-                excludedNodeIds,
                 out string? selectedStreamStableId,
                 out bool shouldPersistSelectedStreamStableId
             );
@@ -2437,18 +2419,14 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 return null;
             }
 
-            var allExcludedNodeIds = new HashSet<string>(
-                excludedNodeIds,
-                StringComparer.Ordinal
-            );
-            foreach (string activeNodeId in SnapshotActiveNodeIds())
-                _ = allExcludedNodeIds.Add(activeNodeId);
+            HashSet<string> blockedNodeIds = SnapshotActiveNodeIds()
+                .ToHashSet(StringComparer.Ordinal);
 
             string? discoveredNodeId = await WaitForNewPipeWireNodeIdAsync(
                 baselineIds,
                 TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
                 windowId,
-                allExcludedNodeIds,
+                blockedNodeIds,
                 cancellationToken
             ).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(discoveredNodeId))
@@ -2676,18 +2654,13 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
     }
 
-    private string? ResolveNodeIdFromPwDump(
-        string windowId,
-        IReadOnlyCollection<string> excludedNodeIds,
-        bool allowBestCandidate
-    )
+    private string? ResolveNodeIdFromPwDump(string windowId, bool allowBestCandidate)
     {
         if (!LinuxDependencies.IsPwDumpAvailable)
             return null;
 
         IReadOnlyList<NodeCandidate> nodes = GetPipeWireNodeCandidates();
-        IReadOnlyList<NodeCandidate> availableNodes = FilterExcludedNodes(nodes, excludedNodeIds);
-        if (availableNodes.Count == 0)
+        if (nodes.Count == 0)
             return null;
 
         string? windowTitle = TryGetWindowTitleById(windowId);
@@ -2695,9 +2668,9 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             windowId,
             windowTitle
         );
-        NodeCandidate? matching = FindBestMatchingNode(availableNodes, normalizedWindowIds);
+        NodeCandidate? matching = FindBestMatchingNode(nodes, normalizedWindowIds);
         if (matching is null)
-            return allowBestCandidate ? FindBestNode(availableNodes)?.Id : null;
+            return allowBestCandidate ? FindBestNode(nodes)?.Id : null;
 
         return matching.Value.Id;
     }
@@ -2706,7 +2679,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         HashSet<string> baselineIds,
         TimeSpan timeout,
         string windowId,
-        IReadOnlyCollection<string> excludedNodeIds,
+        IReadOnlyCollection<string> blockedNodeIds,
         CancellationToken cancellationToken = default
     )
     {
@@ -2725,12 +2698,12 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 current,
                 baselineIds,
                 normalizedWindowIds,
-                excludedNodeIds
+                blockedNodeIds
             );
             if (matchingNew is not null)
                 return matchingNew.Value.Id;
 
-            NodeCandidate? bestThisRound = FindBestNewNode(current, baselineIds, excludedNodeIds);
+            NodeCandidate? bestThisRound = FindBestNewNode(current, baselineIds, blockedNodeIds);
             if (
                 bestThisRound is not null
                 && (
@@ -2888,7 +2861,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
     private static PortalStreamDescriptor? FindBestMatchingPortalStream(
         IReadOnlyList<PortalStreamDescriptor> streams,
-        IReadOnlyCollection<string> excludedNodeIds,
+        IReadOnlyCollection<string> blockedNodeIds,
         IReadOnlyCollection<string> normalizedWindowIds
     )
     {
@@ -2902,7 +2875,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         for (int index = 0; index < streams.Count; index++)
         {
             PortalStreamDescriptor stream = streams[index];
-            if (excludedNodeIds.Contains(stream.NodeId))
+            if (blockedNodeIds.Contains(stream.NodeId))
                 continue;
             if (string.IsNullOrWhiteSpace(stream.NormalizedSearchText))
                 continue;
@@ -3302,7 +3275,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
     private static NodeCandidate? FindBestNewNode(
         IReadOnlyList<NodeCandidate> candidates,
         HashSet<string> baselineIds,
-        IReadOnlyCollection<string> excludedNodeIds
+        IReadOnlyCollection<string> blockedNodeIds
     )
     {
         NodeCandidate? best = null;
@@ -3311,7 +3284,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             NodeCandidate candidate = candidates[index];
             if (baselineIds.Contains(candidate.Id))
                 continue;
-            if (excludedNodeIds.Contains(candidate.Id))
+            if (blockedNodeIds.Contains(candidate.Id))
                 continue;
             if (best is null || candidate.Score > best.Value.Score)
                 best = candidate;
@@ -3324,7 +3297,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         IReadOnlyList<NodeCandidate> candidates,
         HashSet<string> baselineIds,
         IReadOnlyCollection<string> normalizedWindowIds,
-        IReadOnlyCollection<string> excludedNodeIds
+        IReadOnlyCollection<string> blockedNodeIds
     )
     {
         NodeCandidate? best = null;
@@ -3333,7 +3306,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             NodeCandidate candidate = candidates[index];
             if (baselineIds.Contains(candidate.Id))
                 continue;
-            if (excludedNodeIds.Contains(candidate.Id))
+            if (blockedNodeIds.Contains(candidate.Id))
                 continue;
             if (!MatchesWindowId(candidate, normalizedWindowIds))
                 continue;
@@ -3484,25 +3457,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         return candidates;
     }
 
-    private static IReadOnlyList<NodeCandidate> FilterExcludedNodes(
-        IReadOnlyList<NodeCandidate> candidates,
-        IReadOnlyCollection<string> excludedNodeIds
-    )
-    {
-        if (excludedNodeIds.Count == 0)
-            return candidates;
-
-        var filtered = new List<NodeCandidate>(capacity: candidates.Count);
-        for (int index = 0; index < candidates.Count; index++)
-        {
-            NodeCandidate candidate = candidates[index];
-            if (!excludedNodeIds.Contains(candidate.Id))
-                filtered.Add(candidate);
-        }
-
-        return filtered;
-    }
-
     private IReadOnlyCollection<string> SnapshotActiveNodeIds()
     {
         lock (_capturesSync)
@@ -3535,34 +3489,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
         lock (_capturesSync)
             _pendingNodeIdsByWindow.Remove(windowId);
-    }
-
-    private IReadOnlyCollection<string> SnapshotExcludedNodeIds(string windowId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return Array.Empty<string>();
-
-        lock (_capturesSync)
-        {
-            if (
-                !_excludedNodesByWindow.TryGetValue(windowId, out HashSet<string>? excludedNodeIds)
-                || excludedNodeIds.Count == 0
-            )
-                return Array.Empty<string>();
-
-            return excludedNodeIds.ToArray();
-        }
-    }
-
-    private void ClearExcludedNodes(string windowId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return;
-
-        lock (_capturesSync)
-        {
-            _excludedNodesByWindow.Remove(windowId);
-        }
     }
 
     private static string BuildSearchText(
