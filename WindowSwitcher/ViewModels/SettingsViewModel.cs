@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -53,146 +55,98 @@ public class SettingsViewModel : ObservableObject
 
     public bool StartMinimized
     {
-        get => _configAccessor.ReadConfig(config => config.StartMinimized);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.StartMinimized == value)
-                    return;
-                config.StartMinimized = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.StartMinimized);
+        set =>
+            UpdateSetting(
+                nameof(StartMinimized),
+                value,
+                config => config.StartMinimized,
+                (config, currentValue) => config.StartMinimized = currentValue
+            );
     }
 
     public bool ResizeWindows
     {
-        get => _configAccessor.ReadConfig(config => config.ResizeWindows);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ResizeWindows == value)
-                    return;
-                config.ResizeWindows = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.ResizeWindows);
+        set =>
+            UpdateSetting(
+                nameof(ResizeWindows),
+                value,
+                config => config.ResizeWindows,
+                (config, currentValue) => config.ResizeWindows = currentValue
+            );
     }
 
     public bool MoveWindows
     {
-        get => _configAccessor.ReadConfig(config => config.MoveWindows);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.MoveWindows == value)
-                    return;
-                config.MoveWindows = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.MoveWindows);
+        set =>
+            UpdateSetting(
+                nameof(MoveWindows),
+                value,
+                config => config.MoveWindows,
+                (config, currentValue) => config.MoveWindows = currentValue
+            );
     }
 
     public bool FocusOnHover
     {
-        get => _configAccessor.ReadConfig(config => config.FocusOnHover);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.FocusOnHover == value)
-                    return;
-                config.FocusOnHover = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.FocusOnHover);
+        set =>
+            UpdateSetting(
+                nameof(FocusOnHover),
+                value,
+                config => config.FocusOnHover,
+                (config, currentValue) => config.FocusOnHover = currentValue
+            );
     }
 
     public bool ShowWindowDecorations
     {
-        get => _configAccessor.ReadConfig(config => config.ShowWindowDecorations);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ShowWindowDecorations == value)
-                    return;
-                config.ShowWindowDecorations = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.ShowWindowDecorations);
+        set =>
+            UpdateSetting(
+                nameof(ShowWindowDecorations),
+                value,
+                config => config.ShowWindowDecorations,
+                (config, currentValue) => config.ShowWindowDecorations = currentValue
+            );
     }
 
     public bool UseFixedWindowSize
     {
-        get => _configAccessor.ReadConfig(config => config.UseFixedWindowSize);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.UseFixedWindowSize == value)
-                    return;
-                config.UseFixedWindowSize = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.UseFixedWindowSize);
+        set =>
+            UpdateSetting(
+                nameof(UseFixedWindowSize),
+                value,
+                config => config.UseFixedWindowSize,
+                (config, currentValue) => config.UseFixedWindowSize = currentValue
+            );
     }
 
     public int WindowWidth
     {
-        get => _configAccessor.ReadConfig(config => config.WindowWidth);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.WindowWidth == value)
-                    return;
-                config.WindowWidth = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.WindowWidth);
+        set =>
+            UpdateSetting(
+                nameof(WindowWidth),
+                value,
+                config => config.WindowWidth,
+                (config, currentValue) => config.WindowWidth = currentValue
+            );
     }
 
     public int WindowHeight
     {
-        get => _configAccessor.ReadConfig(config => config.WindowHeight);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.WindowHeight == value)
-                    return;
-                config.WindowHeight = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.WindowHeight);
+        set =>
+            UpdateSetting(
+                nameof(WindowHeight),
+                value,
+                config => config.WindowHeight,
+                (config, currentValue) => config.WindowHeight = currentValue
+            );
     }
 
     public Color PreviewHighlightColor
@@ -246,5 +200,31 @@ public class SettingsViewModel : ObservableObject
     {
         _configAccessor.UpdateConfig(config => config.DisablePreviews = _pendingDisablePreviews);
         _applyAction();
+    }
+
+    private T ReadSetting<T>(Func<ConfigFile, T> selector)
+    {
+        return _configAccessor.ReadConfig(selector);
+    }
+
+    private void UpdateSetting<T>(
+        string propertyName,
+        T newValue,
+        Func<ConfigFile, T> selector,
+        Action<ConfigFile, T> updater
+    )
+    {
+        bool updated = false;
+        _configAccessor.UpdateConfig(config =>
+        {
+            if (EqualityComparer<T>.Default.Equals(selector(config), newValue))
+                return;
+
+            updater(config, newValue);
+            updated = true;
+        });
+
+        if (updated)
+            OnPropertyChanged(propertyName);
     }
 }

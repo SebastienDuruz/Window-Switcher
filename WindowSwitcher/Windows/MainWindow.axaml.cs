@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Abstractions;
+using WindowSwitcher.Windows.Services;
 using WindowSwitcherLib.Data;
 using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
@@ -26,9 +27,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
 {
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
-    private readonly Dictionary<string, FloatingWindow> _floatingWindows = new(
-        StringComparer.Ordinal
-    );
+    private readonly FloatingWindowRegistry _floatingWindowRegistry;
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
@@ -49,6 +48,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _dependencyNotificationService.DependencyMissing += OnDependencyMissing;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
+        _floatingWindowRegistry = new FloatingWindowRegistry(WinAccessorBase, PreviewFrameProvider, this);
 
         ViewModel = new WindowListViewModel(WinAccessorBase);
         DataContext = ViewModel;
@@ -73,7 +73,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         RenameWindow = new RenameWindow();
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
-        InitializeFloatingWindows(ViewModel.WindowsConfigs);
+        _floatingWindowRegistry.Initialize(ViewModel.WindowsConfigs);
         ShowPreviouslyReportedDependencies();
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
@@ -91,15 +91,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
         StaticData.AppClosing = true;
         _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
-        PreviewFrameProvider.Dispose();
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
         AppInfoWindow.Close();
         RenameWindow.Close();
-        foreach (FloatingWindow floatingWindow in _floatingWindows.Values.ToList())
-            floatingWindow.Close();
-        _floatingWindows.Clear();
+        _floatingWindowRegistry.CloseAll();
+        PreviewFrameProvider.Dispose();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
         ViewModel.Dispose();
         base.OnClosing(e);
@@ -181,7 +179,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public async Task RenameWindowTitleAsync(string windowId)
     {
-        if (!_floatingWindows.TryGetValue(windowId, out FloatingWindow? floatingWindow))
+        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
             return;
 
         bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(
@@ -248,67 +246,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
             dialog.Show();
     }
 
-    private void InitializeFloatingWindows(IEnumerable<WindowConfig> windows)
-    {
-        foreach (WindowConfig window in windows)
-        {
-            if (_floatingWindows.ContainsKey(window.WindowId))
-                continue;
-
-            _floatingWindows[window.WindowId] = new FloatingWindow(
-                window,
-                WinAccessorBase,
-                PreviewFrameProvider,
-                this
-            );
-        }
-    }
-
     private void WindowsConfigsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == NotifyCollectionChangedAction.Reset)
-        {
-            CloseAllFloatingWindows();
-            InitializeFloatingWindows(ViewModel.WindowsConfigs);
-            return;
-        }
-
-        if (e.NewItems is not null)
-        {
-            foreach (WindowConfig window in e.NewItems.OfType<WindowConfig>())
-            {
-                if (_floatingWindows.ContainsKey(window.WindowId))
-                    continue;
-
-                _floatingWindows[window.WindowId] = new FloatingWindow(
-                    window,
-                    WinAccessorBase,
-                    PreviewFrameProvider,
-                    this
-                );
-            }
-        }
-
-        if (e.OldItems is not null)
-        {
-            foreach (WindowConfig window in e.OldItems.OfType<WindowConfig>())
-                CloseFloatingWindow(window.WindowId);
-        }
-    }
-
-    private void CloseAllFloatingWindows()
-    {
-        foreach (FloatingWindow window in _floatingWindows.Values.ToList())
-            window.RequestCloseFromHost();
-        _floatingWindows.Clear();
-    }
-
-    private void CloseFloatingWindow(string windowId)
-    {
-        if (!_floatingWindows.Remove(windowId, out FloatingWindow? window))
-            return;
-
-        window.RequestCloseFromHost();
+        _floatingWindowRegistry.SynchronizeWithCollectionChange(e, ViewModel.WindowsConfigs);
     }
 
     private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
@@ -323,7 +263,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public void ApplySettings()
     {
-        foreach (FloatingWindow floatingWindow in _floatingWindows.Values.ToList())
-            floatingWindow.ApplySettings();
+        _floatingWindowRegistry.ApplySettings();
     }
 }

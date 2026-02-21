@@ -28,37 +28,9 @@ public sealed class RuntimePreviewFrameProviderFactory(
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
-        if (
-            !EnsureLinuxDependency(
-                dependencyName: "gst-launch-1.0",
-                isAvailable: _linuxDependencies.IsGstLaunchAvailable
-            )
-        )
-            return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (
-            !EnsureLinuxDependency(
-                dependencyName: "gstreamer-pipewire",
-                isAvailable: _linuxDependencies.IsGstPipeWireSrcAvailable
-            )
-        )
-            return new ScreenshotPreviewFrameProvider(accessorBase);
-        if (
-            !EnsureLinuxDependency(
-                dependencyName: "pw-dump",
-                isAvailable: _linuxDependencies.IsPwDumpAvailable
-            )
-        )
+        if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies))
             return new ScreenshotPreviewFrameProvider(accessorBase);
 
         return new PipeWireFrameProvider(accessorBase);
-    }
-
-    private bool EnsureLinuxDependency(string dependencyName, bool isAvailable)
-    {
-        if (isAvailable)
-            return true;
-
-        _linuxDependencies.ReportMissingOnce(dependencyName);
-        return false;
     }
 }

@@ -9,5 +9,9 @@ public class ContextMenuCommand(Action execute, Func<bool>? canExecute = null) :
 
     public void Execute(object? parameter) => execute();
 
-    public event EventHandler? CanExecuteChanged;
+    public event EventHandler? CanExecuteChanged
+    {
+        add { }
+        remove { }
+    }
 }

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using WindowSwitcherLib.Data.Platform.Interop;
 using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Models;
@@ -11,6 +12,7 @@ using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors;
 
+[SupportedOSPlatform("windows")]
 public class WindowsWinAccessor : WinAccessorBase
 {
     [StructLayout(LayoutKind.Sequential)]
