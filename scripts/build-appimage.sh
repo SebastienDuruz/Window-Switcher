@@ -100,7 +100,7 @@ ensure_appimagetool() {
 
 configuration="Release"
 runtime="linux-x64"
-version="0.6.3"
+version="0.6.4"
 self_contained="true"
 publish_dir=""
 out_dir=""
