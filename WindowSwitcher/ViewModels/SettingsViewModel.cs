@@ -1,168 +1,152 @@
 using System;
-using System.Runtime.InteropServices;
+using System.Collections.Generic;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Theming;
-using WindowSwitcherLib.Data.FileAccess;
+using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
 public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
-    public bool ShowWindowDecorationsVisible => !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-    public bool LinuxScreenshotSettingsVisible => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+    private readonly ISettingsPlatformPolicy _settingsPlatformPolicy;
+    private readonly Action _applyAction;
+    private bool _pendingDisablePreviews;
+    public IRelayCommand ApplyCommand { get; }
 
-    public SettingsViewModel(Action applyAction)
+    public SettingsViewModel(Action applyAction, ISettingsPlatformPolicy settingsPlatformPolicy)
     {
-        ApplyCommand = new RelayCommand(applyAction);
+        ArgumentNullException.ThrowIfNull(applyAction);
+        ArgumentNullException.ThrowIfNull(settingsPlatformPolicy);
+
+        _applyAction = applyAction;
+        _settingsPlatformPolicy = settingsPlatformPolicy;
+        _pendingDisablePreviews = _configAccessor.ReadConfig(config => config.DisablePreviews);
+        ApplyCommand = new RelayCommand(Apply);
     }
 
-    public IRelayCommand ApplyCommand { get; }
+    public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
+
+    public bool DisablePreviews
+    {
+        get => _pendingDisablePreviews;
+        set
+        {
+            if (_pendingDisablePreviews == value)
+                return;
+            _pendingDisablePreviews = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public void ResetPendingValues()
+    {
+        bool configuredValue = _configAccessor.ReadConfig(config => config.DisablePreviews);
+        if (_pendingDisablePreviews == configuredValue)
+            return;
+
+        _pendingDisablePreviews = configuredValue;
+        OnPropertyChanged(nameof(DisablePreviews));
+    }
 
     public bool StartMinimized
     {
-        get => _configAccessor.ReadConfig(config => config.StartMinimized);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.StartMinimized == value)
-                    return;
-                config.StartMinimized = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.StartMinimized);
+        set =>
+            UpdateSetting(
+                nameof(StartMinimized),
+                value,
+                config => config.StartMinimized,
+                (config, currentValue) => config.StartMinimized = currentValue
+            );
     }
 
     public bool ResizeWindows
     {
-        get => _configAccessor.ReadConfig(config => config.ResizeWindows);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ResizeWindows == value)
-                    return;
-                config.ResizeWindows = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.ResizeWindows);
+        set =>
+            UpdateSetting(
+                nameof(ResizeWindows),
+                value,
+                config => config.ResizeWindows,
+                (config, currentValue) => config.ResizeWindows = currentValue
+            );
     }
 
     public bool MoveWindows
     {
-        get => _configAccessor.ReadConfig(config => config.MoveWindows);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.MoveWindows == value)
-                    return;
-                config.MoveWindows = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.MoveWindows);
+        set =>
+            UpdateSetting(
+                nameof(MoveWindows),
+                value,
+                config => config.MoveWindows,
+                (config, currentValue) => config.MoveWindows = currentValue
+            );
     }
 
     public bool FocusOnHover
     {
-        get => _configAccessor.ReadConfig(config => config.FocusOnHover);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.FocusOnHover == value)
-                    return;
-                config.FocusOnHover = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.FocusOnHover);
+        set =>
+            UpdateSetting(
+                nameof(FocusOnHover),
+                value,
+                config => config.FocusOnHover,
+                (config, currentValue) => config.FocusOnHover = currentValue
+            );
     }
 
     public bool ShowWindowDecorations
     {
-        get => _configAccessor.ReadConfig(config => config.ShowWindowDecorations);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ShowWindowDecorations == value)
-                    return;
-                config.ShowWindowDecorations = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.ShowWindowDecorations);
+        set =>
+            UpdateSetting(
+                nameof(ShowWindowDecorations),
+                value,
+                config => config.ShowWindowDecorations,
+                (config, currentValue) => config.ShowWindowDecorations = currentValue
+            );
     }
 
     public bool UseFixedWindowSize
     {
-        get => _configAccessor.ReadConfig(config => config.UseFixedWindowSize);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.UseFixedWindowSize == value)
-                    return;
-                config.UseFixedWindowSize = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.UseFixedWindowSize);
+        set =>
+            UpdateSetting(
+                nameof(UseFixedWindowSize),
+                value,
+                config => config.UseFixedWindowSize,
+                (config, currentValue) => config.UseFixedWindowSize = currentValue
+            );
     }
 
     public int WindowWidth
     {
-        get => _configAccessor.ReadConfig(config => config.WindowWidth);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.WindowWidth == value)
-                    return;
-                config.WindowWidth = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.WindowWidth);
+        set =>
+            UpdateSetting(
+                nameof(WindowWidth),
+                value,
+                config => config.WindowWidth,
+                (config, currentValue) => config.WindowWidth = currentValue
+            );
     }
 
     public int WindowHeight
     {
-        get => _configAccessor.ReadConfig(config => config.WindowHeight);
-        set
-        {
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.WindowHeight == value)
-                    return;
-                config.WindowHeight = value;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
+        get => ReadSetting(config => config.WindowHeight);
+        set =>
+            UpdateSetting(
+                nameof(WindowHeight),
+                value,
+                config => config.WindowHeight,
+                (config, currentValue) => config.WindowHeight = currentValue
+            );
     }
 
     public Color PreviewHighlightColor
@@ -183,7 +167,13 @@ public class SettingsViewModel : ObservableObject
             bool updated = false;
             _configAccessor.UpdateConfig(config =>
             {
-                if (string.Equals(config.PreviewHighlightColor, configValue, StringComparison.OrdinalIgnoreCase))
+                if (
+                    string.Equals(
+                        config.PreviewHighlightColor,
+                        configValue,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                     return;
                 config.PreviewHighlightColor = configValue;
                 updated = true;
@@ -196,44 +186,6 @@ public class SettingsViewModel : ObservableObject
         }
     }
 
-    public int ScreenshotQuality
-    {
-        get => _configAccessor.ReadConfig(config => config.ScreenshotQuality);
-        set
-        {
-            int clamped = Math.Clamp(value, 1, 100);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ScreenshotQuality == clamped)
-                    return;
-                config.ScreenshotQuality = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
-    public int ScreenshotRefreshTimeoutMs
-    {
-        get => _configAccessor.ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
-        set
-        {
-            int clamped = Math.Clamp(value, 100, 10_000);
-            bool updated = false;
-            _configAccessor.UpdateConfig(config =>
-            {
-                if (config.ScreenshotRefreshTimeoutMs == clamped)
-                    return;
-                config.ScreenshotRefreshTimeoutMs = clamped;
-                updated = true;
-            });
-            if (updated)
-                OnPropertyChanged();
-        }
-    }
-
     private static string ToConfigColorString(Color color)
     {
         // Keep a stable, human-friendly format in the config file.
@@ -242,5 +194,37 @@ public class SettingsViewModel : ObservableObject
         return color.A == 0xFF
             ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
             : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
+
+    private void Apply()
+    {
+        _configAccessor.UpdateConfig(config => config.DisablePreviews = _pendingDisablePreviews);
+        _applyAction();
+    }
+
+    private T ReadSetting<T>(Func<ConfigFile, T> selector)
+    {
+        return _configAccessor.ReadConfig(selector);
+    }
+
+    private void UpdateSetting<T>(
+        string propertyName,
+        T newValue,
+        Func<ConfigFile, T> selector,
+        Action<ConfigFile, T> updater
+    )
+    {
+        bool updated = false;
+        _configAccessor.UpdateConfig(config =>
+        {
+            if (EqualityComparer<T>.Default.Equals(selector(config), newValue))
+                return;
+
+            updater(config, newValue);
+            updated = true;
+        });
+
+        if (updated)
+            OnPropertyChanged(propertyName);
     }
 }

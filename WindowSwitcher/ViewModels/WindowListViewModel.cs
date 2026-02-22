@@ -8,45 +8,46 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
 public partial class WindowListViewModel : ObservableObject, IDisposable
 {
-    private readonly CancellationTokenSource _cts = new ();
-    [ObservableProperty] 
+    private const int WindowListRefreshIntervalMs = 250;
+    private readonly CancellationTokenSource _cts = new();
+
+    [ObservableProperty]
     private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
+
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
-    private WindowAccessor WindowAccessor { get; }
-    public string LastSelectedItemId { get; } = "";
-    public List<string> TempWindowIdsBlacklist { get; set; } = new ();
-    
-    public WindowListViewModel(WindowAccessor windowAccessor)
+    private WinAccessorBase WinAccessorBase { get; }
+    public string LastSelectedItemId { get; } = string.Empty;
+    public HashSet<string> TempWindowIdsBlacklist { get; } = new(StringComparer.Ordinal);
+
+    public WindowListViewModel(WinAccessorBase winAccessorBase)
     {
-        WindowAccessor = windowAccessor;
-        Task.Run(async () => await RunPeriodicTask(_cts.Token));
+        WinAccessorBase = winAccessorBase;
+        _ = Task.Run(() => RunPeriodicTask(_cts.Token));
     }
 
     private async Task RunPeriodicTask(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        await RefreshWindowsAsync(cancellationToken).ConfigureAwait(false);
+
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(WindowListRefreshIntervalMs));
+        try
         {
-            try
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
-                ObservableCollection<WindowConfig> fetchedWindows = WindowAccessor.GetWindows();
-                await Dispatcher.UIThread.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+                await RefreshWindowsAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
-                if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.ActivateLogs))
-                    AppLogger.Log(ex.Message, StaticData.LogSeverity.ERRO);
-            }
-            int refreshTimeoutMs = ConfigFileAccessor.GetInstance().ReadConfig(config => config.ScreenshotRefreshTimeoutMs);
-            await Task.Delay(refreshTimeoutMs, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown path.
         }
     }
 
@@ -57,10 +58,10 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         _cts.Cancel();
         _cts.Dispose();
     }
-    
+
     public void FetchWindowsWithFilters()
     {
-        ApplyWindowsWithFilters(WindowAccessor.GetWindows());
+        ApplyWindowsWithFilters(WinAccessorBase.GetWindows());
     }
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
@@ -68,47 +69,83 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         var configAccessor = ConfigFileAccessor.GetInstance();
         var configSnapshot = configAccessor.ReadConfig(config => new
         {
-            config.ActivateLogs,
-            BlacklistPrefixes = config.BlacklistPrefixes.ToList(),
-            WhitelistPrefixes = config.WhitelistPrefixes.ToList()
+            BlacklistPrefixes = config.BlacklistPrefixes.ToHashSet(
+                StringComparer.OrdinalIgnoreCase
+            ),
+            WhitelistPrefixes = config
+                .WhitelistPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix))
+                .ToArray(),
         });
 
-        // Apply the prefixes and remove the blacklisted clients
+        var fetchedIds = new HashSet<string>(StringComparer.Ordinal);
+        var existingById = WindowsConfigs.ToDictionary(
+            config => config.WindowId,
+            StringComparer.Ordinal
+        );
+
+        // Apply whitelist/blacklist rules while iterating fetched windows.
         foreach (WindowConfig fetchedWindow in fetchedWindows)
         {
-            bool isOnBlacklist = (configSnapshot.BlacklistPrefixes.Exists(x =>
-                x.Equals(fetchedWindow.WindowTitle, StringComparison.OrdinalIgnoreCase)) ||
-                TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId));
-            bool isOnWhiteList = configSnapshot.WhitelistPrefixes.Any(prefix =>
-                fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase));
-            bool isOnWindowsList = WindowsConfigs.Any(x => x.WindowId == fetchedWindow.WindowId);
+            fetchedIds.Add(fetchedWindow.WindowId);
 
-            if ((isOnBlacklist && isOnWindowsList) || (isOnWindowsList && !isOnWhiteList))
+            bool isOnBlacklist =
+                configSnapshot.BlacklistPrefixes.Contains(fetchedWindow.WindowTitle)
+                || TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId);
+            bool isOnWhiteList = configSnapshot.WhitelistPrefixes.Any(prefix =>
+                fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase)
+            );
+            bool isOnWindowsList = existingById.TryGetValue(
+                fetchedWindow.WindowId,
+                out WindowConfig? existingConfig
+            );
+
+            if (isOnWindowsList && (isOnBlacklist || !isOnWhiteList))
             {
-                if(configSnapshot.ActivateLogs)
-                    AppLogger.Log($"[REMOVE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
-                WindowsConfigs.Remove(WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId));
+                WindowsConfigs.Remove(existingConfig!);
+                existingById.Remove(fetchedWindow.WindowId);
             }
             else if (!isOnBlacklist && !isOnWindowsList && isOnWhiteList)
             {
-                if(configSnapshot.ActivateLogs)
-                    AppLogger.Log($"[ADD] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
                 WindowsConfigs.Add(fetchedWindow);
+                existingById[fetchedWindow.WindowId] = fetchedWindow;
             }
             else if (!isOnBlacklist && isOnWindowsList && isOnWhiteList)
             {
-                WindowConfig windowConfig = WindowsConfigs.First(x => x.WindowId == fetchedWindow.WindowId);
-                if (windowConfig.WindowTitle != fetchedWindow.WindowTitle)
+                if (existingConfig!.WindowTitle != fetchedWindow.WindowTitle)
                 {
-                    if(configSnapshot.ActivateLogs)
-                        AppLogger.Log($"[UPDATE] {fetchedWindow.ShortWindowTitle} ({fetchedWindow.WindowId}) || isOnBlacklist: {isOnBlacklist} isOnWhiteList: {isOnWhiteList} isOnWindowsList: {isOnWindowsList}", StaticData.LogSeverity.INFO);                
-                    windowConfig.WindowTitle = fetchedWindow.WindowTitle;
+                    existingConfig.WindowTitle = fetchedWindow.WindowTitle;
                 }
             }
         }
-        
-        List<WindowConfig> toRemove = WindowsConfigs.Where(x => fetchedWindows.All(y => y.WindowId != x.WindowId)).ToList();
-        foreach (WindowConfig window in toRemove)
-            WindowsConfigs.Remove(window);
+
+        // Remove stale windows that are no longer present in accessor output.
+        for (int i = WindowsConfigs.Count - 1; i >= 0; i--)
+        {
+            WindowConfig window = WindowsConfigs[i];
+            if (fetchedIds.Contains(window.WindowId))
+                continue;
+
+            WindowsConfigs.RemoveAt(i);
+        }
+    }
+
+    private async Task RefreshWindowsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            ObservableCollection<WindowConfig> fetchedWindows = WinAccessorBase.GetWindows();
+            await Dispatcher.UIThread.InvokeAsync(
+                () => ApplyWindowsWithFilters(fetchedWindows),
+                DispatcherPriority.Background
+            );
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown path.
+        }
+        catch (Exception)
+        {
+            // Ignore transient refresh failures and continue periodic polling.
+        }
     }
 }

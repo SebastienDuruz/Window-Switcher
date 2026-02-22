@@ -35,6 +35,7 @@ This software **doesn't modify game clients**.
 
 - **Windows:** uses DWM thumbnails for smooth live previews.
 - **Linux (X11):** uses periodic screenshots (requires ImageMagick `import`) and `wmctrl` to focus/rename windows.
+- **Linux (Wayland):** supports PipeWire stream preview by matching `wmctrl` window ids to PipeWire nodes.
 
 ## Roadmap
 
@@ -135,12 +136,21 @@ Make sure your system has:
 
 - [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows)
 - ImageMagick [`import`](https://linux.die.net/man/1/import) (screenshots for live preview)
+- [`gst-launch-1.0`](https://gstreamer.freedesktop.org/) + `pipewiresrc` plugin (PipeWire video stream)
+- [`pw-dump`](https://pipewire.pages.freedesktop.org/pipewire/page_man_pw-dump_1.html) (PipeWire node discovery and matching)
+- [`gdbus`](https://manpages.ubuntu.com/manpages/jammy/man1/gdbus.1.html) (optional, only if portal fallback is enabled)
 
 Install examples (depends on your distro):
 
 - Debian/Ubuntu: `sudo apt install wmctrl imagemagick`
 - Arch: `sudo pacman -S wmctrl imagemagick`
 - Fedora: `sudo dnf install wmctrl ImageMagick`
+
+Wayland PipeWire packages (examples):
+
+- Debian/Ubuntu: `sudo apt install gstreamer1.0-tools gstreamer1.0-pipewire pipewire-bin libglib2.0-bin`
+- Arch: `sudo pacman -S gst-plugin-pipewire gstreamer pipewire glib2`
+- Fedora: `sudo dnf install gstreamer1 pipewire-gstreamer pipewire-utils glib2`
 
 ## Usage
 

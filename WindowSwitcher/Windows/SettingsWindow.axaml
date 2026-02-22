@@ -21,7 +21,7 @@
                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
                         <CheckBox Content="Resize windows" IsChecked="{Binding ResizeWindows, Mode=TwoWay}" />
                         <CheckBox Content="Window decorations"
-                                  IsVisible="{Binding ShowWindowDecorationsVisible}"
+                                  IsVisible="{Binding ShowWindowDecorationSetting}"
                                   IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
                         <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
                         <StackPanel Name="FixedWidthStackPanel"
@@ -42,6 +42,7 @@
                 </StackPanel>
 
                 <StackPanel Grid.Row="0" Grid.Column="1" Spacing="8">
+                        <CheckBox Content="Disable previews" IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
                         <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
                         <CheckBox Content="Focus on hover" IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
                         <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
@@ -53,28 +54,6 @@
                                                          IsAlphaVisible="False" />
                         </Grid>
 
-                        
-
-                        <!-- Linux-only screenshot settings: keep last -->
-                        <StackPanel IsVisible="{Binding LinuxScreenshotSettingsVisible}" Orientation="Vertical" Spacing="0">
-                                <TextBlock Text="{Binding ScreenshotQuality, StringFormat=Screenshot quality: {0}}" />
-                                <Slider Width="240"
-                                        Minimum="1"
-                                        Maximum="100"
-                                        TickFrequency="1"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding ScreenshotQuality, Mode=TwoWay}" />
-                        </StackPanel>
-
-                        <StackPanel IsVisible="{Binding LinuxScreenshotSettingsVisible}" Orientation="Vertical" Spacing="0">
-                                <TextBlock Text="{Binding ScreenshotRefreshTimeoutMs, StringFormat=Screenshot refresh (ms): {0}}" />
-                                <Slider Width="240"
-                                        Minimum="100"
-                                        Maximum="10000"
-                                        TickFrequency="100"
-                                        IsSnapToTickEnabled="True"
-                                        Value="{Binding ScreenshotRefreshTimeoutMs, Mode=TwoWay}" />
-                        </StackPanel>
                 </StackPanel>
 
                 <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">

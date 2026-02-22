@@ -1,7 +1,7 @@
 param(
     [string] $Configuration = "Release",
     [string] $Runtime = "win-x64",
-    [string] $Version = "0.6.0",
+    [string] $Version = "0.7.0",
     [switch] $SelfContained,
     [string] $PublishDir = (Join-Path $PSScriptRoot "..\\artifacts\\publish\\$Runtime"),
     [string] $OutDir = (Join-Path $PSScriptRoot "..\\artifacts\\installer")
@@ -22,8 +22,17 @@ $publishArgs = @(
     "publish", $project,
     "-c", $Configuration,
     "-r", $Runtime,
-    "-o", $PublishDir
+    "-o", $PublishDir,
+    "-p:Version=$Version",
+    "-p:InformationalVersion=$Version"
 )
+
+$semver = [regex]::Match($Version, "^(\\d+)\\.(\\d+)\\.(\\d+)$")
+if ($semver.Success) {
+    $fourPart = "$($semver.Groups[1].Value).$($semver.Groups[2].Value).$($semver.Groups[3].Value).0"
+    $publishArgs += "-p:AssemblyVersion=$fourPart"
+    $publishArgs += "-p:FileVersion=$fourPart"
+}
 
 if ($SelfContained) {
     $publishArgs += "--self-contained"

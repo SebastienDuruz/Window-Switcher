@@ -1,0 +1,9 @@
+﻿using Tmds.DBus;
+
+namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
+
+[DBusInterface("org.freedesktop.portal.Session")]
+public interface IPipeWirePortalSession : IDBusObject
+{
+    Task CloseAsync();
+}

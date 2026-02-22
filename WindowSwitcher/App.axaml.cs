@@ -5,16 +5,14 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using WindowSwitcher.Theming;
-using WindowSwitcher.ViewModels;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcherLib.Data;
 
 namespace WindowSwitcher;
 
 public partial class App : Application
 {
     private Windows.MainWindow? MainWindow { get; set; }
-    
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -22,9 +20,9 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        DataFolders.CheckFolders();
+        StaticData.CheckFolders();
         ApplyAccentColorFromConfig();
-        
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             MainWindow = new Windows.MainWindow();
@@ -36,7 +34,9 @@ public partial class App : Application
 
     private static void ApplyAccentColorFromConfig()
     {
-        string configValue = ConfigFileAccessor.GetInstance().ReadConfig(config => config.PreviewHighlightColor);
+        string configValue = ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => config.PreviewHighlightColor);
         if (Color.TryParse(configValue, out Color accentColor))
             AccentColorApplier.Apply(accentColor);
     }

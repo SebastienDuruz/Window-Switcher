@@ -27,7 +27,11 @@ internal static class AccentColorApplier
         SetAccentPalette(Application.Current.Resources, opaqueAccent, prefix: "AccentColor");
     }
 
-    private static void SetAccentPalette(IResourceDictionary resources, Color baseColor, string prefix)
+    private static void SetAccentPalette(
+        IResourceDictionary resources,
+        Color baseColor,
+        string prefix
+    )
     {
         resources[prefix] = baseColor;
 
@@ -44,11 +48,9 @@ internal static class AccentColorApplier
 
     private static Color Mix(Color from, Color to, double amount)
     {
-        amount = Math.Clamp(amount, 0.0, 1.0);
-
-        byte r = (byte)Math.Clamp(Math.Round(from.R + (to.R - from.R) * amount), 0, 255);
-        byte g = (byte)Math.Clamp(Math.Round(from.G + (to.G - from.G) * amount), 0, 255);
-        byte b = (byte)Math.Clamp(Math.Round(from.B + (to.B - from.B) * amount), 0, 255);
+        byte r = (byte)Math.Round(from.R + (to.R - from.R) * amount);
+        byte g = (byte)Math.Round(from.G + (to.G - from.G) * amount);
+        byte b = (byte)Math.Round(from.B + (to.B - from.B) * amount);
 
         return Color.FromArgb(0xFF, r, g, b);
     }

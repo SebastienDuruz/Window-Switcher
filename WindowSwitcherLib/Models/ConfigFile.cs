@@ -12,19 +12,21 @@ public class ConfigFile
     public int WindowWidth { get; set; } = 300;
     public int WindowHeight { get; set; } = 200;
     public string PreviewHighlightColor { get; set; } = "#E3008C";
-    
-    // Debug
+
+    public bool DisablePreviews { get; set; } = false;
     public bool ActivateWindowsPreview { get; set; } = true;
-    public bool ActivateLogs { get; set; } = false;
-    
-    // Screenshot methods
-    public int ScreenshotRefreshTimeoutMs { get; set; } = 1000;
-    public int ScreenshotQuality { get; set; } = 5;
-    
+    public string LinuxWaylandScreenCastRestoreToken { get; set; } = string.Empty;
+    public Dictionary<string, string> LinuxWaylandScreenCastRestoreTokensByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+    public Dictionary<string, string> LinuxWaylandScreenCastRestoreDataByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+    public Dictionary<string, string> LinuxWaylandScreenCastStreamIdsByWindowId { get; set; } =
+        new(StringComparer.Ordinal);
+
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();
     public List<string> BlacklistPrefixes { get; set; } = new List<string>();
-    
+
     // Remember floating windows positions
     public List<WindowConfig?> FloatingWindowsConfig { get; set; } = new List<WindowConfig?>();
 }
