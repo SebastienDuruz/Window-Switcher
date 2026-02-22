@@ -42,7 +42,7 @@ public partial class AppInfoViewModel : ObservableObject
 
     public void Refresh()
     {
-        AppVersion = "0.6.3";
+        AppVersion = "0.7.0";
         PlatformAppInfoSnapshot snapshot = _appInfoProvider.GetSnapshot();
         OsDescription = snapshot.OsDescription;
         FrameworkDescription = snapshot.FrameworkDescription;
