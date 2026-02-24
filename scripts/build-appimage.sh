@@ -128,7 +128,7 @@ case "$runtime" in
 esac
 
 repo="$(repo_root)"
-project="${repo}/WindowSwitcher/WindowSwitcher.csproj"
+project="${repo}/src/WindowSwitcher/WindowSwitcher.csproj"
 packaging_dir="${repo}/packaging/linux"
 
 if [[ -z "$publish_dir" ]]; then
@@ -167,7 +167,7 @@ cp -a "${publish_dir}/." "$appdir/usr/bin/"
 
 cp -a "${repo}/LICENSE" "$appdir/usr/share/licenses/windowswitcher/LICENSE"
 
-cp -a "${repo}/WindowSwitcher/Assets/WS_logo.png" "$appdir/windowswitcher.png"
+cp -a "${repo}/src/WindowSwitcher/Assets/WS_logo.png" "$appdir/windowswitcher.png"
 cp -a "$appdir/windowswitcher.png" "$appdir/.DirIcon"
 cp -a "$appdir/windowswitcher.png" "$appdir/usr/share/icons/hicolor/256x256/apps/windowswitcher.png"
 

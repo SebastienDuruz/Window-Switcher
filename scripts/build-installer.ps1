@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$project = Join-Path $repoRoot "WindowSwitcher\\WindowSwitcher.csproj"
+$project = Join-Path $repoRoot "src\\WindowSwitcher\\WindowSwitcher.csproj"
 $nsi = Join-Path $repoRoot "installer\\WindowSwitcher.nsi"
 
 New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
