@@ -16,6 +16,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
+        <ProjectReference Include="..\WindowSwitcher.Lib\WindowSwitcher.Lib.csproj" />
     </ItemGroup>
 </Project>

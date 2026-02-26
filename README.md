@@ -110,7 +110,7 @@ From the repo root:
 
 - Build: `dotnet build Window-Switcher.sln`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
-- Tester project: `dotnet run --project src/WindowSwitcherTester/WindowSwitcherTester.csproj`
+- Tester project: `dotnet run --project src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
 ## Build Windows installer (scripted)
 
