@@ -1,61 +1,62 @@
-using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using WindowSwitcherLib.Data.CustomWindows;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.WindowAccess;
+using WindowSwitcher.Controls;
+using WindowSwitcher.Windows.Services;
+using WindowSwitcherLib.Data;
 
 namespace WindowSwitcher.Windows;
 
 public partial class PrefixesWindow : EditListWindow
 {
-    public PrefixesWindow(List<string> listToEdit, StaticData.PrefixWindowType prefixWindowType, string windowTitle) : base(listToEdit, prefixWindowType)
+    private readonly UtilityWindowService _windowService = new();
+    private readonly PrefixListService _prefixListService;
+
+    public PrefixesWindow(
+        List<string> listToEdit,
+        StaticData.PrefixWindowType prefixWindowType,
+        string windowTitle
+    )
+        : base(listToEdit, prefixWindowType)
     {
         InitializeComponent();
+        _prefixListService = new PrefixListService(ListToEdit, PrefixWindowType);
         Closing += OnClosing;
         Title = windowTitle;
 
-        foreach (string prefix in ListToEdit)
+        foreach (string prefix in _prefixListService.GetPrefixesSnapshot())
             AddPrefixToList(prefix);
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        e.Cancel = !StaticData.AppClosing;
-        Hide();
+        _windowService.HandleClosing(this, e, hideWhenCanceled: true, hideWhenAllowed: true);
     }
 
     private void AddPrefixClick(object? sender, RoutedEventArgs e)
     {
-        if (!String.IsNullOrWhiteSpace(PrefixTextBox.Text))
-        {
-            PrefixTextBox.Text = PrefixTextBox.Text.ToLower();
-            if (!string.IsNullOrWhiteSpace(PrefixTextBox.Text) && !ListToEdit.Contains(PrefixTextBox.Text))
-            {
-                ListToEdit.Add(PrefixTextBox.Text);
-                ConfigFileAccessor.GetInstance().WriteUserSettings();
-                AddPrefixToList(PrefixTextBox.Text);
-                PrefixTextBox.Text = "";
-            
-                SavePrefixList();
-            }
-        }
+        if (!_prefixListService.TryAddPrefix(PrefixTextBox.Text, out string normalizedPrefix))
+            return;
+
+        AddPrefixToList(normalizedPrefix);
+        PrefixTextBox.Text = string.Empty;
     }
 
     public void AddPrefixToList(string prefix)
     {
         Dispatcher.UIThread.Invoke(() =>
         {
-            PrefixListBox.Items.Add(new ListBoxItem()
-            {
-                Content = prefix.ToLower(),
-                Height = 22,
-                FontSize = 14,
-                Padding = new Thickness(8, 2)
-            });
+            PrefixListBox.Items.Add(
+                new ListBoxItem()
+                {
+                    Content = prefix.ToLower(),
+                    Height = 22,
+                    FontSize = 14,
+                    Padding = new Thickness(8, 2),
+                }
+            );
         });
     }
 
@@ -76,24 +77,28 @@ public partial class PrefixesWindow : EditListWindow
         ListBoxItem? selectedPrefix = e.AddedItems[0] as ListBoxItem;
         if (selectedPrefix == null)
             return;
-        
+
+        bool isRemoved = _prefixListService.TryRemovePrefix(
+            selectedPrefix.Content as string,
+            out _
+        );
+        if (!isRemoved)
+            return;
+
         DeletePrefixFromList(selectedPrefix);
-        
-        ListToEdit.Remove(((string)selectedPrefix.Content!).ToLower());
-        
-        SavePrefixList();
     }
 
-    private void SavePrefixList()
+    public bool HasPrefixStartingWith(string prefix)
     {
-        switch (PrefixWindowType)
-        {
-            case StaticData.PrefixWindowType.whitelist:
-                ConfigFileAccessor.GetInstance().SavePrefixesList(ListToEdit);
-                break;
-            case StaticData.PrefixWindowType.blacklist:
-                ConfigFileAccessor.GetInstance().SaveBlacklist(ListToEdit);
-                break;
-        }
+        return _prefixListService.ContainsPrefixStartingWith(prefix);
+    }
+
+    public bool TryAddPrefix(string prefix)
+    {
+        if (!_prefixListService.TryAddPrefix(prefix, out string normalizedPrefix))
+            return false;
+
+        AddPrefixToList(normalizedPrefix);
+        return true;
     }
 }

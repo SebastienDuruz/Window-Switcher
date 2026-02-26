@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+HERE="$(dirname "$(readlink -f "$0")")"
+APPDIR="${APPDIR:-$HERE}"
+
+exec "$APPDIR/usr/bin/WindowSwitcher" "$@"
+

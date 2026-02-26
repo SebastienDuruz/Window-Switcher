@@ -2,11 +2,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcherLib"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
-        Width="300" Height="400"
+        Width="300"
+        SizeToContent="Height"
         x:Class="WindowSwitcher.Windows.MainWindow"
         ShowInTaskbar="True"
         Topmost="True"
@@ -23,7 +24,9 @@
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
             </MenuItem>
-            <MenuItem Name="RefreshButton" Header="_Refresh" Padding="4" Click="RefreshClicked"></MenuItem>
+            <MenuItem Header="_Help" Padding="4">
+                <MenuItem Header="_About" Click="OpenAppInfoWindowClick" />
+            </MenuItem>
         </Menu>
         <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
             <ListBox ItemsSource="{Binding WindowsConfigs}"

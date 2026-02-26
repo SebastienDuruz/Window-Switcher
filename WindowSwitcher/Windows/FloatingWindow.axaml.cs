@@ -1,46 +1,71 @@
 using System;
-using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Platform;
-using Avalonia.Threading;
-using WindowSwitcherLib.Data.FileAccess;
-using WindowSwitcherLib.Data.Interop;
-using WindowSwitcherLib.Data.WindowAccess;
+using WindowSwitcher.Controls;
+using WindowSwitcher.Hosting;
+using WindowSwitcher.Windows.Abstractions;
+using WindowSwitcher.Windows.Services;
+using WindowSwitcherLib.Data;
+using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcherLib.Models;
-using WindowSwitcherLib.WindowAccess;
-using WindowSwitcherLib.WindowAccess.CustomWindows.Commands;
-using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows;
 
-public partial class FloatingWindow : Window
+public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
-    private IntPtr ThumbnailHandle { get; set; } = IntPtr.Zero;
-    
-    private readonly CancellationTokenSource _cts = new();
-    public WindowConfig? WindowConfig { get; set; }
-    private MainWindow MainWindow { get; set; }
-    private WindowAccessor WindowAccessor { get; set; }
-    
-    public FloatingWindow(WindowConfig? windowConfig, WindowAccessor windowAccessor, MainWindow mainWindow)
+    private volatile bool _isPointerInside;
+    private bool _closeRequestedByHost;
+    private readonly IFloatingWindowHost _floatingWindowHost;
+    private readonly WinAccessorBase _winAccessorBase;
+    private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
+    private readonly IFloatingWindowHandleConfigurator _floatingWindowHandleConfigurator;
+    private readonly FloatingWindowService _service;
+    public WindowConfig WindowConfig { get; private set; }
+
+    public FloatingWindow(
+        WindowConfig windowConfig,
+        WinAccessorBase winAccessorBase,
+        IPreviewFrameProvider previewFrameProvider,
+        IFloatingWindowHost floatingWindowHost
+    )
     {
+        ArgumentNullException.ThrowIfNull(windowConfig);
+        ArgumentNullException.ThrowIfNull(winAccessorBase);
+        ArgumentNullException.ThrowIfNull(previewFrameProvider);
+        ArgumentNullException.ThrowIfNull(floatingWindowHost);
+
         InitializeComponent();
 
         WindowConfig = windowConfig;
-        WindowAccessor = windowAccessor;
-        MainWindow = mainWindow;
+        _winAccessorBase = winAccessorBase;
+        _floatingWindowHost = floatingWindowHost;
+        _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
+        _floatingWindowHandleConfigurator =
+            AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
-        Show();
 
-        StartBackgroundTask();
+        _service = new FloatingWindowService(
+            this,
+            WindowConfig,
+            previewFrameProvider,
+            _floatingPreviewPolicy,
+            WindowScreenshot,
+            PreviewBorder
+        );
+
+        Show();
+        _service.UpdateLayout();
+        _service.Start();
+
+        var platformHandle = TryGetPlatformHandle();
+        if (platformHandle is not null)
+            _floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
     }
 
     public sealed override void Show()
@@ -48,33 +73,11 @@ public partial class FloatingWindow : Window
         base.Show();
     }
 
-    private void StartBackgroundTask()
-    {
-        Task.Run(async () => await RunPeriodicTask(_cts.Token));
-    }
-
-    private async Task RunPeriodicTask(CancellationToken cancellationToken)
-    {
-        if (ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) // Windows DWM Thumbnails
-            {
-                RegisterWindowThumbnail();
-            }
-            else // Screenshot
-            {
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    await UpdateScreenshot();
-                    await Task.Delay(ConfigFileAccessor.GetInstance().Config.RefreshTimeoutMs, cancellationToken);
-                }
-            }
-        }
-    }
-
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor.GetInstance().GetFloatingWindowConfig(WindowConfig!);
+        WindowConfig? settingsConfig = ConfigFileAccessor
+            .GetInstance()
+            .GetFloatingWindowConfig(WindowConfig);
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -82,141 +85,177 @@ public partial class FloatingWindow : Window
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
-        
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            User32Functions.HideFromAltTab(TryGetPlatformHandle()!.Handle);
 
-        WindowLabel.Content = WindowConfig!.ShortWindowTitle;
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Add to blacklist",
-            Command = new ContextMenuCommand(() => MainWindow.AddToBlacklist(WindowConfig.WindowTitle))
-        });
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Add to temp blacklist",
-            Command = new ContextMenuCommand(() => MainWindow.AddToTempBlacklist(WindowConfig.WindowId))
-        });
-        FloatingWindowContextMenu.Items.Add(new MenuItem()
-        {
-            Header = "Rename window",
-            Command = new ContextMenuCommand(() => _ = RenameWindowTitle())
-        });
-        
-        CanResize = ConfigFileAccessor.GetInstance().Config.ResizeWindows;
-        if (ConfigFileAccessor.GetInstance().Config.UseFixedWindowSize)
-        {
-            CanResize = false;
-            Width = ConfigFileAccessor.GetInstance().Config.WindowWidth;
-            Height = ConfigFileAccessor.GetInstance().Config.WindowHeight; 
-        }
-        else
-        {
-            Width = WindowConfig.WindowWidth;
-            Height = WindowConfig.WindowHeight;
-        }
-        
-        SystemDecorations = ConfigFileAccessor.GetInstance().Config.ShowWindowDecorations
-            ? SystemDecorations.Full
-            : SystemDecorations.BorderOnly;
+        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+
+        WindowScreenshot.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Add to blacklist",
+                Command = new ContextMenuCommand(() =>
+                    _floatingWindowHost.AddToBlacklist(WindowConfig.WindowTitle)
+                ),
+            }
+        );
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Add to temp blacklist",
+                Command = new ContextMenuCommand(() =>
+                    _floatingWindowHost.AddToTempBlacklist(WindowConfig.WindowId)
+                ),
+            }
+        );
+        FloatingWindowContextMenu.Items.Add(
+            new MenuItem()
+            {
+                Header = "Rename window",
+                Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync()),
+            }
+        );
+
+        ApplySettingsCore(refreshPreviewPipeline: false);
     }
 
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if(ConfigFileAccessor.GetInstance().Config.MoveWindows)
+        _floatingWindowHost.SetActivePreview(this);
+        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows))
             BeginMoveDrag(e);
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowAccessor.RaiseWindow(WindowConfig!.WindowId);
+        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
     }
 
-    private Task UpdateScreenshot()
+    private void CanvasPointerEntered(object? sender, PointerEventArgs e)
     {
-        Bitmap appScreenshot = WindowAccessor.TakeScreenshot(WindowConfig.WindowId);
-        if (appScreenshot is not null)
-            Dispatcher.UIThread.Invoke(() =>
-            {
-                WindowCanvas.Background = new ImageBrush()
-                {
-                    Source = appScreenshot,
-                    Stretch = Stretch.Fill,
-                    Opacity = 0.8
-                };
-            });
-        return Task.CompletedTask;
+        if (_isPointerInside)
+            return;
+        _isPointerInside = true;
+
+        if (!ConfigFileAccessor.GetInstance().ReadConfig(config => config.FocusOnHover))
+            return;
+
+        PointerPoint point = e.GetCurrentPoint(this);
+        if (
+            point.Properties.IsLeftButtonPressed
+            || point.Properties.IsRightButtonPressed
+            || point.Properties.IsMiddleButtonPressed
+        )
+            return;
+
+        _floatingWindowHost.SetActivePreview(this);
+        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
+    }
+
+    private void CanvasPointerExited(object? sender, PointerEventArgs e)
+    {
+        _isPointerInside = false;
     }
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        WindowConfig!.WindowHeight = Height;
+        WindowConfig.WindowHeight = Height;
         WindowConfig.WindowWidth = Width;
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ConfigFileAccessor.GetInstance().Config.ActivateWindowsPreview)
-            RegisterWindowThumbnail();    
+        _service.OnWindowResized();
     }
 
     private void WindowPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        WindowConfig!.WindowLeft = Position.X;
+        WindowConfig.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
     }
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
-        e.Cancel = !StaticData.AppClosing;
+        _floatingWindowHost.ClearActivePreview(this);
+        bool allowClose = StaticData.AppClosing || _closeRequestedByHost;
+        e.Cancel = !allowClose;
         if (!e.Cancel)
-        {
-            _cts.Cancel();
-            if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && ThumbnailHandle != IntPtr.Zero)
-                DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);    
-        }
+            _service.Stop(WindowConfig.WindowId);
     }
 
-    private void RegisterWindowThumbnail()
+    private async Task RenameWindowTitleAsync()
     {
-        if (ThumbnailHandle != IntPtr.Zero)
-            DwmFunctions.DwmUnregisterThumbnail(ThumbnailHandle);
-        
-        IntPtr windowHandle = TryGetPlatformHandle()!.Handle;
-        IntPtr srcHandle = IntPtr.Parse(WindowConfig!.WindowId);
-        int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle,out IntPtr thumbnail);
-        if (res == 0) // all good !
-        {
-            ThumbnailHandle = thumbnail;
-            
-            DwmFunctions.DwmQueryThumbnailSourceSize( thumbnail, out DwmFunctions.PSIZE size );
-            DwmFunctions.Rect dest = new()
+        await _floatingWindowHost.RenameWindowTitleAsync(WindowConfig.WindowId);
+    }
+
+    public void SetPreviewHighlight(bool isSelected)
+    {
+        _service.SetPreviewHighlight(isSelected);
+    }
+
+    public void UpdateWindowTitle(string newTitle)
+    {
+        if (string.IsNullOrWhiteSpace(newTitle))
+            return;
+
+        WindowConfig.WindowTitle = newTitle;
+        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+    }
+
+    public void ApplySettings()
+    {
+        ApplySettingsCore(refreshPreviewPipeline: true);
+    }
+
+    public void RequestCloseFromHost()
+    {
+        if (_closeRequestedByHost)
+            return;
+
+        _closeRequestedByHost = true;
+        _service.Stop(WindowConfig.WindowId);
+        Close();
+    }
+
+    private void ApplySettingsCore(bool refreshPreviewPipeline)
+    {
+        var configSnapshot = ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new
             {
-                Left = 0,
-                Top = (int)(12 * Screens.Primary!.Scaling),
-                Right = (int)(WindowConfig.WindowWidth * Screens.Primary.Scaling),
-                Bottom = (int)(WindowConfig.WindowHeight * Screens.Primary.Scaling),
-            };
+                config.ResizeWindows,
+                config.UseFixedWindowSize,
+                config.WindowWidth,
+                config.WindowHeight,
+                config.ShowWindowDecorations,
+                config.PreviewHighlightColor,
+            });
 
-            DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new DwmFunctions.DWM_THUMBNAIL_PROPERTIES();
-
-            props.dwFlags =
-                DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY |
-                DwmFunctions.DWM_TNP_VISIBLE |
-                DwmFunctions.DWM_TNP_OPACITY |
-                DwmFunctions.DWM_TNP_RECTDESTINATION;
-
-            props.fSourceClientAreaOnly = false;
-            props.fVisible = true;
-            props.opacity = 255;
-            props.rcDestination = dest;
-
-            DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props );
+        CanResize = configSnapshot.ResizeWindows;
+        if (configSnapshot.UseFixedWindowSize)
+        {
+            CanResize = false;
+            Width = configSnapshot.WindowWidth;
+            Height = configSnapshot.WindowHeight;
         }
-    }
+        else
+        {
+            Width = WindowConfig.WindowWidth;
+            Height = WindowConfig.WindowHeight;
+        }
 
-    private async Task RenameWindowTitle()
-    {
-        // Works only for windows
-        if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            await MainWindow.RenameWindowTitle(WindowConfig!.WindowId);
+        SystemDecorations = configSnapshot.ShowWindowDecorations
+            ? SystemDecorations.Full
+            : SystemDecorations.BorderOnly;
+
+        if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
+        {
+            var highlightBrush = new SolidColorBrush(highlightColor);
+            WindowLabel.Foreground = highlightBrush;
+            PreviewBorder.BorderBrush = highlightBrush;
+        }
+        else
+        {
+            PreviewBorder.BorderBrush = WindowLabel.Foreground;
+        }
+
+        if (refreshPreviewPipeline)
+            _service.ApplySettings();
     }
 }

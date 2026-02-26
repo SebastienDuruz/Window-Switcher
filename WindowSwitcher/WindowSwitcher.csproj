@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
         <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -10,43 +10,56 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Avalonia" Version="11.2.4" />
-        <PackageReference Include="Avalonia.Desktop" Version="11.2.4" />
-        <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.4" />
-        <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.4" />
+        <PackageReference Include="Avalonia" Version="11.3.10" />
+        <PackageReference Include="Avalonia.Controls.ColorPicker" Version="11.3.10" />
+        <PackageReference Include="Avalonia.Desktop" Version="11.3.10" />
+        <PackageReference Include="Avalonia.X11" Version="11.3.10" />
+        <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.10" />
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.10" />
         <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-        <PackageReference Include="Avalonia.Diagnostics" Version="11.2.4">
+        <PackageReference Include="Avalonia.Diagnostics" Version="11.3.10">
             <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="NSIS" Version="2.51.0" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
+        <ProjectReference Include="..\WindowSwitcherLib\WindowSwitcherLib.csproj" />
     </ItemGroup>
     <ItemGroup>
-        <AvaloniaResource Include="Assets\WS_logo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/>
-        <AvaloniaResource Include="Assets\WS_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/>
+        <AvaloniaResource Include="Assets\WS_logo.ico" />
+        <AvaloniaResource Include="Assets\WS_logo.png" />
+        <Content
+            Include="Assets\WS_logo.ico"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+        />
+        <Content
+            Include="Assets\WS_logo.png"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+        />
     </ItemGroup>
     <ItemGroup>
-      <Compile Update="Windows\FloatingWindow.axaml.cs">
-        <DependentUpon>FloatingWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\MainWindow.axaml.cs">
-        <DependentUpon>MainWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\PrefixesWindow.axaml.cs">
-        <DependentUpon>PrefixesWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
-      <Compile Update="Windows\RenameWindow.axaml.cs">
-        <DependentUpon>RenameWindow.axaml</DependentUpon>
-        <SubType>Code</SubType>
-      </Compile>
+        <Compile Update="Windows\FloatingWindow.axaml.cs">
+            <DependentUpon>FloatingWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\MainWindow.axaml.cs">
+            <DependentUpon>MainWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\PrefixesWindow.axaml.cs">
+            <DependentUpon>PrefixesWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Windows\RenameWindow.axaml.cs">
+            <DependentUpon>RenameWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
     </ItemGroup>
 </Project>

@@ -2,31 +2,62 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:colorPicker="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.ColorPicker"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="200" Height="270" 
+        SizeToContent="WidthAndHeight"
         CanResize="False"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
         SystemDecorations="Full"
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
-        <StackPanel Orientation="Vertical" Margin="5 5" Spacing="0">
-                <CheckBox Content="Start minimized" IsCheckedChanged="StartMinimizedCheckedChange" IsChecked="{Binding ConfigFile.StartMinimized, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Resize windows" IsCheckedChanged="ResizeWindowsCheckedChange" IsChecked="{Binding ConfigFile.ResizeWindows, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Move windows" IsCheckedChanged="MoveWindowsCheckedChange" IsChecked="{Binding ConfigFile.MoveWindows, Mode=OneTime}"></CheckBox>
-                <CheckBox Content="Fixed size" IsCheckedChanged="FixedWindowCheckedChange" IsChecked="{Binding ConfigFile.UseFixedWindowSize, Mode=OneTime}"></CheckBox>
-                <StackPanel Name="FixedWidthStackPanel" IsVisible="{Binding ConfigFile.UseFixedWindowSize, Mode=OneWay}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
-                        <TextBlock Margin="0 5 10 5">Width</TextBlock>
-                        <NumericUpDown Width="130" ValueChanged="FixedWidthNumericChange" Value="{Binding ConfigFile.WindowWidth, Mode=OneTime}" Minimum="10" Maximum="2000" Increment="1" />
+        <Grid Margin="8"
+              ColumnDefinitions="Auto,Auto"
+              RowDefinitions="Auto,Auto"
+              ColumnSpacing="16"
+              RowSpacing="8">
+                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
+                        <CheckBox Content="Resize windows" IsChecked="{Binding ResizeWindows, Mode=TwoWay}" />
+                        <CheckBox Content="Window decorations"
+                                  IsVisible="{Binding ShowWindowDecorationSetting}"
+                                  IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
+                        <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
+                        <StackPanel Name="FixedWidthStackPanel"
+                                    IsVisible="{Binding UseFixedWindowSize}"
+                                    Orientation="Horizontal"
+                                    Spacing="6">
+                                <TextBlock VerticalAlignment="Center">Width</TextBlock>
+                                <NumericUpDown Width="130" Value="{Binding WindowWidth, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />
+                        </StackPanel>
+
+                        <StackPanel Name="FixedHeightStackPanel"
+                                    IsVisible="{Binding UseFixedWindowSize}"
+                                    Orientation="Horizontal"
+                                    Spacing="6">
+                                <TextBlock VerticalAlignment="Center">Height</TextBlock>
+                                <NumericUpDown Width="130" Value="{Binding WindowHeight, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />
+                        </StackPanel>
                 </StackPanel>
-                <StackPanel Name="FixedHeightStackPanel" IsVisible="{Binding ConfigFile.UseFixedWindowSize, Mode=OneWay}" Orientation="Horizontal" Margin="5 5" Spacing="0" HorizontalAlignment="Stretch">
-                        <TextBlock Margin="0 5 5 5">Height</TextBlock>
-                        <NumericUpDown Width="130" ValueChanged="FixedHeightNumericChange" Value="{Binding ConfigFile.WindowHeight, Mode=OneTime}" Minimum="10" Maximum="2000" Increment="1" />
+
+                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="8">
+                        <CheckBox Content="Disable previews" IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
+                        <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
+                        <CheckBox Content="Focus on hover" IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
+                        <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
+                        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
+                                <TextBlock VerticalAlignment="Center">Highlight color</TextBlock>
+                                <colorPicker:ColorPicker Grid.Column="1"
+                                                         Width="60"
+                                                         Color="{Binding PreviewHighlightColor, Mode=TwoWay}"
+                                                         IsAlphaVisible="False" />
+                        </Grid>
+
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Click="ApplyButtonClick">Apply</Button>
+
+                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Command="{Binding ApplyCommand}">Apply</Button>
                 </StackPanel>
-        </StackPanel>
+        </Grid>
 </Window>

@@ -9,7 +9,7 @@
         ShowActivated="False"
         mc:Ignorable="d"
         x:Class="WindowSwitcher.Windows.FloatingWindow"
-        Title="FloatingWindow"
+        Title=""
         Topmost="True"
         CanResize="True"
         Resized="FloatingWindowResized"
@@ -19,10 +19,13 @@
         ExtendClientAreaChromeHints="NoChrome"
         ExtendClientAreaTitleBarHeightHint="-1"
         x:DataType="windows:MainWindow">
-        <Canvas Name="WindowCanvas" Background="Transparent" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased">
+        <Canvas Name="WindowCanvas" Background="Black" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased" PointerEntered="CanvasPointerEntered" PointerExited="CanvasPointerExited">
                 <Canvas.ContextMenu>
                         <ContextMenu Name="FloatingWindowContextMenu"></ContextMenu>
                 </Canvas.ContextMenu>
+                <Image Name="WindowScreenshot" Stretch="Fill" Opacity="0.8" IsHitTestVisible="False" />
+                <Border Name="PreviewBorder" BorderThickness="2" Background="Transparent"
+                        IsVisible="False" IsHitTestVisible="False" />
                 <Label FontSize="10" Margin="2 0" Padding="0" Foreground="Fuchsia" FontWeight="Bold" Name="WindowLabel"><TextBlock>window name</TextBlock></Label>
         </Canvas>
 </Window>
