@@ -3,7 +3,7 @@ using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcherLib.Models;
 using Xunit;
 
-namespace WindowSwitcherTester.Services;
+namespace WindowSwitcher.Tests.Services;
 
 public sealed class PlatformCommandRunnerIntegrationTests
 {

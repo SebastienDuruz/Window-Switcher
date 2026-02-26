@@ -29,8 +29,8 @@ Unicode True
 Name "${APP_NAME} ${APP_VERSION}"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "..\\WindowSwitcher\\Assets\\WS_logo.ico"
-!define MUI_UNICON "..\\WindowSwitcher\\Assets\\WS_logo.ico"
+!define MUI_ICON "..\\src\\WindowSwitcher\\Assets\\WS_logo.ico"
+!define MUI_UNICON "..\\src\\WindowSwitcher\\Assets\\WS_logo.ico"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY

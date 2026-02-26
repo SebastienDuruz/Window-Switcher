@@ -1,5 +1,5 @@
 <p align="center">
-  <img align="middle" width="300" src="./WindowSwitcher/Assets/WS_logo.png">
+  <img align="middle" width="300" src="./src/WindowSwitcher/Assets/WS_logo.png">
 </p>
 
 # Window Switcher
@@ -57,13 +57,13 @@ This software **doesn't modify game clients**.
 - Add the ability to **rename** windows
     - keep track of different settings for clients like **World of Warcraft**
 
-| Main window                                  | Prefix window                                  |
-| -------------------------------------------- | ---------------------------------------------- |
-| ![Screenshot 1](./Demo/0.4.0/mainwindow.png) | ![Screenshot 2](./Demo/0.4.0/prefixwindow.png) |
+| Main window                               | Prefix window                                  |
+|-------------------------------------------|------------------------------------------------|
+| ![Screenshot 1](./docs/0.4.0/mainwindow.png) | ![Screenshot 2](./docs/0.4.0/prefixwindow.png) |
 
 | Live preview                                 | Settings / Rename                                                                                |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| ![Screenshot 3](./Demo/0.4.0/thumbnails.png) | ![Screenshot 4](./Demo/0.4.0/settingswindows.png) ![Screenshot 4](./Demo/0.4.0/renamewindow.png) |
+| ![Screenshot 3](./docs/0.4.0/thumbnails.png) | ![Screenshot 4](./docs/0.4.0/settingswindows.png) ![Screenshot 4](./docs/0.4.0/renamewindow.png) |
 
 🎥 Example with **Eve Online**, **World of Warcraft** and **Project Gorgon** clients :
 
@@ -75,11 +75,11 @@ This software **doesn't modify game clients**.
 
 | Main window                          | Prefix window                           |
 | ------------------------------------ | --------------------------------------- |
-| ![Screenshot 1](./Demo/settings.png) | ![Screenshot 2](./Demo/mainwindows.png) |
+| ![Screenshot 1](./docs/settings.png) | ![Screenshot 2](./docs/mainwindows.png) |
 
 | Live preview                           |
 | -------------------------------------- |
-| ![Screenshot 3](./Demo/thumbnails.png) |
+| ![Screenshot 3](./docs/thumbnails.png) |
 
 🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
 
@@ -109,8 +109,8 @@ Download the latest release [here](https://github.com/SebastienDuruz/Window-Swit
 From the repo root:
 
 - Build: `dotnet build Window-Switcher.sln`
-- Run: `dotnet run --project WindowSwitcher/WindowSwitcher.csproj`
-- Tester project: `dotnet run --project WindowSwitcherTester/WindowSwitcherTester.csproj`
+- Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
+- Tester project: `dotnet run --project src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
 ## Build Windows installer (scripted)
 
