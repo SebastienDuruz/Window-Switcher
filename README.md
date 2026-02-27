@@ -51,6 +51,15 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 ## Demo
 
 <details open>
+  <summary>v0.7.0</summary>
+
+  🎥 Example with 3 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
+  
+  [![Watch the video](https://img.youtube.com/vi/QQTOkl0HD9s/0.jpg)](https://youtu.be/QQTOkl0HD9s)
+
+</details>
+
+<details>
   <summary>v0.4.0</summary>
 
 ### Features
