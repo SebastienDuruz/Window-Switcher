@@ -4,28 +4,30 @@
 
 # Window Switcher
 
-**Window Switcher** is an **open-source** application that enables users to display **live previews** of selected open windows, with the ability to move, resize, and click to focus windows.
+**Window Switcher** is an open-source desktop app that creates small always-on-top preview windows for selected applications.
 
-It offers a flexible configuration system based on **prefix-based filters and blacklists**, allowing precise control over which windows are displayed.
+It is designed for fast window switching and multibox workflows (games, tools, multi-client setups), without modifying target applications.
 
-This software is inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), but designed for a broader range of use cases.
-The primary goal is to provide an **easy and efficient way to multibox** different game clients.
+Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the project focuses on broader use cases and cross-platform support.
 
-This software **doesn't modify game clients**.
+## What you can do
 
-## Main features:
-
-- 🔍 **Live previews** of selected open windows
-- ⚙️ **Configurable filters** using prefixes and blacklists
-- 🖱️ **Click to focus** the window
-- 🧲 **Focus on hover** (optional)
-- 🖊️ **Rename** windows
+- Display floating previews for selected windows
+- Bring the original window to foreground by clicking a preview
+- Optionally focus windows on mouse hover
+- Filter displayed windows with whitelist prefixes
+- Exclude windows with blacklist entries
+- Temporarily hide a window for the current session (temp blacklist)
+- Rename a window title directly from the UI
+- Persist floating window size/position per window
+- Tune preview behavior and highlight color from Settings
+- Inspect runtime/OS/dependency status from the About window
 
 ## Compatibility
 
-- ✅ **Windows** (fully supported)
-- 🧪 **Linux** (experimental)
-- ⏳ **macOS** (not yet implemented)
+- ✅ **Windows**
+- ✅ **Linux** (X11 + Wayland)
+- ⏳ **macOS** (not implemented)
 
 ## Limitations
 
@@ -33,22 +35,31 @@ This software **doesn't modify game clients**.
 
 ## How it works
 
-- **Windows:** uses DWM thumbnails for smooth live previews.
-- **Linux (X11):** uses periodic screenshots (requires ImageMagick `import`) and `wmctrl` to focus/rename windows.
-- **Linux (Wayland):** supports PipeWire stream preview by matching `wmctrl` window ids to PipeWire nodes.
+- **Windows:** native DWM thumbnail previews are used in floating windows.
+- **Linux (X11):** screenshots are captured via ImageMagick `import`, and window actions use `wmctrl`.
+- **Linux (Wayland):** PipeWire preview is used when dependencies are available; otherwise it falls back to screenshot mode.
 
-## Roadmap
+## Typical workflow
 
-- [x] Windows support
-- [x] Basic Linux support
-- [x] Advanced customization (access settings from the application)
-- [ ] UI enhancements
-- [ ] Better support for Linux
-- [ ] macOS implementation
+1. Launch Window Switcher.
+2. Open `Settings > Configure prefixes` and add entries to the whitelist.
+3. Open `Settings > Configure blacklist` to exclude titles you do not want to see.
+4. Floating previews are created for matching windows.
+5. Click a preview to focus the original window, or enable `Focus on hover`.
+6. Right-click a preview (or list item) to blacklist, temp-blacklist, or rename a window.
 
 ## Demo
 
 <details open>
+  <summary>v0.7.0</summary>
+
+  🎥 Example with 3 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
+  
+  [![Watch the video](https://img.youtube.com/vi/QQTOkl0HD9s/0.jpg)](https://youtu.be/QQTOkl0HD9s)
+
+</details>
+
+<details>
   <summary>v0.4.0</summary>
 
 ### Features
@@ -70,22 +81,12 @@ This software **doesn't modify game clients**.
 [![Watch the video](https://img.youtube.com/vi/hXvS_n32jaQ/0.jpg)](https://youtu.be/hXvS_n32jaQ)
 
 </details>
-<details>
-  <summary>v0.1.0</summary>
 
-| Main window                          | Prefix window                           |
-| ------------------------------------ | --------------------------------------- |
-| ![Screenshot 1](./docs/settings.png) | ![Screenshot 2](./docs/mainwindows.png) |
+## Requirements
 
-| Live preview                           |
-| -------------------------------------- |
-| ![Screenshot 3](./docs/thumbnails.png) |
-
-🎥 Example with **Eve Online**, **World of Warcraft** and **Guild Wars 2** clients :
-
-[![Watch the video](https://img.youtube.com/vi/9oif2M7rryQ/0.jpg)](https://youtu.be/9oif2M7rryQ)
-
-</details>
+- Runtime: Windows or Linux
+- Source build: .NET SDK 10 (`net10.0`)
+- Linux preview/focus features require external tools (see Linux dependencies below)
 
 ## Installation
 
@@ -110,7 +111,7 @@ From the repo root:
 
 - Build: `dotnet build Window-Switcher.sln`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
-- Tester project: `dotnet run --project src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
+- Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
 ## Build Windows installer (scripted)
 
@@ -118,17 +119,17 @@ Prerequisite: install NSIS (so `makensis.exe` is available).
 
 From the repo root:
 
-`pwsh ./scripts/build-installer.ps1 -Version 0.6.0`
+`pwsh ./scripts/build-installer.ps1 -Version 0.7.0`
 
-(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.6.0`.)
+(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.7.0`.)
 
 ## Build Linux AppImage (scripted)
 
 From the repo root:
 
-`./scripts/build-appimage.sh -v 0.6.0`
+`./scripts/build-appimage.sh -v 0.7.0`
 
-Output: `./artifacts/appimage/WindowSwitcher-0.6.0-linux-x64.AppImage`
+Output: `./artifacts/appimage/WindowSwitcher-0.7.0-linux-x64.AppImage`
 
 ### Linux dependencies
 
@@ -154,13 +155,40 @@ Wayland PipeWire packages (examples):
 
 ## Usage
 
-1. Launch Window Switcher.
-2. Configure which windows to preview:
-    - Prefix filter: only show windows with specific names.
-    - Blacklist filter: exclude unwanted windows.
-3. Adjust the preview size and position.
-4. (Optional) Enable **Focus on hover** from the **Settings** window.
-5. Enjoy !
+### Filters behavior
+
+- **Whitelist prefixes:** a window is shown when its title contains at least one configured prefix (case-insensitive).
+- **Blacklist:** exact title matches are excluded (case-insensitive).
+- **Temp blacklist:** hides a window by ID for the current session only.
+
+### Floating preview behavior
+
+- Drag preview windows when `Move windows` is enabled.
+- Resize previews when `Resize windows` is enabled.
+- With `Fixed size`, all previews share configured width/height.
+- Preview position and size are restored per window key on next launch.
+
+### Settings available in-app
+
+- `Disable previews`
+- `Move windows`
+- `Resize windows`
+- `Focus on hover`
+- `Start minimized`
+- `Window decorations` (Linux policy)
+- `Fixed size` + `Width/Height`
+- `Highlight color`
+
+### In-app diagnostics
+
+`Help > About` shows:
+
+- App version
+- OS / .NET runtime / architecture
+- UI backend
+- Config file path
+- Active preview mode
+- Linux dependency status
 
 ## Configuration
 
