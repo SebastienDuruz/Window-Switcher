@@ -6,7 +6,7 @@
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         SizeToContent="WidthAndHeight"
-        CanResize="False"
+        CanResize="True"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.KeybindsWindow"
         Title="Keybinds"
@@ -77,8 +77,8 @@
         <Border Grid.Row="1" Grid.Column="1" BorderThickness="1" Padding="8">
             <StackPanel Spacing="8">
                 <TextBlock Text="Shortcuts for selected target" FontWeight="SemiBold" />
-                <ListBox ItemsSource="{Binding Shortcuts}"
-                         SelectedItem="{Binding SelectedShortcut, Mode=TwoWay}">
+                <ListBox ItemsSource="{Binding Bindings}"
+                         SelectedItem="{Binding SelectedBinding, Mode=TwoWay}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -89,7 +89,7 @@
                 </ListBox>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                     <Button Content="Add shortcut" Command="{Binding BeginCaptureCommand}" />
-                    <Button Content="Remove selected" Command="{Binding RemoveShortcutCommand}" />
+                    <Button Content="Remove selected" Command="{Binding RemoveBindingCommand}" />
                 </StackPanel>
             </StackPanel>
         </Border>
@@ -100,7 +100,8 @@
                 <TextBlock Text="Capture mode:" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding CapturePreview}" VerticalAlignment="Center" />
                 <Button Content="Save"
-                        Command="{Binding ConfirmCaptureCommand}" />
+                        Command="{Binding ConfirmCaptureCommand}"
+                        IsEnabled="{Binding CanConfirmCapture}" />
                 <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
             </StackPanel>
         </Border>

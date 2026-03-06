@@ -162,11 +162,44 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         if (_activePreviewWindow == floatingWindow)
+        {
+            if (floatingWindow is FloatingWindow sameFloatingWindow)
+                SelectWindowInMainList(sameFloatingWindow.WindowConfig.WindowId);
             return;
+        }
 
         _activePreviewWindow?.SetPreviewHighlight(false);
         _activePreviewWindow = floatingWindow;
         _activePreviewWindow.SetPreviewHighlight(true);
+
+        if (floatingWindow is FloatingWindow concreteFloatingWindow)
+            SelectWindowInMainList(concreteFloatingWindow.WindowConfig.WindowId);
+    }
+
+    private void OnWindowKeybindActivated(object? sender, string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        Dispatcher.UIThread.Post(() => SetActivePreviewByWindowId(windowId));
+    }
+
+    private void SetActivePreviewByWindowId(string windowId)
+    {
+        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
+            return;
+
+        SetActivePreview(floatingWindow);
+    }
+
+    private void SelectWindowInMainList(string windowId)
+    {
+        if (!ViewModel.TrySelectWindowById(windowId))
+            return;
+        if (ViewModel.SelectedWindow is null)
+            return;
+
+        WindowsListBox.ScrollIntoView(ViewModel.SelectedWindow);
     }
 
     private void OnWindowKeybindActivated(object? sender, string windowId)

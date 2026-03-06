@@ -26,14 +26,8 @@ public partial class KeybindsWindow : Window
 
         IWindowKeybindManager keybindManager =
             AppServiceProvider.GetRequiredService<IWindowKeybindManager>();
-        IWindowKeybindTargetCatalogService targetCatalogService =
-            AppServiceProvider.GetRequiredService<IWindowKeybindTargetCatalogService>();
 
-        _viewModel = new KeybindSettingsViewModel(
-            keybindManager,
-            targetCatalogService,
-            selectedClientsProvider
-        );
+        _viewModel = new KeybindSettingsViewModel(keybindManager, selectedClientsProvider);
         DataContext = _viewModel;
 
         Closing += OnClosing;

@@ -69,7 +69,6 @@ public static class PlatformServiceCollectionExtensions
         );
         services.AddSingleton<IGlobalKeyboardService, GlobalKeyboardService>();
         services.AddSingleton<IWindowKeybindManager, WindowKeybindManager>();
-        services.AddSingleton<IWindowKeybindTargetCatalogService, WindowKeybindTargetCatalogService>();
         services.AddSingleton<IWindowKeybindActivator, WindowKeybindActivator>();
         services.AddSingleton<IGlobalWindowKeybindRuntimeService, GlobalWindowKeybindRuntimeService>();
 

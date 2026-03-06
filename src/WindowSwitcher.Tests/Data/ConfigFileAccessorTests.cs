@@ -68,6 +68,7 @@ public sealed class ConfigFileAccessorTests
                       "DisplayLabel": "  Editor Window  ",
                       "Shortcuts": [
                         {
+                          "Enabled": true,
                           "Combination": {
                             "Ctrl": true,
                             "Alt": false,
@@ -77,6 +78,7 @@ public sealed class ConfigFileAccessorTests
                           }
                         },
                         {
+                          "Enabled": true,
                           "Combination": {
                             "Key": "None"
                           }
@@ -126,7 +128,8 @@ public sealed class ConfigFileAccessorTests
             WindowKeybindTargetConfig keybindTarget = Assert.Single(config.WindowKeybindTargets);
             Assert.Equal("proc|editor", keybindTarget.TargetId);
             Assert.Equal("Editor Window", keybindTarget.DisplayLabel);
-            WindowKeybindShortcut shortcut = Assert.Single(keybindTarget.Shortcuts);
+            WindowKeybindBinding shortcut = Assert.Single(keybindTarget.Shortcuts);
+            Assert.True(shortcut.Enabled);
             Assert.True(shortcut.Combination.Ctrl);
             Assert.Equal(KeybindPrimaryKey.A, shortcut.Combination.Key);
         }
@@ -293,8 +296,9 @@ public sealed class ConfigFileAccessorTests
                         DisplayLabel = "Editor",
                         Shortcuts =
                         [
-                            new WindowKeybindShortcut
+                            new WindowKeybindBinding
                             {
+                                Enabled = true,
                                 Combination = new KeyCombination
                                 {
                                     Alt = true,

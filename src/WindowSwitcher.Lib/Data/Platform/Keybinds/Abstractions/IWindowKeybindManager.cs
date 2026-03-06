@@ -8,14 +8,14 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 public interface IWindowKeybindManager
 {
     /// <summary>
-    /// Returns all configured targets and their shortcuts.
+    /// Returns all configured targets and their bindings.
     /// </summary>
     IReadOnlyCollection<WindowKeybindTargetConfig> GetTargets();
 
     /// <summary>
-    /// Returns shortcuts for one target.
+    /// Returns bindings for one target.
     /// </summary>
-    IReadOnlyCollection<WindowKeybindShortcut> GetShortcutsForTarget(string targetId);
+    IReadOnlyCollection<WindowKeybindBinding> GetBindingsForTarget(string targetId);
 
     /// <summary>
     /// Creates or updates a target metadata entry.
@@ -23,18 +23,19 @@ public interface IWindowKeybindManager
     void UpsertTarget(string targetId, string displayLabel);
 
     /// <summary>
-    /// Registers a binding for the target.
+    /// Tries to register a binding for the target.
     /// </summary>
-    KeybindShortcutAddResult AddShortcut(
+    KeybindRegistrationResult TryAddBinding(
         string targetId,
         string displayLabel,
-        KeyCombination combination
+        KeyCombination combination,
+        out string message
     );
 
     /// <summary>
     /// Removes a binding from one target.
     /// </summary>
-    bool RemoveShortcut(string targetId, KeyCombination combination);
+    bool RemoveBinding(string targetId, KeyCombination combination);
 
     /// <summary>
     /// Resolves target id for an active combination.

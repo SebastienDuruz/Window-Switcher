@@ -1,7 +1,6 @@
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
-using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 
@@ -27,42 +26,44 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
     /// <inheritdoc />
     public IReadOnlyCollection<WindowKeybindTargetConfig> GetTargets()
     {
-        return _configAccessor.ReadConfig(config => CloneTargets(config.WindowKeybindTargets));
+        return _configAccessor.ReadConfig(config =>
+            NormalizeTargets(config.WindowKeybindTargets).Select(CloneTarget).ToArray()
+        );
     }
 
     /// <inheritdoc />
-    public IReadOnlyCollection<WindowKeybindShortcut> GetShortcutsForTarget(string targetId)
+    public IReadOnlyCollection<WindowKeybindBinding> GetBindingsForTarget(string targetId)
     {
-        targetId = KeybindCatalogBuilder.NormalizeTargetId(targetId);
+        targetId = NormalizeTargetId(targetId);
         if (string.IsNullOrWhiteSpace(targetId))
             return [];
 
         return _configAccessor.ReadConfig(config =>
         {
-            KeybindCatalog catalog = BuildCatalog(config.WindowKeybindTargets);
-            if (
-                !catalog.TryGetTarget(targetId, out WindowKeybindTargetConfig? target)
-                || target is null
-            )
+            WindowKeybindTargetConfig? target = NormalizeTargets(config.WindowKeybindTargets)
+                .FirstOrDefault(entry => string.Equals(entry.TargetId, targetId, StringComparison.Ordinal));
+            if (target is null)
                 return [];
 
-            return target.Shortcuts.Select(KeybindCatalogBuilder.CloneShortcut).ToArray();
+            return target.Shortcuts.Select(CloneBinding).ToArray();
         });
     }
 
     /// <inheritdoc />
     public void UpsertTarget(string targetId, string displayLabel)
     {
-        targetId = KeybindCatalogBuilder.NormalizeTargetId(targetId);
+        targetId = NormalizeTargetId(targetId);
         if (string.IsNullOrWhiteSpace(targetId))
             return;
 
-        string normalizedLabel = KeybindCatalogBuilder.NormalizeDisplayLabel(displayLabel);
+        string normalizedLabel = NormalizeDisplayLabel(displayLabel);
 
         _configAccessor.UpdateConfig(config =>
         {
-            NormalizeTargetsInPlace(config);
-            WindowKeybindTargetConfig? target = FindTarget(config.WindowKeybindTargets, targetId);
+            config.WindowKeybindTargets = NormalizeTargets(config.WindowKeybindTargets).ToList();
+            WindowKeybindTargetConfig? target = config.WindowKeybindTargets.FirstOrDefault(entry =>
+                string.Equals(entry.TargetId, targetId, StringComparison.Ordinal)
+            );
             if (target is null)
             {
                 config.WindowKeybindTargets.Add(
@@ -82,29 +83,37 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
     }
 
     /// <inheritdoc />
-    public KeybindShortcutAddResult AddShortcut(
+    public KeybindRegistrationResult TryAddBinding(
         string targetId,
         string displayLabel,
-        KeyCombination combination
+        KeyCombination combination,
+        out string message
     )
     {
         ArgumentNullException.ThrowIfNull(combination);
 
-        targetId = KeybindCatalogBuilder.NormalizeTargetId(targetId);
+        targetId = NormalizeTargetId(targetId);
         if (string.IsNullOrWhiteSpace(targetId))
-            return KeybindShortcutAddResult.Invalid("No keybind target selected.");
+        {
+            message = "No keybind target selected.";
+            return KeybindRegistrationResult.Invalid;
+        }
 
         if (!KeyCombinationParser.IsValid(combination))
-            return KeybindShortcutAddResult.Invalid("The shortcut is invalid.");
+        {
+            message = "The shortcut is invalid.";
+            return KeybindRegistrationResult.Invalid;
+        }
 
         KeyCombination normalizedCombination = KeyCombinationParser.Normalize(combination);
-        string normalizedDisplayLabel = KeybindCatalogBuilder.NormalizeDisplayLabel(displayLabel);
+        string normalizedDisplayLabel = NormalizeDisplayLabel(displayLabel);
 
-        KeybindShortcutAddResult result = KeybindShortcutAddResult.Invalid("The shortcut is invalid.");
+        KeybindRegistrationResult result = KeybindRegistrationResult.Invalid;
+        string localMessage = "The shortcut is invalid.";
 
         _configAccessor.UpdateConfig(config =>
         {
-            NormalizeTargetsInPlace(config);
+            config.WindowKeybindTargets = NormalizeTargets(config.WindowKeybindTargets).ToList();
 
             WindowKeybindTargetConfig target = GetOrCreateTarget(
                 config.WindowKeybindTargets,
@@ -113,55 +122,61 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             );
 
             if (
-                target.Shortcuts.Any(shortcut =>
-                    KeyCombinationParser.IsValid(shortcut.Combination)
-                    && KeyCombinationParser.Normalize(shortcut.Combination).Equals(normalizedCombination)
+                target.Shortcuts.Any(binding =>
+                    KeyCombinationParser.IsValid(binding.Combination)
+                    && KeyCombinationParser.Normalize(binding.Combination).Equals(normalizedCombination)
                 )
             )
             {
-                result = KeybindShortcutAddResult.Duplicate(
-                    $"Shortcut {KeyCombinationParser.ToCanonicalString(normalizedCombination)} is already assigned to this target."
-                );
+                result = KeybindRegistrationResult.Duplicate;
+                localMessage =
+                    $"Shortcut {KeyCombinationParser.ToCanonicalString(normalizedCombination)} is already assigned to this target.";
                 return;
             }
 
-            KeybindCatalog catalog = BuildCatalog(config.WindowKeybindTargets);
-            WindowKeybindTargetConfig? conflictTarget =
-                catalog.TryResolveTarget(normalizedCombination, out string conflictTargetId)
-                && !string.Equals(conflictTargetId, targetId, StringComparison.Ordinal)
-                && catalog.TryGetTarget(conflictTargetId, out WindowKeybindTargetConfig? resolvedTarget)
-                    ? resolvedTarget
-                    : null;
+            WindowKeybindTargetConfig? conflictTarget = config.WindowKeybindTargets
+                .Where(entry => !string.Equals(entry.TargetId, targetId, StringComparison.Ordinal))
+                .FirstOrDefault(entry =>
+                    entry.Shortcuts.Any(binding =>
+                        binding.Enabled
+                        && KeyCombinationParser.IsValid(binding.Combination)
+                        && KeyCombinationParser.Normalize(binding.Combination)
+                            .Equals(normalizedCombination)
+                    )
+                );
 
             if (conflictTarget is not null)
             {
+                result = KeybindRegistrationResult.Conflict;
                 string conflictLabel = string.IsNullOrWhiteSpace(conflictTarget.DisplayLabel)
                     ? conflictTarget.TargetId
                     : conflictTarget.DisplayLabel;
-                result = KeybindShortcutAddResult.Conflict(
-                    $"Conflict: {KeyCombinationParser.ToCanonicalString(normalizedCombination)} is already assigned to \"{conflictLabel}\"."
-                );
+                localMessage =
+                    $"Conflict: {KeyCombinationParser.ToCanonicalString(normalizedCombination)} is already assigned to \"{conflictLabel}\".";
                 return;
             }
 
             target.Shortcuts.Add(
-                new WindowKeybindShortcut
+                new WindowKeybindBinding
                 {
+                    Enabled = true,
                     Combination = normalizedCombination,
                 }
             );
-            result = KeybindShortcutAddResult.Added();
+            result = KeybindRegistrationResult.Added;
+            localMessage = string.Empty;
         });
 
+        message = localMessage;
         return result;
     }
 
     /// <inheritdoc />
-    public bool RemoveShortcut(string targetId, KeyCombination combination)
+    public bool RemoveBinding(string targetId, KeyCombination combination)
     {
         ArgumentNullException.ThrowIfNull(combination);
 
-        targetId = KeybindCatalogBuilder.NormalizeTargetId(targetId);
+        targetId = NormalizeTargetId(targetId);
         if (string.IsNullOrWhiteSpace(targetId))
             return false;
 
@@ -173,14 +188,16 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
 
         _configAccessor.UpdateConfig(config =>
         {
-            NormalizeTargetsInPlace(config);
-            WindowKeybindTargetConfig? target = FindTarget(config.WindowKeybindTargets, targetId);
+            config.WindowKeybindTargets = NormalizeTargets(config.WindowKeybindTargets).ToList();
+            WindowKeybindTargetConfig? target = config.WindowKeybindTargets.FirstOrDefault(entry =>
+                string.Equals(entry.TargetId, targetId, StringComparison.Ordinal)
+            );
             if (target is null)
                 return;
 
-            removed = target.Shortcuts.RemoveAll(shortcut =>
-                    KeyCombinationParser.IsValid(shortcut.Combination)
-                    && KeyCombinationParser.Normalize(shortcut.Combination)
+            removed = target.Shortcuts.RemoveAll(binding =>
+                    KeyCombinationParser.IsValid(binding.Combination)
+                    && KeyCombinationParser.Normalize(binding.Combination)
                         .Equals(normalizedCombination)
                 )
                 > 0;
@@ -192,19 +209,40 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
         return removed;
     }
 
+    /// <inheritdoc />
     public bool TryResolveTarget(KeyCombination combination, out string targetId)
     {
         ArgumentNullException.ThrowIfNull(combination);
 
         string resolvedTargetId = string.Empty;
+        if (!KeyCombinationParser.IsValid(combination))
+        {
+            targetId = string.Empty;
+            return false;
+        }
+
+        KeyCombination normalizedCombination = KeyCombinationParser.Normalize(combination);
         bool found = _configAccessor.ReadConfig(config =>
         {
-            KeybindCatalog catalog = BuildCatalog(config.WindowKeybindTargets);
-            if (!catalog.TryResolveTarget(combination, out string localTargetId))
-                return false;
+            foreach (WindowKeybindTargetConfig target in NormalizeTargets(config.WindowKeybindTargets))
+            {
+                foreach (WindowKeybindBinding binding in target.Shortcuts)
+                {
+                    if (!binding.Enabled || !KeyCombinationParser.IsValid(binding.Combination))
+                        continue;
 
-            resolvedTargetId = localTargetId;
-            return true;
+                    if (
+                        !KeyCombinationParser.Normalize(binding.Combination)
+                            .Equals(normalizedCombination)
+                    )
+                        continue;
+
+                    resolvedTargetId = target.TargetId;
+                    return true;
+                }
+            }
+
+            return false;
         });
 
         targetId = found ? resolvedTargetId : string.Empty;
@@ -237,32 +275,70 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
         return created;
     }
 
-    private static KeybindCatalog BuildCatalog(IEnumerable<WindowKeybindTargetConfig>? targets)
-    {
-        return KeybindCatalogBuilder.Build(targets);
-    }
-
-    private static WindowKeybindTargetConfig[] CloneTargets(
+    private static IEnumerable<WindowKeybindTargetConfig> NormalizeTargets(
         IEnumerable<WindowKeybindTargetConfig>? targets)
     {
-        return BuildCatalog(targets).Targets.Select(KeybindCatalogBuilder.CloneTarget).ToArray();
+        if (targets is null)
+            return [];
+
+        return targets
+            .Where(target => target is not null)
+            .Select(target => NormalizeTarget(target))
+            .Where(target => !string.IsNullOrWhiteSpace(target.TargetId));
     }
 
-    private static void NormalizeTargetsInPlace(ConfigFile config)
+    private static WindowKeybindTargetConfig NormalizeTarget(WindowKeybindTargetConfig target)
     {
-        ArgumentNullException.ThrowIfNull(config);
-        config.WindowKeybindTargets = CloneTargets(config.WindowKeybindTargets).ToList();
+        string targetId = NormalizeTargetId(target.TargetId);
+        string displayLabel = NormalizeDisplayLabel(target.DisplayLabel);
+
+        List<WindowKeybindBinding> shortcuts = (target.Shortcuts ?? [])
+            .Where(binding =>
+                binding is not null
+                && binding.Combination is not null
+                && KeyCombinationParser.IsValid(binding.Combination)
+            )
+            .Select(binding => new WindowKeybindBinding
+            {
+                Enabled = binding.Enabled,
+                Combination = KeyCombinationParser.Normalize(binding.Combination),
+            })
+            .ToList();
+
+        return new WindowKeybindTargetConfig
+        {
+            TargetId = targetId,
+            DisplayLabel = string.IsNullOrWhiteSpace(displayLabel) ? targetId : displayLabel,
+            Shortcuts = shortcuts,
+        };
     }
 
-    private static WindowKeybindTargetConfig? FindTarget(
-        IEnumerable<WindowKeybindTargetConfig> targets,
-        string targetId)
+    private static WindowKeybindTargetConfig CloneTarget(WindowKeybindTargetConfig target)
     {
-        ArgumentNullException.ThrowIfNull(targets);
-        ArgumentNullException.ThrowIfNull(targetId);
+        return new WindowKeybindTargetConfig
+        {
+            TargetId = target.TargetId,
+            DisplayLabel = target.DisplayLabel,
+            Shortcuts = target.Shortcuts.Select(CloneBinding).ToList(),
+        };
+    }
 
-        return targets.FirstOrDefault(target =>
-            string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
-        );
+    private static WindowKeybindBinding CloneBinding(WindowKeybindBinding binding)
+    {
+        return new WindowKeybindBinding
+        {
+            Enabled = binding.Enabled,
+            Combination = KeyCombinationParser.Normalize(binding.Combination),
+        };
+    }
+
+    private static string NormalizeTargetId(string? targetId)
+    {
+        return string.IsNullOrWhiteSpace(targetId) ? string.Empty : targetId.Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeDisplayLabel(string? displayLabel)
+    {
+        return string.IsNullOrWhiteSpace(displayLabel) ? string.Empty : displayLabel.Trim();
     }
 }
