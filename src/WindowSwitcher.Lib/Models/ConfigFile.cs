@@ -1,4 +1,6 @@
-namespace WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+
+namespace WindowSwitcher.Lib.Models;
 
 public class ConfigFile
 {
@@ -29,4 +31,7 @@ public class ConfigFile
 
     // Remember floating windows positions
     public List<WindowConfig?> FloatingWindowsConfig { get; set; } = new List<WindowConfig?>();
+
+    // Global keybinds by stable window target
+    public List<WindowKeybindTargetConfig> WindowKeybindTargets { get; set; } = [];
 }

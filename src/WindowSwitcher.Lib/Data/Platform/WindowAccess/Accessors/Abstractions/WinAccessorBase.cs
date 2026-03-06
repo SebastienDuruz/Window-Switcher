@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 
 public abstract class WinAccessorBase
 {

@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
 /// <summary>
 /// Describes preview rendering capabilities for floating windows.

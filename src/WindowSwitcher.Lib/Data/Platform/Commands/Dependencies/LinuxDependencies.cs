@@ -1,6 +1,6 @@
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Dependencies;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 
 public static class LinuxDependencies
 {

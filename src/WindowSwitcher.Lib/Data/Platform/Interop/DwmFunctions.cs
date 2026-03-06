@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace WindowSwitcherLib.Data.Platform.Interop;
+namespace WindowSwitcher.Lib.Data.Platform.Interop;
 
 public static class DwmFunctions
 {

@@ -11,15 +11,16 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.Hosting;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcher.Windows.Services;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
+using WindowConfig = WindowSwitcher.Lib.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows;
 
@@ -31,11 +32,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private PrefixesWindow PrefixesWindow { get; }
     private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
+    private KeybindsWindow KeybindsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
     private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
     private readonly IDependencyNotificationService _dependencyNotificationService;
+    private readonly IWindowKeybindActivator _windowKeybindActivator;
     private readonly HashSet<string> _missingDependenciesShown = new(
         StringComparer.OrdinalIgnoreCase
     );
@@ -46,6 +49,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _dependencyNotificationService =
             AppServiceProvider.GetRequiredService<IDependencyNotificationService>();
         _dependencyNotificationService.DependencyMissing += OnDependencyMissing;
+        _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
+        _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
         _floatingWindowRegistry = new FloatingWindowRegistry(WinAccessorBase, PreviewFrameProvider, this);
@@ -69,6 +74,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
             "Blacklist"
         );
         SettingsWindow = new SettingsWindow(ApplySettings);
+        KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
         AppInfoWindow = new AppInfoWindow { Title = $"About {StaticData.AppName}" };
         RenameWindow = new RenameWindow();
 
@@ -90,10 +96,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
     {
         StaticData.AppClosing = true;
         _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
+        _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         PrefixesWindow.Close();
         BlacklistWindow.Close();
         SettingsWindow.Close();
+        KeybindsWindow.Close();
         AppInfoWindow.Close();
         RenameWindow.Close();
         _floatingWindowRegistry.CloseAll();
@@ -124,6 +132,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
     {
         SettingsWindow.RefreshPendingValues();
         SettingsWindow.Show();
+    }
+
+    private void OpenKeybindsWindowClick(object? sender, RoutedEventArgs e)
+    {
+        KeybindsWindow.RefreshData();
+        KeybindsWindow.Show();
     }
 
     private void OpenAppInfoWindowClick(object? sender, RoutedEventArgs e)
@@ -161,11 +175,44 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         if (_activePreviewWindow == floatingWindow)
+        {
+            if (floatingWindow is FloatingWindow sameFloatingWindow)
+                SelectWindowInMainList(sameFloatingWindow.WindowConfig.WindowId);
             return;
+        }
 
         _activePreviewWindow?.SetPreviewHighlight(false);
         _activePreviewWindow = floatingWindow;
         _activePreviewWindow.SetPreviewHighlight(true);
+
+        if (floatingWindow is FloatingWindow concreteFloatingWindow)
+            SelectWindowInMainList(concreteFloatingWindow.WindowConfig.WindowId);
+    }
+
+    private void OnWindowKeybindActivated(object? sender, string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        Dispatcher.UIThread.Post(() => SetActivePreviewByWindowId(windowId));
+    }
+
+    private void SetActivePreviewByWindowId(string windowId)
+    {
+        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
+            return;
+
+        SetActivePreview(floatingWindow);
+    }
+
+    private void SelectWindowInMainList(string windowId)
+    {
+        if (!ViewModel.TrySelectWindowById(windowId))
+            return;
+        if (ViewModel.SelectedWindow is null)
+            return;
+
+        WindowsListBox.ScrollIntoView(ViewModel.SelectedWindow);
     }
 
     public void ClearActivePreview(IFloatingPreviewWindow floatingWindow)

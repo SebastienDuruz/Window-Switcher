@@ -1,6 +1,6 @@
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Wrappers;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 
 public sealed class GstInspectWrapper() : CommandBase("gst-inspect-1.0"), ICommandWrapper
 {

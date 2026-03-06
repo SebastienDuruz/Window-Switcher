@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Commands;
+namespace WindowSwitcher.Lib.Data.Platform.Commands;
 
 /// <summary>
 /// Windows adapter for <see cref="ICommandRunner"/>.

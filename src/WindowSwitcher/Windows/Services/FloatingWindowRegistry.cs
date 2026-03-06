@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Windows.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowConfig = WindowSwitcherLib.Models.WindowConfig;
+using WindowConfig = WindowSwitcher.Lib.Models.WindowConfig;
 
 namespace WindowSwitcher.Windows.Services;
 

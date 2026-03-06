@@ -1,7 +1,7 @@
-using WindowSwitcherLib.Data.Platform.Interop;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Interop;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Policies;
+namespace WindowSwitcher.Lib.Data.Platform.Policies;
 
 /// <summary>
 /// Configures Windows floating windows to stay hidden from Alt+Tab.

@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace WindowSwitcherLib.Models;
+namespace WindowSwitcher.Lib.Models;
 
 public class WindowConfig : INotifyPropertyChanged
 {

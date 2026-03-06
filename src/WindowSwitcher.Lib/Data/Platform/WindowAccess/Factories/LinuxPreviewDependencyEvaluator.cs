@@ -1,7 +1,6 @@
-using System;
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 
 internal static class LinuxPreviewDependencyEvaluator
 {

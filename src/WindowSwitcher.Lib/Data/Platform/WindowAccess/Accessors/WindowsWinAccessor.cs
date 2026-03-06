@@ -4,17 +4,20 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using WindowSwitcherLib.Data.Platform.Interop;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Models;
+using System.Text;
+using WindowSwitcher.Lib.Data.Platform.Interop;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Models;
 using static System.Drawing.Imaging.Encoder;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
 [SupportedOSPlatform("windows")]
 public class WindowsWinAccessor : WinAccessorBase
 {
+    private const uint GwOwner = 4;
+
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
     {
@@ -23,6 +26,8 @@ public class WindowsWinAccessor : WinAccessorBase
         public int right;
         public int bottom;
     }
+
+    private delegate bool EnumWindowsProc(IntPtr windowHandle, IntPtr lParam);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -34,6 +39,32 @@ public class WindowsWinAccessor : WinAccessorBase
     [DllImport("user32.dll")]
     private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
 
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr windowHandle);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr windowHandle, uint command);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(
+        IntPtr windowHandle,
+        out uint processId
+    );
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowText(
+        IntPtr windowHandle,
+        StringBuilder titleBuffer,
+        int maxCount
+    );
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowTextLength(IntPtr windowHandle);
+
     private static readonly ImageCodecInfo? JpegCodec = ImageCodecInfo
         .GetImageDecoders()
         .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
@@ -43,41 +74,99 @@ public class WindowsWinAccessor : WinAccessorBase
     public override ObservableCollection<WindowConfig> GetWindows()
     {
         Windows.Clear();
+        int currentProcessId = Process.GetCurrentProcess().Id;
+        var processNameByPid = new Dictionary<uint, string>();
 
-        foreach (Process process in Process.GetProcesses())
-        {
-            try
+        _ = EnumWindows(
+            (windowHandle, lParam) =>
             {
-                if (process.HasExited || string.IsNullOrWhiteSpace(process.MainWindowTitle))
-                    continue;
-                if (
-                    process.MainWindowTitle.Equals(
-                        StaticData.AppName,
-                        StringComparison.OrdinalIgnoreCase
-                    )
-                )
-                    continue;
+                try
+                {
+                    if (!IsEligibleTopLevelWindow(windowHandle))
+                        return true;
 
-                Windows.Add(
-                    new WindowConfig
-                    {
-                        WindowTitle = process.MainWindowTitle,
-                        WindowId = process.MainWindowHandle.ToString(),
-                        ProcessName = process.ProcessName,
-                    }
-                );
-            }
-            catch
-            {
-                // Ignore processes we cannot inspect.
-            }
-            finally
-            {
-                process.Dispose();
-            }
-        }
+                    string windowTitle = ReadWindowTitle(windowHandle);
+                    if (string.IsNullOrWhiteSpace(windowTitle))
+                        return true;
+                    if (windowTitle.Equals(StaticData.AppName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    GetWindowThreadProcessId(windowHandle, out uint processId);
+                    if (processId == 0 || processId == (uint)currentProcessId)
+                        return true;
+
+                    string processName = ResolveProcessName(processId, processNameByPid);
+                    Windows.Add(
+                        new WindowConfig
+                        {
+                            WindowTitle = windowTitle,
+                            WindowId = windowHandle.ToString(),
+                            ProcessName = processName,
+                        }
+                    );
+                }
+                catch
+                {
+                    // Ignore windows we cannot inspect.
+                }
+
+                return true;
+            },
+            IntPtr.Zero
+        );
 
         return Windows;
+    }
+
+    private static bool IsEligibleTopLevelWindow(IntPtr windowHandle)
+    {
+        if (windowHandle == IntPtr.Zero)
+            return false;
+        if (!IsWindowVisible(windowHandle))
+            return false;
+        if (GetWindow(windowHandle, GwOwner) != IntPtr.Zero)
+            return false;
+        if (GetWindowTextLength(windowHandle) <= 0)
+            return false;
+
+        return true;
+    }
+
+    private static string ReadWindowTitle(IntPtr windowHandle)
+    {
+        int titleLength = GetWindowTextLength(windowHandle);
+        if (titleLength <= 0)
+            return string.Empty;
+
+        var titleBuffer = new StringBuilder(titleLength + 1);
+        int copiedLength = GetWindowText(windowHandle, titleBuffer, titleBuffer.Capacity);
+        if (copiedLength <= 0)
+            return string.Empty;
+
+        return titleBuffer.ToString().Trim();
+    }
+
+    private static string ResolveProcessName(
+        uint processId,
+        IDictionary<uint, string> processNameByPid
+    )
+    {
+        if (processNameByPid.TryGetValue(processId, out string? cachedName))
+            return cachedName;
+
+        string processName = string.Empty;
+        try
+        {
+            using Process process = Process.GetProcessById((int)processId);
+            processName = process.ProcessName;
+        }
+        catch
+        {
+            // Keep empty process name if unavailable.
+        }
+
+        processNameByPid[processId] = processName;
+        return processName;
     }
 
     public override void RaiseWindow(string windowId)

@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Models;
+namespace WindowSwitcher.Lib.Models;
 
 /// <summary>
 /// Snapshot of platform and runtime diagnostics shown in the About window.

@@ -1,9 +1,9 @@
 using System;
 using Avalonia.Controls;
 using WindowSwitcher.Hosting;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Services;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
 
 namespace WindowSwitcher.Windows;
 

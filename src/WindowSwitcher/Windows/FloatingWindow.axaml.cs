@@ -6,13 +6,13 @@ using Avalonia.Input;
 using Avalonia.Media;
 using WindowSwitcher.Controls;
 using WindowSwitcher.Hosting;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Models;
 using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcher.Windows.Services;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.Windows;
 

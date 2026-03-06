@@ -1,4 +1,4 @@
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Models;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Models;

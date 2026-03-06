@@ -1,12 +1,12 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Accessors;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
 public class LinuxWinAccessor : WinAccessorBase
 {

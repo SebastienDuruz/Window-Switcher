@@ -1,7 +1,7 @@
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 
 /// <summary>
 /// Creates preview frame providers for a given accessor.

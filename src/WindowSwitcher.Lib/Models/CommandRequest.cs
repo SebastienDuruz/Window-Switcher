@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Models;
+namespace WindowSwitcher.Lib.Models;
 
 /// <summary>
 /// Describes a process execution request without exposing OS-specific types.

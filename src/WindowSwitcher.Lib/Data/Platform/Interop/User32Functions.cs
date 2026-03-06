@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace WindowSwitcherLib.Data.Platform.Interop;
+namespace WindowSwitcher.Lib.Data.Platform.Interop;
 
 public static class User32Functions
 {

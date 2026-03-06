@@ -1,6 +1,6 @@
 ﻿using Tmds.DBus;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 
 [DBusInterface("org.freedesktop.impl.portal.ScreenCast")]
 public interface IKdePortalScreenCast : IDBusObject

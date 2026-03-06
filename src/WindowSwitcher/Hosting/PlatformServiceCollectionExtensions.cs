@@ -1,11 +1,15 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
-using WindowSwitcherLib.Data.Platform.Commands;
-using WindowSwitcherLib.Data.Platform.Diagnostics;
-using WindowSwitcherLib.Data.Platform.Policies;
-using WindowSwitcherLib.Data.Platform.SystemInfo;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Platform.Commands;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Factories;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Factories.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
+using WindowSwitcher.Lib.Data.Platform.Policies;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 
 namespace WindowSwitcher.Hosting;
 
@@ -58,6 +62,15 @@ public static class PlatformServiceCollectionExtensions
                 "Only Windows and Linux are currently supported."
             );
         }
+
+        services.AddSingleton<IGlobalKeyboardListenerFactory, RuntimeGlobalKeyboardListenerFactory>();
+        services.AddSingleton<IGlobalKeyboardListener>(serviceProvider =>
+            serviceProvider.GetRequiredService<IGlobalKeyboardListenerFactory>().Create()
+        );
+        services.AddSingleton<IGlobalKeyboardService, GlobalKeyboardService>();
+        services.AddSingleton<IWindowKeybindManager, WindowKeybindManager>();
+        services.AddSingleton<IWindowKeybindActivator, WindowKeybindActivator>();
+        services.AddSingleton<IGlobalWindowKeybindRuntimeService, GlobalWindowKeybindRuntimeService>();
 
         services.AddSingleton<SystemInfoService>();
         return services;

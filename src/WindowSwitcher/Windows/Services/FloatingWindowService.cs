@@ -1,16 +1,14 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Platform.Interop;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.Interop;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Models;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows.Services;

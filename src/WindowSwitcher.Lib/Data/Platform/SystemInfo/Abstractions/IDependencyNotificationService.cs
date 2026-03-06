@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
 /// <summary>
 /// Exposes platform dependency notifications to the UI.

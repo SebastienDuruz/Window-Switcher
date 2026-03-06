@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Factories.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 
 /// <summary>
 /// Default factory that selects the accessor implementation from the current OS.

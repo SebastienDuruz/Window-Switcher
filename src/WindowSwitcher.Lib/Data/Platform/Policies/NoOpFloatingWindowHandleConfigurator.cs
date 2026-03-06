@@ -1,6 +1,6 @@
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Policies;
+namespace WindowSwitcher.Lib.Data.Platform.Policies;
 
 /// <summary>
 /// No-op handle configurator for platforms without extra native behavior.

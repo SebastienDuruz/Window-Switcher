@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Models;
 using WindowSwitcher.Theming;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
