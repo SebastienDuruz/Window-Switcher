@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
-        xmlns:models="clr-namespace:WindowSwitcherLib.Models;assembly=WindowSwitcher.Lib"
+        xmlns:models="clr-namespace:WindowSwitcher.Lib.Models;assembly=WindowSwitcher.Lib"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="300"
@@ -20,6 +20,7 @@
                 <MenuItem Header="_Configure prefixes" Click="OpenPrefixesWindowClick" />
                 <MenuItem Header="_Configure blacklist" Click="OpenBlacklistWindowClick" />
                 <MenuItem Header="_General settings" Click="OpenSettingsWindowClick" />
+                <MenuItem Header="_Configure keybinds" Click="OpenKeybindsWindowClick" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
@@ -29,8 +30,9 @@
             </MenuItem>
         </Menu>
         <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
-            <ListBox ItemsSource="{Binding WindowsConfigs}"
-                     SelectedItem="{Binding LastSelectedItemId, Mode=OneWay}">
+            <ListBox x:Name="WindowsListBox"
+                     ItemsSource="{Binding WindowsConfigs}"
+                     SelectedItem="{Binding SelectedWindow, Mode=TwoWay}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel>

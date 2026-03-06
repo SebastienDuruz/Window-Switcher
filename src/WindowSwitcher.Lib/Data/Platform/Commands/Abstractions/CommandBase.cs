@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 
 public abstract class CommandBase(string command)
 {

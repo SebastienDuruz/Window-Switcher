@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Buffers;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -10,15 +10,15 @@ using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Tmds.DBus;
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
 public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPreviewFrameProvider
 {
@@ -257,8 +257,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             cancellation.Cancel();
             cancellation.Dispose();
         }
+
+        Connection? sessionBusConnection;
         lock (_dbusSync)
+        {
+            sessionBusConnection = _sessionBusConnection;
             _sessionBusConnection = null;
+        }
+
+        DisposeSessionBusConnection(sessionBusConnection);
     }
 
     public async ValueTask DisposeAsync()
@@ -1274,7 +1281,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         Connection connection;
         lock (_dbusSync)
         {
-            _sessionBusConnection ??= Connection.Session;
+            _sessionBusConnection ??= CreateSessionBusConnection();
             connection = _sessionBusConnection;
         }
 
@@ -1288,7 +1295,47 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         }
         catch (Exception)
         {
+            bool shouldDispose = false;
+            lock (_dbusSync)
+            {
+                if (ReferenceEquals(_sessionBusConnection, connection))
+                {
+                    _sessionBusConnection = null;
+                    shouldDispose = true;
+                }
+            }
+
+            if (shouldDispose)
+                DisposeSessionBusConnection(connection);
+
             return null;
+        }
+    }
+
+    private static Connection CreateSessionBusConnection()
+    {
+        var connectionOptions = new ClientConnectionOptions(Address.Session)
+        {
+            // Avoid capturing AvaloniaSynchronizationContext and dispatching callbacks on shutdown.
+            SynchronizationContext = null,
+            AutoConnect = true,
+            RunContinuationsAsynchronously = true,
+        };
+        return new Connection(connectionOptions);
+    }
+
+    private static void DisposeSessionBusConnection(Connection? connection)
+    {
+        if (connection is null)
+            return;
+
+        try
+        {
+            connection.Dispose();
+        }
+        catch
+        {
+            // Best effort cleanup.
         }
     }
 

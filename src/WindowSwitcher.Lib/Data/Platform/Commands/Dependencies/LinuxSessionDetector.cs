@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Data.Platform.Commands.Wrappers;
+using WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Dependencies;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 
 public static class LinuxSessionDetector
 {

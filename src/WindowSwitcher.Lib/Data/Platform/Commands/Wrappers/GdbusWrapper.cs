@@ -1,7 +1,7 @@
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Wrappers;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 
 public sealed class GdbusWrapper() : CommandBase("gdbus"), IGdbusWrapper
 {

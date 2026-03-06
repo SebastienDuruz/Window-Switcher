@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Models;
+namespace WindowSwitcher.Lib.Models;
 
 /// <summary>
 /// Contains process execution outcome.

@@ -1,6 +1,7 @@
 using System.Reflection;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+using WindowSwitcher.Lib.Models;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Data;
@@ -20,6 +21,7 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.WhitelistPrefixes);
             Assert.NotNull(sut.Config.BlacklistPrefixes);
             Assert.NotNull(sut.Config.FloatingWindowsConfig);
+            Assert.NotNull(sut.Config.WindowKeybindTargets);
         }
         finally
         {
@@ -59,6 +61,35 @@ public sealed class ConfigFileAccessorTests
                       "WindowTitle": "  My Title  ",
                       "ConfigKey": ""
                     }
+                  ],
+                  "WindowKeybindTargets": [
+                    {
+                      "TargetId": "  Proc|Editor  ",
+                      "DisplayLabel": "  Editor Window  ",
+                      "Shortcuts": [
+                        {
+                          "Enabled": true,
+                          "Combination": {
+                            "Ctrl": true,
+                            "Alt": false,
+                            "Shift": false,
+                            "Meta": false,
+                            "Key": "A"
+                          }
+                        },
+                        {
+                          "Enabled": true,
+                          "Combination": {
+                            "Key": "None"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "TargetId": "",
+                      "DisplayLabel": "invalid",
+                      "Shortcuts": []
+                    }
                   ]
                 }
                 """;
@@ -93,6 +124,14 @@ public sealed class ConfigFileAccessorTests
                 config.FloatingWindowsConfig.Where(entry => entry is not null).Select(entry => entry!)
             );
             Assert.Equal("proc|my title", persistedConfig.ConfigKey);
+
+            WindowKeybindTargetConfig keybindTarget = Assert.Single(config.WindowKeybindTargets);
+            Assert.Equal("proc|editor", keybindTarget.TargetId);
+            Assert.Equal("Editor Window", keybindTarget.DisplayLabel);
+            WindowKeybindBinding shortcut = Assert.Single(keybindTarget.Shortcuts);
+            Assert.True(shortcut.Enabled);
+            Assert.True(shortcut.Combination.Ctrl);
+            Assert.Equal(KeybindPrimaryKey.A, shortcut.Combination.Key);
         }
         finally
         {
@@ -235,6 +274,48 @@ public sealed class ConfigFileAccessorTests
 
             string json = File.ReadAllText(sut.GetFilePath());
             Assert.Contains("\"WindowWidth\": 777", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void SaveWindowKeybindTargets_PersistsStructuredShortcuts()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+            sut.SaveWindowKeybindTargets(
+                [
+                    new WindowKeybindTargetConfig
+                    {
+                        TargetId = "proc|editor",
+                        DisplayLabel = "Editor",
+                        Shortcuts =
+                        [
+                            new WindowKeybindBinding
+                            {
+                                Enabled = true,
+                                Combination = new KeyCombination
+                                {
+                                    Alt = true,
+                                    Shift = true,
+                                    Key = KeybindPrimaryKey.F2,
+                                },
+                            },
+                        ],
+                    },
+                ]
+            );
+            sut.WriteUserSettings();
+
+            string json = File.ReadAllText(sut.GetFilePath());
+            Assert.Contains("\"WindowKeybindTargets\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"TargetId\": \"proc|editor\"", json, StringComparison.Ordinal);
+            Assert.Contains("\"Key\": \"F2\"", json, StringComparison.Ordinal);
         }
         finally
         {

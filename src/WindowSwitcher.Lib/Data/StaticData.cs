@@ -1,4 +1,4 @@
-namespace WindowSwitcherLib.Data;
+namespace WindowSwitcher.Lib.Data;
 
 public static class StaticData
 {

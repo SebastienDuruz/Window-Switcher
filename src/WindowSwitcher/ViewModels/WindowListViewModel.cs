@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WindowSwitcherLib.Data;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -23,8 +23,11 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
+
+    [ObservableProperty]
+    private WindowConfig? _selectedWindow;
+
     private WinAccessorBase WinAccessorBase { get; }
-    public string LastSelectedItemId { get; } = string.Empty;
     public HashSet<string> TempWindowIdsBlacklist { get; } = new(StringComparer.Ordinal);
 
     public WindowListViewModel(WinAccessorBase winAccessorBase)
@@ -62,6 +65,21 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     public void FetchWindowsWithFilters()
     {
         ApplyWindowsWithFilters(WinAccessorBase.GetWindows());
+    }
+
+    public bool TrySelectWindowById(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return false;
+
+        WindowConfig? matchingWindow = WindowsConfigs.FirstOrDefault(window =>
+            string.Equals(window.WindowId, windowId, StringComparison.Ordinal)
+        );
+        if (matchingWindow is null)
+            return false;
+
+        SelectedWindow = matchingWindow;
+        return true;
     }
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
@@ -127,6 +145,20 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 
             WindowsConfigs.RemoveAt(i);
         }
+
+        if (SelectedWindow is null)
+            return;
+
+        WindowConfig? selectedWindow = WindowsConfigs.FirstOrDefault(window =>
+            string.Equals(window.WindowId, SelectedWindow.WindowId, StringComparison.Ordinal)
+        );
+        if (selectedWindow is not null)
+        {
+            SelectedWindow = selectedWindow;
+            return;
+        }
+
+        SelectedWindow = null;
     }
 
     private async Task RefreshWindowsAsync(CancellationToken cancellationToken)

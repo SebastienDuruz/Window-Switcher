@@ -1,7 +1,9 @@
 using Newtonsoft.Json;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data;
+namespace WindowSwitcher.Lib.Data;
 
 public class ConfigFileAccessor
 {
@@ -55,6 +57,7 @@ public class ConfigFileAccessor
             _config.WhitelistPrefixes ??= new List<string>();
             _config.BlacklistPrefixes ??= new List<string>();
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
+            _config.WindowKeybindTargets = NormalizeWindowKeybindTargets(_config.WindowKeybindTargets);
             _config.LinuxWaylandScreenCastRestoreToken ??= string.Empty;
             _config.LinuxWaylandScreenCastRestoreTokensByWindowId ??= new Dictionary<
                 string,
@@ -150,6 +153,13 @@ public class ConfigFileAccessor
         UpdateConfig(config => config.BlacklistPrefixes = blacklist.ToList());
     }
 
+    public void SaveWindowKeybindTargets(IReadOnlyCollection<WindowKeybindTargetConfig> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+
+        UpdateConfig(config => config.WindowKeybindTargets = NormalizeWindowKeybindTargets(targets));
+    }
+
     public WindowConfig? GetFloatingWindowConfig(WindowConfig windowConfig)
     {
         lock (_syncRoot)
@@ -213,5 +223,46 @@ public class ConfigFileAccessor
     private static string NormalizeKeyPart(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+    }
+
+    private static List<WindowKeybindTargetConfig> NormalizeWindowKeybindTargets(
+        IEnumerable<WindowKeybindTargetConfig>? targets)
+    {
+        if (targets is null)
+            return [];
+
+        return targets
+            .Where(target => target is not null)
+            .Select(target => NormalizeWindowKeybindTarget(target))
+            .Where(target => !string.IsNullOrWhiteSpace(target.TargetId))
+            .ToList();
+    }
+
+    private static WindowKeybindTargetConfig NormalizeWindowKeybindTarget(
+        WindowKeybindTargetConfig target)
+    {
+        string targetId = NormalizeKeyPart(target.TargetId);
+        string displayLabel = string.IsNullOrWhiteSpace(target.DisplayLabel)
+            ? targetId
+            : target.DisplayLabel.Trim();
+        List<WindowKeybindBinding> shortcuts = (target.Shortcuts ?? [])
+            .Where(binding =>
+                binding is not null
+                && binding.Combination is not null
+                && KeyCombinationParser.IsValid(binding.Combination)
+            )
+            .Select(binding => new WindowKeybindBinding
+            {
+                Enabled = binding.Enabled,
+                Combination = KeyCombinationParser.Normalize(binding.Combination),
+            })
+            .ToList();
+
+        return new WindowKeybindTargetConfig
+        {
+            TargetId = targetId,
+            DisplayLabel = displayLabel,
+            Shortcuts = shortcuts,
+        };
     }
 }

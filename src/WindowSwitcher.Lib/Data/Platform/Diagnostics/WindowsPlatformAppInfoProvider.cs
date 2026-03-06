@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.Diagnostics;
+namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 
 /// <summary>
 /// Windows diagnostics provider for application info view.

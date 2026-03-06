@@ -1,7 +1,7 @@
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.SystemInfo;
+namespace WindowSwitcher.Lib.Data.Platform.SystemInfo;
 
 /// <summary>
 /// Application service consuming <see cref="ICommandRunner"/> without OS branches.

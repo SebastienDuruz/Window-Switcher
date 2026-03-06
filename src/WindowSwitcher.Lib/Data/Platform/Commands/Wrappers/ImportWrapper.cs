@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.Commands.Wrappers;
+namespace WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 
 public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 {

@@ -1,6 +1,6 @@
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.Factories.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 
 /// <summary>
 /// Creates window accessor implementations for the current runtime environment.

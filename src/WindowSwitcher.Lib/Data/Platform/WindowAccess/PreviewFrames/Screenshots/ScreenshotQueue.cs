@@ -1,9 +1,9 @@
 using System.Threading.Channels;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
+namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 
 public sealed class ScreenshotQueue : IDisposable, IAsyncDisposable
 {

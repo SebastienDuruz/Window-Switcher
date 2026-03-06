@@ -1,4 +1,4 @@
-using WindowSwitcherLib.Data.Platform.Policies;
+using WindowSwitcher.Lib.Data.Platform.Policies;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Platform;

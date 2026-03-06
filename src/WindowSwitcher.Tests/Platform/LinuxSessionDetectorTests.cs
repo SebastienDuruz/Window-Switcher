@@ -1,4 +1,4 @@
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Platform;

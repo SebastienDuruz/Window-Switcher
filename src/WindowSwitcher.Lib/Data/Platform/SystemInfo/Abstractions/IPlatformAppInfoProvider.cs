@@ -1,6 +1,6 @@
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+namespace WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
 /// <summary>
 /// Provides platform diagnostics for application info UI.

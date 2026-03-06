@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
-using WindowSwitcherLib.Data.Platform.Commands.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcherLib.Data.Platform.WindowAccess.Factories;
-using WindowSwitcherLib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
+using WindowSwitcher.Lib.Models;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Services;

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel;
 using Avalonia.Controls;
-using WindowSwitcherLib.Data;
+using WindowSwitcher.Lib.Data;
 
 namespace WindowSwitcher.Windows.Services;
 

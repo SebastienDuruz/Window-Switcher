@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.Commands;
+namespace WindowSwitcher.Lib.Data.Platform.Commands;
 
 /// <summary>
 /// Shared process execution infrastructure for command runner adapters.

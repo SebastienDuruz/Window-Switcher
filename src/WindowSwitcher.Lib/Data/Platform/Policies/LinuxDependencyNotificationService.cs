@@ -1,7 +1,7 @@
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 
-namespace WindowSwitcherLib.Data.Platform.Policies;
+namespace WindowSwitcher.Lib.Data.Platform.Policies;
 
 /// <summary>
 /// Linux dependency notification adapter backed by <see cref="LinuxDependencies"/>.

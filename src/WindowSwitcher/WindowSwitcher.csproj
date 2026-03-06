@@ -53,6 +53,10 @@
             <DependentUpon>MainWindow.axaml</DependentUpon>
             <SubType>Code</SubType>
         </Compile>
+        <Compile Update="Windows\KeybindsWindow.axaml.cs">
+            <DependentUpon>KeybindsWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
         <Compile Update="Windows\PrefixesWindow.axaml.cs">
             <DependentUpon>PrefixesWindow.axaml</DependentUpon>
             <SubType>Code</SubType>

@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
 using Avalonia.Controls.ApplicationLifetimes;
-using WindowSwitcherLib.Data.Platform.Commands.Dependencies;
-using WindowSwitcherLib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcherLib.Models;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Models;
 
-namespace WindowSwitcherLib.Data.Platform.Diagnostics;
+namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 
 /// <summary>
 /// Linux diagnostics provider for application info view.
