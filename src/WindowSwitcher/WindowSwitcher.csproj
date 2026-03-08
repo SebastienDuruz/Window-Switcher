@@ -57,8 +57,8 @@
             <DependentUpon>KeybindsWindow.axaml</DependentUpon>
             <SubType>Code</SubType>
         </Compile>
-        <Compile Update="Windows\PrefixesWindow.axaml.cs">
-            <DependentUpon>PrefixesWindow.axaml</DependentUpon>
+        <Compile Update="Windows\FiltersWindow.axaml.cs">
+            <DependentUpon>FiltersWindow.axaml</DependentUpon>
             <SubType>Code</SubType>
         </Compile>
         <Compile Update="Windows\RenameWindow.axaml.cs">

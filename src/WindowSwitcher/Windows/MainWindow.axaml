@@ -17,8 +17,7 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
             <MenuItem Header="_Settings" Padding="4">
-                <MenuItem Header="_Configure prefixes" Click="OpenPrefixesWindowClick" />
-                <MenuItem Header="_Configure blacklist" Click="OpenBlacklistWindowClick" />
+                <MenuItem Header="_Configure filters" Click="OpenFiltersWindowClick" />
                 <MenuItem Header="_General settings" Click="OpenSettingsWindowClick" />
                 <MenuItem Header="_Configure keybinds" Click="OpenKeybindsWindowClick" />
             </MenuItem>
