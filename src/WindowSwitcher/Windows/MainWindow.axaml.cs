@@ -29,7 +29,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private readonly FloatingWindowRegistry _floatingWindowRegistry;
-    private FiltersWindow FiltersWindow { get; }
+    private PrefixesWindow PrefixesWindow { get; }
+    private PrefixesWindow BlacklistWindow { get; }
     private SettingsWindow SettingsWindow { get; }
     private KeybindsWindow KeybindsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
@@ -58,13 +59,19 @@ public partial class MainWindow : Window, IFloatingWindowHost
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
-        FiltersWindow = new FiltersWindow(
+        PrefixesWindow = new PrefixesWindow(
             ConfigFileAccessor
                 .GetInstance()
                 .ReadConfig(config => config.WhitelistPrefixes.ToList()),
+            StaticData.PrefixWindowType.whitelist,
+            "Prefixes"
+        );
+        BlacklistWindow = new PrefixesWindow(
             ConfigFileAccessor
                 .GetInstance()
-                .ReadConfig(config => config.BlacklistPrefixes.ToList())
+                .ReadConfig(config => config.BlacklistPrefixes.ToList()),
+            StaticData.PrefixWindowType.blacklist,
+            "Blacklist"
         );
         SettingsWindow = new SettingsWindow(ApplySettings);
         KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
@@ -91,7 +98,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
         _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
-        FiltersWindow.Close();
+        PrefixesWindow.Close();
+        BlacklistWindow.Close();
         SettingsWindow.Close();
         KeybindsWindow.Close();
         AppInfoWindow.Close();
@@ -110,9 +118,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
         );
     }
 
-    private void OpenFiltersWindowClick(object? sender, RoutedEventArgs e)
+    private void OpenPrefixesWindowClick(object? sender, RoutedEventArgs e)
     {
-        FiltersWindow.ShowPrefixesTab();
+        PrefixesWindow.Show();
+    }
+
+    private void OpenBlacklistWindowClick(object? sender, RoutedEventArgs e)
+    {
+        BlacklistWindow.Show();
     }
 
     private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
@@ -148,10 +161,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void AddToBlacklist(string windowTitle)
     {
         windowTitle = windowTitle.ToLowerInvariant();
-        if (FiltersWindow.HasBlacklistPrefixStartingWith(windowTitle))
+        if (BlacklistWindow.HasPrefixStartingWith(windowTitle))
             return;
 
-        _ = FiltersWindow.TryAddBlacklistPrefix(windowTitle);
+        _ = BlacklistWindow.TryAddPrefix(windowTitle);
     }
 
     public void AddToTempBlacklist(string windowId)
@@ -162,44 +175,11 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         if (_activePreviewWindow == floatingWindow)
-        {
-            if (floatingWindow is FloatingWindow sameFloatingWindow)
-                SelectWindowInMainList(sameFloatingWindow.WindowConfig.WindowId);
             return;
-        }
 
         _activePreviewWindow?.SetPreviewHighlight(false);
         _activePreviewWindow = floatingWindow;
         _activePreviewWindow.SetPreviewHighlight(true);
-
-        if (floatingWindow is FloatingWindow concreteFloatingWindow)
-            SelectWindowInMainList(concreteFloatingWindow.WindowConfig.WindowId);
-    }
-
-    private void OnWindowKeybindActivated(object? sender, string windowId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return;
-
-        Dispatcher.UIThread.Post(() => SetActivePreviewByWindowId(windowId));
-    }
-
-    private void SetActivePreviewByWindowId(string windowId)
-    {
-        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
-            return;
-
-        SetActivePreview(floatingWindow);
-    }
-
-    private void SelectWindowInMainList(string windowId)
-    {
-        if (!ViewModel.TrySelectWindowById(windowId))
-            return;
-        if (ViewModel.SelectedWindow is null)
-            return;
-
-        WindowsListBox.ScrollIntoView(ViewModel.SelectedWindow);
     }
 
     private void OnWindowKeybindActivated(object? sender, string windowId)
@@ -229,26 +209,24 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public async Task RenameWindowTitleAsync(string windowId)
     {
-        if (string.IsNullOrWhiteSpace(windowId))
+        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
             return;
 
-        WindowConfig? windowConfig = ViewModel.WindowsConfigs.FirstOrDefault(config =>
-            string.Equals(config.WindowId, windowId, StringComparison.Ordinal)
+        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(
+            floatingWindow.WindowConfig.WindowTitle
         );
-        if (windowConfig is null)
-            return;
-
-        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(windowConfig.WindowTitle);
         if (!isUpdated)
             return;
 
         string renamedTitle = RenameWindow.NewWindowTitle;
         WinAccessorBase.RenameWindowTitle(windowId, renamedTitle);
 
-        windowConfig.WindowTitle = renamedTitle;
-
-        if (_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
-            floatingWindow.UpdateWindowTitle(renamedTitle);
+        floatingWindow.UpdateWindowTitle(renamedTitle);
+        WindowConfig? viewModelConfig = ViewModel.WindowsConfigs.FirstOrDefault(config =>
+            string.Equals(config.WindowId, windowId, StringComparison.Ordinal)
+        );
+        if (viewModelConfig is not null)
+            viewModelConfig.WindowTitle = renamedTitle;
     }
 
     private void ShowPreviouslyReportedDependencies()
@@ -311,11 +289,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
     {
         AddToTempBlacklist((string)((MenuItem)sender!).Tag!);
-    }
-
-    private async void RenameMenuItemClick(object? sender, RoutedEventArgs e)
-    {
-        await RenameWindowTitleAsync((string)((MenuItem)sender!).Tag!);
     }
 
     public void ApplySettings()
