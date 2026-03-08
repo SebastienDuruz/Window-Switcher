@@ -29,8 +29,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private readonly FloatingWindowRegistry _floatingWindowRegistry;
-    private PrefixesWindow PrefixesWindow { get; }
-    private PrefixesWindow BlacklistWindow { get; }
+    private FiltersWindow FiltersWindow { get; }
     private SettingsWindow SettingsWindow { get; }
     private KeybindsWindow KeybindsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
@@ -59,19 +58,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
-        PrefixesWindow = new PrefixesWindow(
+        FiltersWindow = new FiltersWindow(
             ConfigFileAccessor
                 .GetInstance()
                 .ReadConfig(config => config.WhitelistPrefixes.ToList()),
-            StaticData.PrefixWindowType.whitelist,
-            "Prefixes"
-        );
-        BlacklistWindow = new PrefixesWindow(
             ConfigFileAccessor
                 .GetInstance()
-                .ReadConfig(config => config.BlacklistPrefixes.ToList()),
-            StaticData.PrefixWindowType.blacklist,
-            "Blacklist"
+                .ReadConfig(config => config.BlacklistPrefixes.ToList())
         );
         SettingsWindow = new SettingsWindow(ApplySettings);
         KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
@@ -98,8 +91,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
         _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
-        PrefixesWindow.Close();
-        BlacklistWindow.Close();
+        FiltersWindow.Close();
         SettingsWindow.Close();
         KeybindsWindow.Close();
         AppInfoWindow.Close();
@@ -118,14 +110,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         );
     }
 
-    private void OpenPrefixesWindowClick(object? sender, RoutedEventArgs e)
+    private void OpenFiltersWindowClick(object? sender, RoutedEventArgs e)
     {
-        PrefixesWindow.Show();
-    }
-
-    private void OpenBlacklistWindowClick(object? sender, RoutedEventArgs e)
-    {
-        BlacklistWindow.Show();
+        FiltersWindow.ShowPrefixesTab();
     }
 
     private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
@@ -161,10 +148,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void AddToBlacklist(string windowTitle)
     {
         windowTitle = windowTitle.ToLowerInvariant();
-        if (BlacklistWindow.HasPrefixStartingWith(windowTitle))
+        if (FiltersWindow.HasBlacklistPrefixStartingWith(windowTitle))
             return;
 
-        _ = BlacklistWindow.TryAddPrefix(windowTitle);
+        _ = FiltersWindow.TryAddBlacklistPrefix(windowTitle);
     }
 
     public void AddToTempBlacklist(string windowId)

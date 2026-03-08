@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Input;
 using Avalonia.Threading;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Windows.Services;
@@ -81,27 +80,9 @@ public partial class FiltersWindow : Window
         _ = TryAddPrefix(_whitelistService, WhitelistListBox, WhitelistTextBox, WhitelistTextBox.Text);
     }
 
-    private void WhitelistTextBoxKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-            return;
-
-        _ = TryAddPrefix(_whitelistService, WhitelistListBox, WhitelistTextBox, WhitelistTextBox.Text);
-        e.Handled = true;
-    }
-
     private void AddBlacklistClick(object? sender, RoutedEventArgs e)
     {
         _ = TryAddPrefix(_blacklistService, BlacklistListBox, BlacklistTextBox, BlacklistTextBox.Text);
-    }
-
-    private void BlacklistTextBoxKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter)
-            return;
-
-        _ = TryAddPrefix(_blacklistService, BlacklistListBox, BlacklistTextBox, BlacklistTextBox.Text);
-        e.Handled = true;
     }
 
     private void WhitelistListBoxSelectionChanged(object? sender, SelectionChangedEventArgs e)

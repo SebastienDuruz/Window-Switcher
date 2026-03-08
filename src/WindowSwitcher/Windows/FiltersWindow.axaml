@@ -7,14 +7,13 @@
         Width="320"
         MinWidth="320"
         MaxWidth="320"
+        SizeToContent="Height"
         CanResize="False"
         Topmost="True"
-        SizeToContent="Height"
         x:Class="WindowSwitcher.Windows.FiltersWindow"
         Title="Filters">
     <TabControl Name="FiltersTabControl"
-                FontSize="13"
-                Padding="0">
+                FontSize="13">
         <TabControl.Styles>
             <Style Selector="TabItem">
                 <Setter Property="FontSize" Value="13" />
@@ -28,12 +27,13 @@
                       ColumnSpacing="6">
                     <TextBox Name="WhitelistTextBox"
                              Grid.Column="0"
-                             HorizontalAlignment="Stretch"
-                             KeyDown="WhitelistTextBoxKeyDown" />
+                             HorizontalAlignment="Stretch" />
                     <Button Name="WhitelistButton"
                             Grid.Column="1"
                             Content="Add"
-                            Click="AddWhitelistClick" />
+                            MinWidth="52"
+                            Click="AddWhitelistClick"
+                            HotKey="Enter" />
                 </Grid>
                 <ListBox Name="WhitelistListBox"
                          Grid.Row="1"
@@ -47,12 +47,13 @@
                       ColumnSpacing="6">
                     <TextBox Name="BlacklistTextBox"
                              Grid.Column="0"
-                             HorizontalAlignment="Stretch"
-                             KeyDown="BlacklistTextBoxKeyDown" />
+                             HorizontalAlignment="Stretch" />
                     <Button Name="BlacklistButton"
                             Grid.Column="1"
                             Content="Add"
-                            Click="AddBlacklistClick" />
+                            MinWidth="52"
+                            Click="AddBlacklistClick"
+                            HotKey="Enter" />
                 </Grid>
                 <ListBox Name="BlacklistListBox"
                          Grid.Row="1"
