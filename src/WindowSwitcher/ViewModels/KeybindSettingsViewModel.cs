@@ -16,27 +16,28 @@ namespace WindowSwitcher.ViewModels;
 public partial class KeybindSettingsViewModel : ObservableObject
 {
     private readonly IWindowKeybindManager _keybindManager;
+    private readonly IWindowKeybindTargetCatalogService _targetCatalogService;
     private readonly Func<IReadOnlyCollection<WindowConfig>> _selectedClientsProvider;
-    private bool _isSynchronizingSelection;
+    private readonly RelayCommand _beginCaptureCommand;
+    private readonly RelayCommand _confirmCaptureCommand;
+    private readonly RelayCommand _cancelCaptureCommand;
+    private readonly RelayCommand _removeShortcutCommand;
     private KeyCombination? _capturedCombination;
 
     [ObservableProperty]
-    private ObservableCollection<KeybindTargetOption> _actionTargets = [];
+    private ObservableCollection<KeybindTargetDescriptor> _actionTargets = [];
 
     [ObservableProperty]
-    private KeybindTargetOption? _selectedActionTarget;
+    private ObservableCollection<KeybindTargetDescriptor> _clientTargets = [];
 
     [ObservableProperty]
-    private ObservableCollection<KeybindTargetOption> _clientTargets = [];
+    private KeybindTargetDescriptor? _selectedTarget;
 
     [ObservableProperty]
-    private KeybindTargetOption? _selectedClientTarget;
+    private ObservableCollection<KeybindShortcutOption> _shortcuts = [];
 
     [ObservableProperty]
-    private ObservableCollection<KeybindBindingOption> _bindings = [];
-
-    [ObservableProperty]
-    private KeybindBindingOption? _selectedBinding;
+    private KeybindShortcutOption? _selectedShortcut;
 
     [ObservableProperty]
     private bool _isCapturing;
@@ -51,41 +52,67 @@ public partial class KeybindSettingsViewModel : ObservableObject
     public IRelayCommand BeginCaptureCommand { get; }
     public IRelayCommand ConfirmCaptureCommand { get; }
     public IRelayCommand CancelCaptureCommand { get; }
-    public IRelayCommand RemoveBindingCommand { get; }
+    public IRelayCommand RemoveShortcutCommand { get; }
 
     public bool CanConfirmCapture => IsCapturing && _capturedCombination is not null;
 
+    public KeybindTargetDescriptor? SelectedActionTarget
+    {
+        get => SelectedTarget?.IsBuiltIn == true ? SelectedTarget : null;
+        set
+        {
+            if (value is not null)
+                SelectedTarget = value;
+        }
+    }
+
+    public KeybindTargetDescriptor? SelectedClientTarget
+    {
+        get => SelectedTarget?.IsBuiltIn == false ? SelectedTarget : null;
+        set
+        {
+            if (value is not null)
+                SelectedTarget = value;
+        }
+    }
+
     public KeybindSettingsViewModel(
         IWindowKeybindManager keybindManager,
+        IWindowKeybindTargetCatalogService targetCatalogService,
         Func<IReadOnlyCollection<WindowConfig>> selectedClientsProvider
     )
     {
         ArgumentNullException.ThrowIfNull(keybindManager);
+        ArgumentNullException.ThrowIfNull(targetCatalogService);
         ArgumentNullException.ThrowIfNull(selectedClientsProvider);
 
         _keybindManager = keybindManager;
+        _targetCatalogService = targetCatalogService;
         _selectedClientsProvider = selectedClientsProvider;
 
         RefreshTargetsCommand = new RelayCommand(RefreshTargets);
-        BeginCaptureCommand = new RelayCommand(BeginCapture);
-        ConfirmCaptureCommand = new RelayCommand(ConfirmCapture);
-        CancelCaptureCommand = new RelayCommand(CancelCapture);
-        RemoveBindingCommand = new RelayCommand(RemoveBinding);
+        _beginCaptureCommand = new RelayCommand(BeginCapture, CanBeginCapture);
+        _confirmCaptureCommand = new RelayCommand(ConfirmCapture, () => CanConfirmCapture);
+        _cancelCaptureCommand = new RelayCommand(CancelCapture, CanCancelCapture);
+        _removeShortcutCommand = new RelayCommand(RemoveShortcut, CanRemoveShortcut);
+        BeginCaptureCommand = _beginCaptureCommand;
+        ConfirmCaptureCommand = _confirmCaptureCommand;
+        CancelCaptureCommand = _cancelCaptureCommand;
+        RemoveShortcutCommand = _removeShortcutCommand;
 
         RefreshTargets();
     }
 
     public void RefreshTargets()
     {
-        string? previousTargetId = GetSelectedTarget()?.TargetId;
+        string? previousTargetId = SelectedTarget?.TargetId;
 
-        IReadOnlyCollection<WindowKeybindTargetConfig> persistedTargets = _keybindManager.GetTargets();
+        KeybindTargetCatalogSnapshot targetCatalog = _targetCatalogService.GetTargets(
+            _selectedClientsProvider()
+        );
 
-        Dictionary<string, KeybindTargetOption> actionsById = BuildActionTargets(persistedTargets);
-        List<KeybindTargetOption> clientTargets = BuildClientTargets(persistedTargets);
-
-        ActionTargets = new ObservableCollection<KeybindTargetOption>(actionsById.Values);
-        ClientTargets = new ObservableCollection<KeybindTargetOption>(clientTargets);
+        ActionTargets = new ObservableCollection<KeybindTargetDescriptor>(targetCatalog.ActionTargets);
+        ClientTargets = new ObservableCollection<KeybindTargetDescriptor>(targetCatalog.ClientTargets);
 
         SelectTargetById(previousTargetId);
     }
@@ -113,187 +140,51 @@ public partial class KeybindSettingsViewModel : ObservableObject
             _capturedCombination = null;
             CapturePreview = message;
             StatusMessage = message;
-            OnPropertyChanged(nameof(CanConfirmCapture));
+            UpdateCommandStates();
             return true;
         }
 
         _capturedCombination = KeyCombinationParser.Normalize(combination);
         CapturePreview = KeyCombinationParser.ToCanonicalString(_capturedCombination);
         StatusMessage = string.Empty;
-        OnPropertyChanged(nameof(CanConfirmCapture));
+        UpdateCommandStates();
         return true;
     }
 
-    partial void OnSelectedActionTargetChanged(KeybindTargetOption? value)
+    partial void OnSelectedShortcutChanged(KeybindShortcutOption? value)
     {
-        if (_isSynchronizingSelection)
-            return;
-
-        if (value is not null)
-        {
-            _isSynchronizingSelection = true;
-            SelectedClientTarget = null;
-            _isSynchronizingSelection = false;
-        }
-
-        HandleTargetSelectionChanged();
-    }
-
-    partial void OnSelectedClientTargetChanged(KeybindTargetOption? value)
-    {
-        if (_isSynchronizingSelection)
-            return;
-
-        if (value is not null)
-        {
-            _isSynchronizingSelection = true;
-            SelectedActionTarget = null;
-            _isSynchronizingSelection = false;
-        }
-
-        HandleTargetSelectionChanged();
+        UpdateCommandStates();
     }
 
     partial void OnIsCapturingChanged(bool value)
     {
-        OnPropertyChanged(nameof(CanConfirmCapture));
+        UpdateCommandStates();
     }
 
-    private static string BuildDisplayName(WindowConfig window)
+    partial void OnSelectedTargetChanged(KeybindTargetDescriptor? value)
     {
-        string title = string.IsNullOrWhiteSpace(window.WindowTitle)
-            ? "(untitled)"
-            : window.WindowTitle.Trim();
-        string process = string.IsNullOrWhiteSpace(window.ProcessName)
-            ? "unknown"
-            : window.ProcessName.Trim();
-
-        return $"{title} ({process})";
-    }
-
-    private static Dictionary<string, KeybindTargetOption> BuildActionTargets(
-        IEnumerable<WindowKeybindTargetConfig> persistedTargets
-    )
-    {
-        ArgumentNullException.ThrowIfNull(persistedTargets);
-
-        var actionsById = new Dictionary<string, KeybindTargetOption>(StringComparer.Ordinal)
-        {
-            [KeybindBuiltInTargets.NextClientTargetId] = new KeybindTargetOption(
-                KeybindBuiltInTargets.NextClientTargetId,
-                KeybindBuiltInTargets.NextClientDisplayName
-            ),
-            [KeybindBuiltInTargets.PreviousClientTargetId] = new KeybindTargetOption(
-                KeybindBuiltInTargets.PreviousClientTargetId,
-                KeybindBuiltInTargets.PreviousClientDisplayName
-            ),
-        };
-
-        foreach (WindowKeybindTargetConfig target in persistedTargets)
-        {
-            if (!KeybindBuiltInTargets.IsBuiltInTarget(target.TargetId))
-                continue;
-
-            if (
-                actionsById.TryGetValue(target.TargetId, out _)
-                && !string.IsNullOrWhiteSpace(target.DisplayLabel)
-            )
-            {
-                actionsById[target.TargetId] = new KeybindTargetOption(
-                    target.TargetId,
-                    target.DisplayLabel
-                );
-                continue;
-            }
-
-            if (!actionsById.ContainsKey(target.TargetId))
-            {
-                actionsById[target.TargetId] = new KeybindTargetOption(
-                    target.TargetId,
-                    target.DisplayLabel
-                );
-            }
-        }
-
-        return actionsById;
-    }
-
-    private List<KeybindTargetOption> BuildClientTargets(
-        IReadOnlyCollection<WindowKeybindTargetConfig> persistedTargets
-    )
-    {
-        ArgumentNullException.ThrowIfNull(persistedTargets);
-
-        List<KeybindTargetOption> runtimeTargets = _selectedClientsProvider()
-            .Select(runtimeWindow =>
-            {
-                string targetId = WindowTargetKeyFactory.Create(runtimeWindow);
-                if (string.IsNullOrWhiteSpace(targetId))
-                    return null;
-
-                string displayName = BuildDisplayName(runtimeWindow);
-                return new KeybindTargetOption(targetId, displayName);
-            })
-            .Where(target => target is not null)
-            .Select(target => target!)
-            .OrderBy(target => target.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        HashSet<string> knownTargetIds = runtimeTargets
-            .Select(target => target.TargetId)
-            .ToHashSet(StringComparer.Ordinal);
-
-        foreach (WindowKeybindTargetConfig target in persistedTargets)
-        {
-            if (string.IsNullOrWhiteSpace(target.TargetId))
-                continue;
-            if (KeybindBuiltInTargets.IsBuiltInTarget(target.TargetId))
-                continue;
-            if (!knownTargetIds.Add(target.TargetId))
-                continue;
-
-            runtimeTargets.Add(new KeybindTargetOption(target.TargetId, target.DisplayLabel));
-        }
-
-        return runtimeTargets;
-    }
-
-    private void HandleTargetSelectionChanged()
-    {
-        LoadBindingsForSelectedTarget();
+        OnPropertyChanged(nameof(SelectedActionTarget));
+        OnPropertyChanged(nameof(SelectedClientTarget));
+        LoadShortcutsForSelectedTarget();
         StatusMessage = string.Empty;
         CancelCapture();
+        UpdateCommandStates();
     }
 
     private void SelectTargetById(string? targetId)
     {
-        KeybindTargetOption? selectedAction = ActionTargets.FirstOrDefault(target =>
-            string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
-        );
-        KeybindTargetOption? selectedClient = selectedAction is null
-            ? ClientTargets.FirstOrDefault(target =>
+        SelectedTarget =
+            ActionTargets.FirstOrDefault(target =>
                 string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
             )
-            : null;
-
-        _isSynchronizingSelection = true;
-        SelectedActionTarget = selectedAction;
-        SelectedClientTarget = selectedClient;
-        _isSynchronizingSelection = false;
-
-        LoadBindingsForSelectedTarget();
-        StatusMessage = string.Empty;
-        CancelCapture();
-    }
-
-    private KeybindTargetOption? GetSelectedTarget()
-    {
-        return SelectedActionTarget ?? SelectedClientTarget;
+            ?? ClientTargets.FirstOrDefault(target =>
+                string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
+            );
     }
 
     private void BeginCapture()
     {
-        KeybindTargetOption? selectedTarget = GetSelectedTarget();
+        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
         if (selectedTarget is null)
         {
             StatusMessage = "Select an action or a client target first.";
@@ -304,28 +195,26 @@ public partial class KeybindSettingsViewModel : ObservableObject
         IsCapturing = true;
         CapturePreview = "Press the shortcut to capture";
         StatusMessage = string.Empty;
-        OnPropertyChanged(nameof(CanConfirmCapture));
     }
 
     private void ConfirmCapture()
     {
-        KeybindTargetOption? selectedTarget = GetSelectedTarget();
+        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
         if (selectedTarget is null || _capturedCombination is null)
             return;
 
-        KeybindRegistrationResult result = _keybindManager.TryAddBinding(
+        KeybindShortcutAddResult result = _keybindManager.AddShortcut(
             selectedTarget.TargetId,
             selectedTarget.DisplayName,
-            _capturedCombination,
-            out string message
+            _capturedCombination
         );
-        if (result != KeybindRegistrationResult.Added)
+        if (!result.Succeeded)
         {
-            StatusMessage = message;
+            StatusMessage = result.Message;
             return;
         }
 
-        LoadBindingsForSelectedTarget();
+        LoadShortcutsForSelectedTarget();
         CancelCapture();
         StatusMessage = "Shortcut added.";
     }
@@ -335,18 +224,18 @@ public partial class KeybindSettingsViewModel : ObservableObject
         _capturedCombination = null;
         IsCapturing = false;
         CapturePreview = "Press the shortcut to capture";
-        OnPropertyChanged(nameof(CanConfirmCapture));
+        UpdateCommandStates();
     }
 
-    private void RemoveBinding()
+    private void RemoveShortcut()
     {
-        KeybindTargetOption? selectedTarget = GetSelectedTarget();
-        if (selectedTarget is null || SelectedBinding is null)
+        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
+        if (selectedTarget is null || SelectedShortcut is null)
             return;
 
-        bool removed = _keybindManager.RemoveBinding(
+        bool removed = _keybindManager.RemoveShortcut(
             selectedTarget.TargetId,
-            SelectedBinding.Combination
+            SelectedShortcut.Combination
         );
         if (!removed)
         {
@@ -354,39 +243,65 @@ public partial class KeybindSettingsViewModel : ObservableObject
             return;
         }
 
-        LoadBindingsForSelectedTarget();
+        LoadShortcutsForSelectedTarget();
         StatusMessage = "Shortcut removed.";
     }
 
-    private void LoadBindingsForSelectedTarget()
+    private void LoadShortcutsForSelectedTarget()
     {
-        KeybindTargetOption? selectedTarget = GetSelectedTarget();
+        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
         if (selectedTarget is null)
         {
-            Bindings = [];
-            SelectedBinding = null;
+            Shortcuts = [];
+            SelectedShortcut = null;
             return;
         }
 
-        Bindings = new ObservableCollection<KeybindBindingOption>(
+        Shortcuts = new ObservableCollection<KeybindShortcutOption>(
             _keybindManager
-                .GetBindingsForTarget(selectedTarget.TargetId)
-                .OrderBy(binding => KeyCombinationParser.ToCanonicalString(binding.Combination))
-                .Select(binding => new KeybindBindingOption(binding))
+                .GetShortcutsForTarget(selectedTarget.TargetId)
+                .OrderBy(shortcut => KeyCombinationParser.ToCanonicalString(shortcut.Combination))
+                .Select(shortcut => new KeybindShortcutOption(shortcut))
         );
-        SelectedBinding = null;
+        SelectedShortcut = null;
+    }
+
+    private bool CanBeginCapture()
+    {
+        return SelectedTarget is not null && !IsCapturing;
+    }
+
+    private bool CanCancelCapture()
+    {
+        return IsCapturing;
+    }
+
+    private bool CanRemoveShortcut()
+    {
+        return SelectedTarget is not null && SelectedShortcut is not null;
+    }
+
+    private void UpdateCommandStates()
+    {
+        OnPropertyChanged(nameof(CanConfirmCapture));
+        _beginCaptureCommand.NotifyCanExecuteChanged();
+        _confirmCaptureCommand.NotifyCanExecuteChanged();
+        _cancelCaptureCommand.NotifyCanExecuteChanged();
+        _removeShortcutCommand.NotifyCanExecuteChanged();
     }
 }
 
-public sealed class KeybindTargetOption(string targetId, string displayName)
+public sealed class KeybindShortcutOption
 {
-    public string TargetId { get; } = targetId;
-    public string DisplayName { get; } = displayName;
-}
+    public KeybindShortcutOption(WindowKeybindShortcut shortcut)
+    {
+        ArgumentNullException.ThrowIfNull(shortcut);
 
-public sealed class KeybindBindingOption(WindowKeybindBinding binding)
-{
-    public KeyCombination Combination { get; } = binding.Combination.Clone();
-    public bool Enabled { get; } = binding.Enabled;
-    public string Display { get; } = KeyCombinationParser.ToCanonicalString(binding.Combination);
+        Combination = shortcut.Combination.Clone();
+        Display = KeyCombinationParser.ToCanonicalString(shortcut.Combination);
+    }
+
+    public KeyCombination Combination { get; }
+
+    public string Display { get; }
 }

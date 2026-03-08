@@ -18,31 +18,28 @@ public sealed class WindowKeybindManagerTests
             var sut = new WindowKeybindManager(accessor);
 
             var ctrlA = new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.A };
-            KeybindRegistrationResult firstResult = sut.TryAddBinding(
+            KeybindShortcutAddResult firstResult = sut.AddShortcut(
                 "proc|editor",
                 "Editor",
-                ctrlA,
-                out string firstMessage
+                ctrlA
             );
-            KeybindRegistrationResult duplicateResult = sut.TryAddBinding(
+            KeybindShortcutAddResult duplicateResult = sut.AddShortcut(
                 "proc|editor",
                 "Editor",
-                ctrlA,
-                out string duplicateMessage
+                ctrlA
             );
-            KeybindRegistrationResult conflictResult = sut.TryAddBinding(
+            KeybindShortcutAddResult conflictResult = sut.AddShortcut(
                 "proc|terminal",
                 "Terminal",
-                ctrlA,
-                out string conflictMessage
+                ctrlA
             );
 
-            Assert.Equal(KeybindRegistrationResult.Added, firstResult);
-            Assert.Equal(string.Empty, firstMessage);
-            Assert.Equal(KeybindRegistrationResult.Duplicate, duplicateResult);
-            Assert.Contains("already assigned", duplicateMessage, StringComparison.OrdinalIgnoreCase);
-            Assert.Equal(KeybindRegistrationResult.Conflict, conflictResult);
-            Assert.Contains("conflict", conflictMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(KeybindRegistrationResult.Added, firstResult.Status);
+            Assert.Equal(string.Empty, firstResult.Message);
+            Assert.Equal(KeybindRegistrationResult.Duplicate, duplicateResult.Status);
+            Assert.Contains("already assigned", duplicateResult.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(KeybindRegistrationResult.Conflict, conflictResult.Status);
+            Assert.Contains("conflict", conflictResult.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -66,15 +63,14 @@ public sealed class WindowKeybindManagerTests
                 Key = KeybindPrimaryKey.F2,
             };
 
-            KeybindRegistrationResult added = sut.TryAddBinding(
+            KeybindShortcutAddResult added = sut.AddShortcut(
                 "proc|editor",
                 "Editor",
-                combination,
-                out _
+                combination
             );
             bool resolved = sut.TryResolveTarget(combination, out string targetId);
 
-            Assert.Equal(KeybindRegistrationResult.Added, added);
+            Assert.Equal(KeybindRegistrationResult.Added, added.Status);
             Assert.True(resolved);
             Assert.Equal("proc|editor", targetId);
         }
@@ -94,8 +90,8 @@ public sealed class WindowKeybindManagerTests
             var sut = new WindowKeybindManager(accessor);
             var combination = new KeyCombination { Key = KeybindPrimaryKey.F1 };
 
-            _ = sut.TryAddBinding("proc|editor", "Editor", combination, out _);
-            bool removed = sut.RemoveBinding("proc|editor", combination);
+            _ = sut.AddShortcut("proc|editor", "Editor", combination);
+            bool removed = sut.RemoveShortcut("proc|editor", combination);
             bool resolvedAfterRemoval = sut.TryResolveTarget(combination, out _);
 
             Assert.True(removed);

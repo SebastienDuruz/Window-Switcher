@@ -1,15 +1,10 @@
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 
 /// <summary>
-/// Configured keybind binding for one target.
+/// Configured keybind shortcut for one target.
 /// </summary>
-public sealed class WindowKeybindBinding
+public sealed class WindowKeybindShortcut
 {
-    /// <summary>
-    /// Gets or sets whether this binding is active.
-    /// </summary>
-    public bool Enabled { get; set; } = true;
-
     /// <summary>
     /// Gets or sets the bound key combination.
     /// </summary>
