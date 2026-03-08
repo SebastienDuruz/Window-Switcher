@@ -18,5 +18,5 @@ public sealed class WindowKeybindTargetConfig
     /// <summary>
     /// Configured bindings for this target.
     /// </summary>
-    public List<WindowKeybindBinding> Shortcuts { get; set; } = [];
+    public List<WindowKeybindShortcut> Shortcuts { get; set; } = [];
 }
