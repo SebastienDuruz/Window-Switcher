@@ -7,13 +7,14 @@
         Width="320"
         MinWidth="320"
         MaxWidth="320"
-        SizeToContent="Height"
         CanResize="False"
         Topmost="True"
+        SizeToContent="Height"
         x:Class="WindowSwitcher.Windows.FiltersWindow"
         Title="Filters">
     <TabControl Name="FiltersTabControl"
-                FontSize="13">
+                FontSize="13"
+                Padding="0">
         <TabControl.Styles>
             <Style Selector="TabItem">
                 <Setter Property="FontSize" Value="13" />
@@ -31,7 +32,6 @@
                     <Button Name="WhitelistButton"
                             Grid.Column="1"
                             Content="Add"
-                            MinWidth="52"
                             Click="AddWhitelistClick"
                             HotKey="Enter" />
                 </Grid>
@@ -51,7 +51,6 @@
                     <Button Name="BlacklistButton"
                             Grid.Column="1"
                             Content="Add"
-                            MinWidth="52"
                             Click="AddBlacklistClick"
                             HotKey="Enter" />
                 </Grid>
