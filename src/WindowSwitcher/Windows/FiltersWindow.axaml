@@ -28,12 +28,12 @@
                       ColumnSpacing="6">
                     <TextBox Name="WhitelistTextBox"
                              Grid.Column="0"
-                             HorizontalAlignment="Stretch" />
+                             HorizontalAlignment="Stretch"
+                             KeyDown="WhitelistTextBoxKeyDown" />
                     <Button Name="WhitelistButton"
                             Grid.Column="1"
                             Content="Add"
-                            Click="AddWhitelistClick"
-                            HotKey="Enter" />
+                            Click="AddWhitelistClick" />
                 </Grid>
                 <ListBox Name="WhitelistListBox"
                          Grid.Row="1"
@@ -47,12 +47,12 @@
                       ColumnSpacing="6">
                     <TextBox Name="BlacklistTextBox"
                              Grid.Column="0"
-                             HorizontalAlignment="Stretch" />
+                             HorizontalAlignment="Stretch"
+                             KeyDown="BlacklistTextBoxKeyDown" />
                     <Button Name="BlacklistButton"
                             Grid.Column="1"
                             Content="Add"
-                            Click="AddBlacklistClick"
-                            HotKey="Enter" />
+                            Click="AddBlacklistClick" />
                 </Grid>
                 <ListBox Name="BlacklistListBox"
                          Grid.Row="1"
