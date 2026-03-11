@@ -196,24 +196,26 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public async Task RenameWindowTitleAsync(string windowId)
     {
-        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
+        if (string.IsNullOrWhiteSpace(windowId))
             return;
 
-        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(
-            floatingWindow.WindowConfig.WindowTitle
+        WindowConfig? windowConfig = ViewModel.WindowsConfigs.FirstOrDefault(config =>
+            string.Equals(config.WindowId, windowId, StringComparison.Ordinal)
         );
+        if (windowConfig is null)
+            return;
+
+        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(windowConfig.WindowTitle);
         if (!isUpdated)
             return;
 
         string renamedTitle = RenameWindow.NewWindowTitle;
         WinAccessorBase.RenameWindowTitle(windowId, renamedTitle);
 
-        floatingWindow.UpdateWindowTitle(renamedTitle);
-        WindowConfig? viewModelConfig = ViewModel.WindowsConfigs.FirstOrDefault(config =>
-            string.Equals(config.WindowId, windowId, StringComparison.Ordinal)
-        );
-        if (viewModelConfig is not null)
-            viewModelConfig.WindowTitle = renamedTitle;
+        windowConfig.WindowTitle = renamedTitle;
+
+        if (_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
+            floatingWindow.UpdateWindowTitle(renamedTitle);
     }
 
     private void ShowPreviouslyReportedDependencies()
@@ -276,6 +278,11 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
     {
         AddToTempBlacklist((string)((MenuItem)sender!).Tag!);
+    }
+
+    private async void RenameMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        await RenameWindowTitleAsync((string)((MenuItem)sender!).Tag!);
     }
 
     public void ApplySettings()
