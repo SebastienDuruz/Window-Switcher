@@ -40,6 +40,7 @@
                                     <ContextMenu>
                                         <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
                                         <MenuItem Header="Add to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
+                                        <MenuItem Header="Rename window" Click="RenameMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
                                     </ContextMenu>
                                 </TextBlock.ContextMenu>
                             </TextBlock>
