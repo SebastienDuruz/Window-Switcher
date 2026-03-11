@@ -15,4 +15,17 @@ public class WmctrlWrapper() : CommandBase("wmctrl"), ICommandWrapper
 
         return ExecuteWithArguments(args, timeoutMs: 2_000);
     }
+
+    public string Execute(IReadOnlyList<string> args, int timeoutMs)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        if (!LinuxDependencies.IsWmctrlAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("wmctrl");
+            return string.Empty;
+        }
+
+        return ExecuteWithArgumentList(args, timeoutMs);
+    }
 }

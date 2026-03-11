@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        Icon="/Assets/WS_logo.ico"
+        mc:Ignorable="d"
+        Width="320"
+        MinWidth="320"
+        MaxWidth="320"
+        CanResize="False"
+        Topmost="True"
+        SizeToContent="Height"
+        x:Class="WindowSwitcher.Windows.FiltersWindow"
+        Title="Filters">
+    <TabControl Name="FiltersTabControl"
+                FontSize="13"
+                Padding="0">
+        <TabControl.Styles>
+            <Style Selector="TabItem">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="Padding" Value="10,4" />
+            </Style>
+        </TabControl.Styles>
+        <TabItem Header="Prefixes">
+            <Grid RowDefinitions="Auto,*"
+                  RowSpacing="8">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="6">
+                    <TextBox Name="WhitelistTextBox"
+                             Grid.Column="0"
+                             HorizontalAlignment="Stretch"
+                             KeyDown="WhitelistTextBoxKeyDown" />
+                    <Button Name="WhitelistButton"
+                            Grid.Column="1"
+                            Content="Add"
+                            Click="AddWhitelistClick" />
+                </Grid>
+                <ListBox Name="WhitelistListBox"
+                         Grid.Row="1"
+                         SelectionChanged="WhitelistListBoxSelectionChanged" />
+            </Grid>
+        </TabItem>
+        <TabItem Header="Blacklist">
+            <Grid RowDefinitions="Auto,*"
+                  RowSpacing="8">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="6">
+                    <TextBox Name="BlacklistTextBox"
+                             Grid.Column="0"
+                             HorizontalAlignment="Stretch"
+                             KeyDown="BlacklistTextBoxKeyDown" />
+                    <Button Name="BlacklistButton"
+                            Grid.Column="1"
+                            Content="Add"
+                            Click="AddBlacklistClick" />
+                </Grid>
+                <ListBox Name="BlacklistListBox"
+                         Grid.Row="1"
+                         SelectionChanged="BlacklistListBoxSelectionChanged" />
+            </Grid>
+        </TabItem>
+    </TabControl>
+</Window>

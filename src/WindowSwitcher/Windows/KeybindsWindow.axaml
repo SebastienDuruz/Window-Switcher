@@ -6,7 +6,7 @@
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         SizeToContent="WidthAndHeight"
-        CanResize="True"
+        CanResize="False"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.KeybindsWindow"
         Title="Keybinds"

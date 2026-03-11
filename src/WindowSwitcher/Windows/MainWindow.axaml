@@ -17,10 +17,9 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
             <MenuItem Header="_Settings" Padding="4">
-                <MenuItem Header="_Configure prefixes" Click="OpenPrefixesWindowClick" />
-                <MenuItem Header="_Configure blacklist" Click="OpenBlacklistWindowClick" />
-                <MenuItem Header="_General settings" Click="OpenSettingsWindowClick" />
-                <MenuItem Header="_Configure keybinds" Click="OpenKeybindsWindowClick" />
+                <MenuItem Header="_Filters" Click="OpenFiltersWindowClick" />
+                <MenuItem Header="_Keybinds" Click="OpenKeybindsWindowClick" />
+                <MenuItem Header="_Settings" Click="OpenSettingsWindowClick" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
@@ -35,22 +34,24 @@
                      SelectedItem="{Binding SelectedWindow, Mode=TwoWay}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel>
-                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14">
-                                <TextBlock.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
-                                        <MenuItem Header="Add to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
-                                    </ContextMenu>
-                                </TextBlock.ContextMenu>
-                            </TextBlock>
-                        </StackPanel>
+                        <Border Background="Transparent"
+                                HorizontalAlignment="Stretch">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
+                                    <MenuItem Header="Add to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
+                                    <MenuItem Header="Rename window" Click="RenameMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14" />
+                        </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
                         <Setter Property="Height" Value="22" />
                         <Setter Property="FontSize" Value="14" />
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Name"
                                 Value="{Binding WindowId, RelativeSource={RelativeSource AncestorType=models:WindowConfig}}" />
                         <Setter Property="Padding" Value="8, 2" />

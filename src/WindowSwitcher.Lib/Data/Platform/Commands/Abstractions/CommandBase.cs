@@ -43,21 +43,11 @@ public abstract class CommandBase(string command)
     {
         try
         {
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            _ = process.StandardError.ReadToEnd();
-
-            if (!process.WaitForExit(timeoutMs))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch { }
-                return string.Empty;
-            }
-
-            return process.ExitCode == 0 ? output : string.Empty;
+            var result = ProcessExecution
+                .RunAsync(process, TimeSpan.FromMilliseconds(timeoutMs))
+                .GetAwaiter()
+                .GetResult();
+            return result.IsSuccess ? result.StandardOutput : string.Empty;
         }
         catch
         {

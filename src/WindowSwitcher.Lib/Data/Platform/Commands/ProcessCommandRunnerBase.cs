@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -48,56 +49,9 @@ public abstract class ProcessCommandRunnerBase : ICommandRunner
             startInfo.Environment[key] = value;
 
         using var process = new Process { StartInfo = startInfo };
-
-        if (!process.Start())
-            throw new InvalidOperationException(
-                $"Failed to start process for request '{request.ExecutablePath ?? request.ShellCommand}'."
-            );
-
-        Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
-        Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
-
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(request.Timeout);
-
-        try
-        {
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            string standardOutput = await stdOutTask.ConfigureAwait(false);
-            string standardError = await stdErrTask.ConfigureAwait(false);
-            return new CommandResult(
-                process.ExitCode,
-                standardOutput,
-                standardError,
-                TimedOut: false
-            );
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            TryKillProcess(process);
-            string standardOutput = await stdOutTask.ConfigureAwait(false);
-            string standardError = await stdErrTask.ConfigureAwait(false);
-            return new CommandResult(-1, standardOutput, standardError, TimedOut: true);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            TryKillProcess(process);
-            throw;
-        }
+        return await ProcessExecution.RunAsync(process, request.Timeout, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     protected abstract void ConfigureShellCommand(ProcessStartInfo startInfo, string shellCommand);
-
-    private static void TryKillProcess(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Ignore cleanup exceptions.
-        }
-    }
 }
