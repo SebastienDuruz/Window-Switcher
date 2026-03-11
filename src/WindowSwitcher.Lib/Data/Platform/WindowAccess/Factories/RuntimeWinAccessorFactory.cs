@@ -16,7 +16,7 @@ public sealed class RuntimeWinAccessorFactory : IWinAccessorFactory
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return new WindowsWinAccessor();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return new LinuxWinAccessor();
+            return new LinuxWinAccessorFactory().Create();
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             throw new PlatformNotSupportedException("Mac access is not supported on this software");
 

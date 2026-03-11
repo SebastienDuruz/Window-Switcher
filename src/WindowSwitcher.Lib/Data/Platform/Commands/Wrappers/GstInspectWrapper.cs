@@ -6,6 +6,7 @@ public sealed class GstInspectWrapper() : CommandBase("gst-inspect-1.0"), IComma
 {
     public string Execute(string args)
     {
-        return ExecuteWithArguments(args, timeoutMs: 2_500);
+        ArgumentException.ThrowIfNullOrWhiteSpace(args);
+        return ExecuteWithArgumentList([args], timeoutMs: 2_500);
     }
 }

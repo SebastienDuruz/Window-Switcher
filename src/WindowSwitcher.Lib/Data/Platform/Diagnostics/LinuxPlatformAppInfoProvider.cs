@@ -11,6 +11,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 /// </summary>
 public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
 {
+    /// <inheritdoc />
     public PlatformAppInfoSnapshot GetSnapshot()
     {
         string[] statuses =

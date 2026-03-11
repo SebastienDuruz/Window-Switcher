@@ -8,10 +8,10 @@ using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
-public class LinuxWinAccessor : WinAccessorBase
+internal abstract class LinuxWmctrlWindowAccessorBase : WinAccessorBase
 {
-    private WmctrlWrapper WmctrlWrapper { get; set; } = new();
-    private ImportWrapper ImportWrapper { get; set; } = new();
+    private WmctrlWrapper WmctrlWrapper { get; } = new();
+    private ImportWrapper ImportWrapper { get; } = new();
 
     public override ObservableCollection<WindowConfig> GetWindows()
     {
@@ -23,56 +23,48 @@ public class LinuxWinAccessor : WinAccessorBase
 
         int currentPid = Process.GetCurrentProcess().Id;
 
-        // -l : list windows
-        // -p : include PID (allows filtering our own windows)
-        string wmctrlOutput = WmctrlWrapper.Execute(" -lp");
+        string wmctrlOutput = WmctrlWrapper.Execute(["-l", "-p"], timeoutMs: 2_000);
         if (string.IsNullOrWhiteSpace(wmctrlOutput))
             return new ObservableCollection<WindowConfig>();
 
-        ObservableCollection<WindowConfig> windows = new ObservableCollection<WindowConfig>();
+        ObservableCollection<WindowConfig> windows = new();
         var processNameByPid = new Dictionary<int, string>();
         string[] lines = wmctrlOutput.Split('\n');
         foreach (string line in lines)
-            if (!String.IsNullOrWhiteSpace(line))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            if (!TryParseWmctrlLine(line, out string? windowId, out int pid, out string windowName))
+                continue;
+
+            if (pid == currentPid)
+                continue;
+
+            if (!processNameByPid.TryGetValue(pid, out string? processName))
             {
-                if (
-                    !TryParseWmctrlLine(
-                        line,
-                        out string? windowId,
-                        out int pid,
-                        out string windowName
-                    )
-                )
-                    continue;
-
-                // Never list WindowSwitcher windows (Main/Settings/About/Floating previews).
-                if (pid == currentPid)
-                    continue;
-
-                if (!processNameByPid.TryGetValue(pid, out string? processName))
-                {
-                    processName = TryReadProcessName(pid);
-                    processNameByPid[pid] = processName;
-                }
-
-                windows.Add(
-                    new WindowConfig()
-                    {
-                        WindowId = windowId!,
-                        WindowTitle = windowName,
-                        ShortWindowTitle =
-                            windowName.Length > 40 ? $"{windowName[..40]}..." : windowName,
-                        ProcessName = processName,
-                    }
-                );
+                processName = TryReadProcessName(pid);
+                processNameByPid[pid] = processName;
             }
+
+            windows.Add(
+                new WindowConfig
+                {
+                    WindowId = windowId!,
+                    WindowTitle = windowName,
+                    ShortWindowTitle =
+                        windowName.Length > 40 ? $"{windowName[..40]}..." : windowName,
+                    ProcessName = processName,
+                }
+            );
+        }
 
         return windows;
     }
 
     public override void RaiseWindow(string windowId)
     {
-        WmctrlWrapper.Execute($" -i -a \"{windowId}\"");
+        WmctrlWrapper.Execute(["-i", "-a", windowId], timeoutMs: 2_000);
     }
 
     public override Bitmap? TakeScreenshot(string windowId)
@@ -125,8 +117,7 @@ public class LinuxWinAccessor : WinAccessorBase
 
     public override void RenameWindowTitle(string windowId, string windowTitle)
     {
-        string escapedTitle = windowTitle.Replace("\"", "\\\"");
-        WmctrlWrapper.Execute($" -i -r {windowId} -T \"{escapedTitle}\"");
+        WmctrlWrapper.Execute(["-i", "-r", windowId, "-T", windowTitle], timeoutMs: 2_000);
     }
 
     private static bool TryParseWmctrlLine(
@@ -142,8 +133,6 @@ public class LinuxWinAccessor : WinAccessorBase
 
         try
         {
-            // Expected format for `wmctrl -lp`:
-            // <0xid> <desktop> <pid> <host> <title...>
             string[] parts = windowInfo.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 5)
                 return false;
@@ -159,7 +148,6 @@ public class LinuxWinAccessor : WinAccessorBase
         }
         catch (Exception)
         {
-            // TODO : Log
             return false;
         }
 

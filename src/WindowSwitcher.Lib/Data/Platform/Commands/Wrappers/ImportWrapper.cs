@@ -40,10 +40,14 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
 
         using var process = CreateProcess();
         process.StartInfo.RedirectStandardError = true;
-
-        string resizeArg = BuildResizeArgument(request);
-        process.StartInfo.Arguments =
-            $"-window {client}{resizeArg} -strip -quality {quality} jpg:-";
+        process.StartInfo.ArgumentList.Clear();
+        process.StartInfo.ArgumentList.Add("-window");
+        process.StartInfo.ArgumentList.Add(client);
+        AppendResizeArguments(process.StartInfo.ArgumentList, request);
+        process.StartInfo.ArgumentList.Add("-strip");
+        process.StartInfo.ArgumentList.Add("-quality");
+        process.StartInfo.ArgumentList.Add(quality.ToString());
+        process.StartInfo.ArgumentList.Add("jpg:-");
 
         try
         {
@@ -110,18 +114,24 @@ public class ImportWrapper() : CommandBase("import"), ICommandWrapper
         }
     }
 
-    private static string BuildResizeArgument(ScreenshotRequest request)
+    private static void AppendResizeArguments(
+        ICollection<string> arguments,
+        ScreenshotRequest request
+    )
     {
+        ArgumentNullException.ThrowIfNull(arguments);
+
         int? w = request.MaxWidthPx is > 0 ? request.MaxWidthPx : null;
         int? h = request.MaxHeightPx is > 0 ? request.MaxHeightPx : null;
         if (w is null && h is null)
-            return string.Empty;
+            return;
 
         // Keep aspect ratio: downscale to fit within the requested box.
         // (The UI will stretch as needed.)
         string geometry =
             $"{(w is null ? "" : w.Value.ToString())}x{(h is null ? "" : h.Value.ToString())}";
-        return $" -thumbnail {geometry}";
+        arguments.Add("-thumbnail");
+        arguments.Add(geometry);
     }
 
     public string Execute(string client)

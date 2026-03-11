@@ -9,6 +9,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 /// </summary>
 public sealed class WindowsPlatformAppInfoProvider : IPlatformAppInfoProvider
 {
+    /// <inheritdoc />
     public PlatformAppInfoSnapshot GetSnapshot()
     {
         return new PlatformAppInfoSnapshot(
