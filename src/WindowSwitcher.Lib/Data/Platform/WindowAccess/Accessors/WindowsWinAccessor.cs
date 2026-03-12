@@ -17,6 +17,8 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 public class WindowsWinAccessor : WinAccessorBase
 {
     private const uint GwOwner = 4;
+    private const int SwRestore = 9;
+    private const int SwShow = 5;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -32,6 +34,32 @@ public class WindowsWinAccessor : WinAccessorBase
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(
+        uint idAttach,
+        uint idAttachTo,
+        [MarshalAs(UnmanagedType.Bool)] bool fAttach
+    );
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetActiveWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
@@ -64,6 +92,9 @@ public class WindowsWinAccessor : WinAccessorBase
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int GetWindowTextLength(IntPtr windowHandle);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
 
     private static readonly ImageCodecInfo? JpegCodec = ImageCodecInfo
         .GetImageDecoders()
@@ -173,49 +204,67 @@ public class WindowsWinAccessor : WinAccessorBase
     {
         try
         {
-            SetForegroundWindow(IntPtr.Parse(windowId));
+            IntPtr windowHandle = IntPtr.Parse(windowId);
+            BringWindowToFront(windowHandle);
         }
         catch (Exception) { }
     }
-
-    /// <summary>
-    /// This method does not work for DirectX applications, this is why we use DWM thumnails instead
-    /// </summary>
-    /// <param name="windowId"></param>
-    /// <returns></returns>
+    
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = IntPtr.Parse(windowId);
+        throw new NotImplementedException();
+    }
+
+    private static void BringWindowToFront(IntPtr windowHandle)
+    {
+        if (windowHandle == IntPtr.Zero)
+            return;
+
+        _ = ShowWindow(windowHandle, IsIconic(windowHandle) ? SwRestore : SwShow);
+
+        IntPtr foregroundWindowHandle = GetForegroundWindow();
+        uint currentThreadId = GetCurrentThreadId();
+        uint foregroundThreadId =
+            foregroundWindowHandle == IntPtr.Zero
+                ? 0
+                : GetWindowThreadProcessId(foregroundWindowHandle, out _);
+        uint targetThreadId = GetWindowThreadProcessId(windowHandle, out _);
+
+        bool attachedToForeground = false;
+        bool attachedToTarget = false;
 
         try
         {
-            GetWindowRect(hwnd, out RECT rect);
-            int width = rect.right - rect.left;
-            int height = rect.bottom - rect.top;
-            if (width <= 0 || height <= 0 || JpegCodec == null)
-                return null;
-
-            using (System.Drawing.Bitmap bitmap = new(width, height))
+            if (foregroundThreadId != 0 && foregroundThreadId != currentThreadId)
             {
-                using (Graphics g = Graphics.FromImage(bitmap))
-                {
-                    IntPtr hdc = g.GetHdc();
-                    PrintWindow(hwnd, hdc, 0);
-                    g.ReleaseHdc(hdc);
-                }
-
-                int quality = 80;
-                using var encoderParameters = new EncoderParameters(1);
-                encoderParameters.Param[0] = new EncoderParameter(Quality, quality);
-                using var stream = new MemoryStream();
-                bitmap.Save(stream, JpegCodec, encoderParameters);
-                stream.Position = 0;
-                return new Bitmap(stream);
+                attachedToForeground = AttachThreadInput(
+                    currentThreadId,
+                    foregroundThreadId,
+                    true
+                );
             }
+
+            if (
+                targetThreadId != 0
+                && targetThreadId != currentThreadId
+                && targetThreadId != foregroundThreadId
+            )
+            {
+                attachedToTarget = AttachThreadInput(currentThreadId, targetThreadId, true);
+            }
+
+            _ = BringWindowToTop(windowHandle);
+            _ = SetActiveWindow(windowHandle);
+            _ = SetForegroundWindow(windowHandle);
+            _ = ShowWindow(windowHandle, SwRestore);
         }
-        catch (Exception)
+        finally
         {
-            return null;
+            if (attachedToTarget)
+                _ = AttachThreadInput(currentThreadId, targetThreadId, false);
+
+            if (attachedToForeground)
+                _ = AttachThreadInput(currentThreadId, foregroundThreadId, false);
         }
     }
 
