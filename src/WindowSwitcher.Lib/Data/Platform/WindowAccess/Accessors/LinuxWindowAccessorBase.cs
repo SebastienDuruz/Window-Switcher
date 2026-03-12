@@ -8,7 +8,7 @@ using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
-internal abstract class LinuxWmctrlWindowAccessorBase : WinAccessorBase
+internal abstract class LinuxWindowAccessorBase : WinAccessorBase
 {
     private WmctrlWrapper WmctrlWrapper { get; } = new();
     private ImportWrapper ImportWrapper { get; } = new();

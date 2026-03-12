@@ -134,6 +134,24 @@ public sealed class WindowKeybindActivatorTests
         Assert.Equal(new[] { "w-1", "w-3", "w-1" }, accessor.RaisedWindowIds);
     }
 
+    [Fact]
+    public void TryActivateTarget_NextClient_KeepsStableOrderWhenAccessorReordersRaisedWindowFirst()
+    {
+        var accessor = new ReorderingFakeWinAccessor(
+            CreateWindow("w-1", "Editor", "code"),
+            CreateWindow("w-2", "Terminal", "wezterm"),
+            CreateWindow("w-3", "Browser", "firefox")
+        );
+        var sut = new WindowKeybindActivator(accessor, SelectAll);
+
+        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+
+        Assert.Equal(new[] { "w-1", "w-2", "w-3", "w-1" }, accessor.RaisedWindowIds);
+    }
+
     private static WindowConfig CreateWindow(string id, string title, string process)
     {
         return new WindowConfig
@@ -158,6 +176,39 @@ public sealed class WindowKeybindActivatorTests
         public override void RaiseWindow(string windowId)
         {
             RaisedWindowIds.Add(windowId);
+        }
+
+        public override Bitmap? TakeScreenshot(string windowId)
+        {
+            return null;
+        }
+
+        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+    }
+
+    private sealed class ReorderingFakeWinAccessor(params WindowConfig[] windows) : WinAccessorBase
+    {
+        private readonly ObservableCollection<WindowConfig> _windows = new(windows);
+
+        public List<string> RaisedWindowIds { get; } = [];
+
+        public override ObservableCollection<WindowConfig> GetWindows()
+        {
+            return _windows;
+        }
+
+        public override void RaiseWindow(string windowId)
+        {
+            RaisedWindowIds.Add(windowId);
+
+            WindowConfig? target = _windows.FirstOrDefault(window =>
+                string.Equals(window.WindowId, windowId, StringComparison.Ordinal)
+            );
+            if (target is null)
+                return;
+
+            _windows.Remove(target);
+            _windows.Insert(0, target);
         }
 
         public override Bitmap? TakeScreenshot(string windowId)
