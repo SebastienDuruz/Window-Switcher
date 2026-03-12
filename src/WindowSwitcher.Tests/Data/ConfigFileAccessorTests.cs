@@ -6,6 +6,7 @@ using Xunit;
 
 namespace WindowSwitcher.Tests.Data;
 
+[Collection(ConfigFileAccessorIsolationCollection.Name)]
 public sealed class ConfigFileAccessorTests
 {
     [Fact]
