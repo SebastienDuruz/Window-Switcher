@@ -88,6 +88,18 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         return true;
     }
 
+    /// <inheritdoc />
+    public void NotifyWindowActivated(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        lock (_syncRoot)
+        {
+            _lastActivatedClientId = windowId;
+        }
+    }
+
     private bool TryActivateRelativeClient(int step)
     {
         if (step is not (1 or -1))

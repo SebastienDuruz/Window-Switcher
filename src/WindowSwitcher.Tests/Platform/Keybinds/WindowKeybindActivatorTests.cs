@@ -106,6 +106,21 @@ public sealed class WindowKeybindActivatorTests
     }
 
     [Fact]
+    public void NotifyWindowActivated_UpdatesAnchorForNextClient()
+    {
+        WindowConfig editor = CreateWindow("w-1", "Editor", "code");
+        WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
+        WindowConfig browser = CreateWindow("w-3", "Browser", "firefox");
+        var accessor = new FakeWinAccessor(editor, terminal, browser);
+        var sut = new WindowKeybindActivator(accessor, SelectAll);
+
+        sut.NotifyWindowActivated("w-2");
+
+        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.Equal(new[] { "w-3" }, accessor.RaisedWindowIds);
+    }
+
+    [Fact]
     public void TryActivateTarget_BuiltInActions_ReturnFalseWhenNoClientsAvailable()
     {
         var accessor = new FakeWinAccessor();

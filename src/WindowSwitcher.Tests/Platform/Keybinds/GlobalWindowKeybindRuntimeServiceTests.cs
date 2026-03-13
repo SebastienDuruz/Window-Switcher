@@ -218,5 +218,7 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
             WindowActivated?.Invoke(this, targetId);
             return true;
         }
+
+        public void NotifyWindowActivated(string windowId) { }
     }
 }

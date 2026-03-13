@@ -128,6 +128,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
+        _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
     }
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
@@ -149,6 +150,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         _floatingWindowHost.SetActivePreview(this);
         _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
+        _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
     }
 
     private void CanvasPointerExited(object? sender, PointerEventArgs e)

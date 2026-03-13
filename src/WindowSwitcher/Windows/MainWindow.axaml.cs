@@ -194,6 +194,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _activePreviewWindow = null;
     }
 
+    public void NotifyPreviewWindowActivated(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        _windowKeybindActivator.NotifyWindowActivated(windowId);
+    }
+
     public async Task RenameWindowTitleAsync(string windowId)
     {
         if (string.IsNullOrWhiteSpace(windowId))
