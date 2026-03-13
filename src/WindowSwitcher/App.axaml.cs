@@ -42,9 +42,9 @@ public partial class App : Application
         GlobalWindowKeybindRuntimeService =
             AppServiceProvider.GetRequiredService<IGlobalWindowKeybindRuntimeService>();
         GlobalKeyboardCts = new CancellationTokenSource();
-        _ = StartGlobalKeyboardServiceAsync(GlobalKeyboardService, GlobalKeyboardCts.Token);
-        _ = StartGlobalWindowKeybindRuntimeServiceAsync(
+        _ = StartGlobalKeyboardPipelineAsync(
             GlobalWindowKeybindRuntimeService,
+            GlobalKeyboardService,
             GlobalKeyboardCts.Token
         );
 
@@ -71,6 +71,17 @@ public partial class App : Application
             return;
         if (MainWindow.WindowState == WindowState.Minimized)
             MainWindow.WindowState = WindowState.Normal;
+    }
+
+    private static async Task StartGlobalKeyboardPipelineAsync(
+        IGlobalWindowKeybindRuntimeService runtimeService,
+        IGlobalKeyboardService globalKeyboardService,
+        CancellationToken cancellationToken)
+    {
+        await StartGlobalWindowKeybindRuntimeServiceAsync(runtimeService, cancellationToken)
+            .ConfigureAwait(false);
+        await StartGlobalKeyboardServiceAsync(globalKeyboardService, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task StartGlobalKeyboardServiceAsync(

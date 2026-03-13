@@ -25,6 +25,9 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
     }
 
     /// <inheritdoc />
+    public event EventHandler? BindingsChanged;
+
+    /// <inheritdoc />
     public IReadOnlyCollection<WindowKeybindTargetConfig> GetTargets()
     {
         return _configAccessor.ReadConfig(config => CloneTargets(config.WindowKeybindTargets));
@@ -58,6 +61,7 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             return;
 
         string normalizedLabel = KeybindCatalogBuilder.NormalizeDisplayLabel(displayLabel);
+        bool changed = false;
 
         _configAccessor.UpdateConfig(config =>
         {
@@ -73,12 +77,22 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
                         Shortcuts = [],
                     }
                 );
+                changed = true;
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(normalizedLabel))
+            if (
+                !string.IsNullOrWhiteSpace(normalizedLabel)
+                && !string.Equals(target.DisplayLabel, normalizedLabel, StringComparison.Ordinal)
+            )
+            {
                 target.DisplayLabel = normalizedLabel;
+                changed = true;
+            }
         });
+
+        if (changed)
+            RaiseBindingsChanged();
     }
 
     /// <inheritdoc />
@@ -153,6 +167,9 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             result = KeybindShortcutAddResult.Added();
         });
 
+        if (result.Status == KeybindRegistrationResult.Added)
+            RaiseBindingsChanged();
+
         return result;
     }
 
@@ -188,6 +205,9 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             if (target.Shortcuts.Count == 0)
                 config.WindowKeybindTargets.Remove(target);
         });
+
+        if (removed)
+            RaiseBindingsChanged();
 
         return removed;
     }
@@ -264,5 +284,10 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
         return targets.FirstOrDefault(target =>
             string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
         );
+    }
+
+    private void RaiseBindingsChanged()
+    {
+        BindingsChanged?.Invoke(this, EventArgs.Empty);
     }
 }

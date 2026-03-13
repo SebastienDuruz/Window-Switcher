@@ -12,6 +12,9 @@ public sealed class NullGlobalKeyboardListener : IGlobalKeyboardListener
     private bool _isDisposed;
 
     /// <inheritdoc />
+    public IKeyboardInputFilter? InputFilter { get; set; }
+
+    /// <inheritdoc />
 #pragma warning disable CS0067
     public event EventHandler<GlobalKeyEventArgs>? KeyEvent;
 #pragma warning restore CS0067

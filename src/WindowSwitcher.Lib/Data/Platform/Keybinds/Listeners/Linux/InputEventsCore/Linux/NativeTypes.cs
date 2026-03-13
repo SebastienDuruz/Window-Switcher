@@ -35,3 +35,17 @@ internal struct NativeInputEvent
     /// </summary>
     public static readonly int Size = Marshal.SizeOf<NativeInputEvent>();
 }
+
+/// <summary>
+/// Managed layout of Linux <c>struct uinput_setup</c>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeUinputSetup
+{
+    public NativeInputId Id;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 80)]
+    public byte[] Name;
+
+    public uint ForceFeedbackEffectsMax;
+}

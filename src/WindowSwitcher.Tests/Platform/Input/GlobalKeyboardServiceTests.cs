@@ -59,6 +59,8 @@ public sealed class GlobalKeyboardServiceTests
     {
         private bool _disposed;
 
+        public IKeyboardInputFilter? InputFilter { get; set; }
+
         public event EventHandler<GlobalKeyEventArgs>? KeyEvent;
 
         public bool IsRunning { get; private set; }
