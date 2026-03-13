@@ -8,6 +8,12 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 public interface IGlobalKeyboardListener : IDisposable, IAsyncDisposable
 {
     /// <summary>
+    /// Gets or sets the input filter that decides whether a captured event should be consumed,
+    /// buffered, or forwarded.
+    /// </summary>
+    IKeyboardInputFilter? InputFilter { get; set; }
+
+    /// <summary>
     /// Raised when a global keyboard event is captured.
     /// </summary>
     event EventHandler<GlobalKeyEventArgs>? KeyEvent;

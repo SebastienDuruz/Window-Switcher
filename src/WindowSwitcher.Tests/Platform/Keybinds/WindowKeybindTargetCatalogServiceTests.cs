@@ -8,6 +8,7 @@ using Xunit;
 
 namespace WindowSwitcher.Tests.Platform.Keybinds;
 
+[Collection(ConfigFileAccessorIsolationCollection.Name)]
 public sealed class WindowKeybindTargetCatalogServiceTests
 {
     [Fact]

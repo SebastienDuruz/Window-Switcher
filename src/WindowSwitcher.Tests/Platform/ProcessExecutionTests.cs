@@ -100,14 +100,14 @@ public sealed class ProcessExecutionTests
     private static string GetSleepCommand(int seconds)
     {
         return OperatingSystem.IsWindows()
-            ? $"powershell -NoProfile -Command \"Start-Sleep -Seconds {seconds}\""
+            ? $"ping 127.0.0.1 -n {seconds + 2} > nul"
             : $"sleep {seconds}";
     }
 
     private static string FailWithStdErrorCommand(string error, int exitCode)
     {
         return OperatingSystem.IsWindows()
-            ? $"powershell -NoProfile -Command \"[Console]::Error.WriteLine('{error}'); exit {exitCode}\""
+            ? $"echo {error} 1>&2 & exit /b {exitCode}"
             : $"printf '%s\\n' '{error}' 1>&2; exit {exitCode}";
     }
 }

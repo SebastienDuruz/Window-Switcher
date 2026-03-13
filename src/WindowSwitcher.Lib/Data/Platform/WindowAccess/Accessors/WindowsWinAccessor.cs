@@ -1,14 +1,11 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using WindowSwitcher.Lib.Data.Platform.Interop;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
-using static System.Drawing.Imaging.Encoder;
 using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
@@ -17,53 +14,8 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 public class WindowsWinAccessor : WinAccessorBase
 {
     private const uint GwOwner = 4;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int left;
-        public int top;
-        public int right;
-        public int bottom;
-    }
-
-    private delegate bool EnumWindowsProc(IntPtr windowHandle, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
-    [DllImport("user32.dll")]
-    private static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
-
-    [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(IntPtr windowHandle);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetWindow(IntPtr windowHandle, uint command);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(
-        IntPtr windowHandle,
-        out uint processId
-    );
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int GetWindowText(
-        IntPtr windowHandle,
-        StringBuilder titleBuffer,
-        int maxCount
-    );
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int GetWindowTextLength(IntPtr windowHandle);
+    private const int SwRestore = 9;
+    private const int SwShow = 5;
 
     private static readonly ImageCodecInfo? JpegCodec = ImageCodecInfo
         .GetImageDecoders()
@@ -77,7 +29,7 @@ public class WindowsWinAccessor : WinAccessorBase
         int currentProcessId = Process.GetCurrentProcess().Id;
         var processNameByPid = new Dictionary<uint, string>();
 
-        _ = EnumWindows(
+        _ = User32Functions.EnumWindows(
             (windowHandle, lParam) =>
             {
                 try
@@ -91,7 +43,7 @@ public class WindowsWinAccessor : WinAccessorBase
                     if (windowTitle.Equals(StaticData.AppName, StringComparison.OrdinalIgnoreCase))
                         return true;
 
-                    GetWindowThreadProcessId(windowHandle, out uint processId);
+                    User32Functions.GetWindowThreadProcessId(windowHandle, out uint processId);
                     if (processId == 0 || processId == (uint)currentProcessId)
                         return true;
 
@@ -122,11 +74,11 @@ public class WindowsWinAccessor : WinAccessorBase
     {
         if (windowHandle == IntPtr.Zero)
             return false;
-        if (!IsWindowVisible(windowHandle))
+        if (!User32Functions.IsWindowVisible(windowHandle))
             return false;
-        if (GetWindow(windowHandle, GwOwner) != IntPtr.Zero)
+        if (User32Functions.GetWindow(windowHandle, GwOwner) != IntPtr.Zero)
             return false;
-        if (GetWindowTextLength(windowHandle) <= 0)
+        if (User32Functions.GetWindowTextLength(windowHandle) <= 0)
             return false;
 
         return true;
@@ -134,12 +86,16 @@ public class WindowsWinAccessor : WinAccessorBase
 
     private static string ReadWindowTitle(IntPtr windowHandle)
     {
-        int titleLength = GetWindowTextLength(windowHandle);
+        int titleLength = User32Functions.GetWindowTextLength(windowHandle);
         if (titleLength <= 0)
             return string.Empty;
 
         var titleBuffer = new StringBuilder(titleLength + 1);
-        int copiedLength = GetWindowText(windowHandle, titleBuffer, titleBuffer.Capacity);
+        int copiedLength = User32Functions.GetWindowText(
+            windowHandle,
+            titleBuffer,
+            titleBuffer.Capacity
+        );
         if (copiedLength <= 0)
             return string.Empty;
 
@@ -173,49 +129,78 @@ public class WindowsWinAccessor : WinAccessorBase
     {
         try
         {
-            SetForegroundWindow(IntPtr.Parse(windowId));
+            IntPtr windowHandle = IntPtr.Parse(windowId);
+            BringWindowToFront(windowHandle);
         }
         catch (Exception) { }
     }
-
-    /// <summary>
-    /// This method does not work for DirectX applications, this is why we use DWM thumnails instead
-    /// </summary>
-    /// <param name="windowId"></param>
-    /// <returns></returns>
+    
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        IntPtr hwnd = IntPtr.Parse(windowId);
+        throw new NotImplementedException();
+    }
+
+    private static void BringWindowToFront(IntPtr windowHandle)
+    {
+        if (windowHandle == IntPtr.Zero)
+            return;
+
+        _ = User32Functions.ShowWindow(
+            windowHandle,
+            User32Functions.IsIconic(windowHandle) ? SwRestore : SwShow
+        );
+
+        IntPtr foregroundWindowHandle = User32Functions.GetForegroundWindow();
+        uint currentThreadId = Kernel32Functions.GetCurrentThreadId();
+        uint foregroundThreadId =
+            foregroundWindowHandle == IntPtr.Zero
+                ? 0
+                : User32Functions.GetWindowThreadProcessId(foregroundWindowHandle, out _);
+        uint targetThreadId = User32Functions.GetWindowThreadProcessId(windowHandle, out _);
+
+        bool attachedToForeground = false;
+        bool attachedToTarget = false;
 
         try
         {
-            GetWindowRect(hwnd, out RECT rect);
-            int width = rect.right - rect.left;
-            int height = rect.bottom - rect.top;
-            if (width <= 0 || height <= 0 || JpegCodec == null)
-                return null;
-
-            using (System.Drawing.Bitmap bitmap = new(width, height))
+            if (foregroundThreadId != 0 && foregroundThreadId != currentThreadId)
             {
-                using (Graphics g = Graphics.FromImage(bitmap))
-                {
-                    IntPtr hdc = g.GetHdc();
-                    PrintWindow(hwnd, hdc, 0);
-                    g.ReleaseHdc(hdc);
-                }
-
-                int quality = 80;
-                using var encoderParameters = new EncoderParameters(1);
-                encoderParameters.Param[0] = new EncoderParameter(Quality, quality);
-                using var stream = new MemoryStream();
-                bitmap.Save(stream, JpegCodec, encoderParameters);
-                stream.Position = 0;
-                return new Bitmap(stream);
+                attachedToForeground = User32Functions.AttachThreadInput(
+                    currentThreadId,
+                    foregroundThreadId,
+                    true
+                );
             }
+
+            if (
+                targetThreadId != 0
+                && targetThreadId != currentThreadId
+                && targetThreadId != foregroundThreadId
+            )
+            {
+                attachedToTarget = User32Functions.AttachThreadInput(
+                    currentThreadId,
+                    targetThreadId,
+                    true
+                );
+            }
+
+            _ = User32Functions.BringWindowToTop(windowHandle);
+            _ = User32Functions.SetActiveWindow(windowHandle);
+            _ = User32Functions.SetForegroundWindow(windowHandle);
+            _ = User32Functions.ShowWindow(windowHandle, SwRestore);
         }
-        catch (Exception)
+        finally
         {
-            return null;
+            if (attachedToTarget)
+                _ = User32Functions.AttachThreadInput(currentThreadId, targetThreadId, false);
+
+            if (attachedToForeground)
+                _ = User32Functions.AttachThreadInput(
+                    currentThreadId,
+                    foregroundThreadId,
+                    false
+                );
         }
     }
 

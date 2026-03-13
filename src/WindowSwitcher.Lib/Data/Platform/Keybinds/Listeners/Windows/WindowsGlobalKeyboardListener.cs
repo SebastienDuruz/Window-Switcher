@@ -21,9 +21,16 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
     private const uint WmSysKeyDown = 0x0104;
     private const uint WmSysKeyUp = 0x0105;
     private const uint LlkhfExtended = 0x00000001;
+    private const uint LlkhfInjected = 0x00000010;
+    private const uint InputKeyboard = 1;
+    private const uint KeyeventfExtendedKey = 0x0001;
+    private const uint KeyeventfKeyUp = 0x0002;
+    private const uint KeyeventfScanCode = 0x0008;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly object _pressedKeysSync = new();
+    private readonly object _bufferSync = new();
     private readonly HashSet<uint> _pressedKeys = [];
+    private readonly List<BufferedKeyboardEvent> _bufferedEvents = [];
     private Thread? _hookThread;
     private uint _hookThreadId;
     private IntPtr _hookHandle;
@@ -31,6 +38,9 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
     private TaskCompletionSource<object?>? _startTcs;
     private TaskCompletionSource<object?>? _stopTcs;
     private bool _isDisposed;
+
+    /// <inheritdoc />
+    public IKeyboardInputFilter? InputFilter { get; set; }
 
     /// <inheritdoc />
     public event EventHandler<GlobalKeyEventArgs>? KeyEvent;
@@ -122,6 +132,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         }
 
         KeyEvent = null;
+        InputFilter = null;
         _lifecycleGate.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -215,11 +226,11 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
     private IntPtr HookCallback(int code, IntPtr wParam, IntPtr lParam)
     {
+        if (code != HcAction)
+            return CallNextHookEx(_hookHandle, code, wParam, lParam);
+
         try
         {
-            if (code != HcAction)
-                return CallNextHookEx(_hookHandle, code, wParam, lParam);
-
             uint message = unchecked((uint)wParam.ToInt64());
             bool isDown = message == WmKeyDown || message == WmSysKeyDown;
             bool isUp = message == WmKeyUp || message == WmSysKeyUp;
@@ -227,6 +238,9 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
                 return CallNextHookEx(_hookHandle, code, wParam, lParam);
 
             KeyboardHookData keyboardData = Marshal.PtrToStructure<KeyboardHookData>(lParam);
+            if ((keyboardData.Flags & LlkhfInjected) != 0)
+                return CallNextHookEx(_hookHandle, code, wParam, lParam);
+
             GlobalKeyState state = isDown ? GlobalKeyState.Down : GlobalKeyState.Up;
             bool isRepeat = false;
 
@@ -239,21 +253,158 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             }
 
             string? keyName = ResolveKeyName(keyboardData);
-            Emit(
-                GlobalKeyboardEventMapper.FromWindows(
-                    keyboardData.VirtualKeyCode,
-                    keyName,
-                    state,
-                    isRepeat
-                )
+            var eventArgs = GlobalKeyboardEventMapper.FromWindows(
+                keyboardData.VirtualKeyCode,
+                keyName,
+                state,
+                isRepeat
             );
+
+            KeyboardFilterDecision decision = EvaluateFilter(eventArgs);
+            Emit(eventArgs);
+            return ApplyDecision(decision, keyboardData, state, code, wParam, lParam);
         }
         catch (Exception ex)
         {
             GlobalKeyboardTrace.Warning($"Windows keyboard callback reported a non-fatal error: {ex.Message}");
+            return CallNextHookEx(_hookHandle, code, wParam, lParam);
+        }
+    }
+
+    private KeyboardFilterDecision EvaluateFilter(GlobalKeyEventArgs eventArgs)
+    {
+        IKeyboardInputFilter? filter = InputFilter;
+        if (filter is null)
+            return KeyboardFilterDecision.Forward();
+
+        try
+        {
+            return filter.ProcessEvent(eventArgs);
+        }
+        catch (Exception ex)
+        {
+            GlobalKeyboardTrace.Warning($"Windows keyboard filter failed: {ex.Message}");
+            return KeyboardFilterDecision.Forward();
+        }
+    }
+
+    private IntPtr ApplyDecision(
+        KeyboardFilterDecision decision,
+        KeyboardHookData keyboardData,
+        GlobalKeyState state,
+        int code,
+        IntPtr wParam,
+        IntPtr lParam)
+    {
+        if (decision.DiscardBufferedEvents)
+            ClearBufferedEvents();
+
+        if (decision.FlushBufferedEvents)
+        {
+            ReplayBufferedEvents();
+            ClearBufferedEvents();
         }
 
-        return CallNextHookEx(_hookHandle, code, wParam, lParam);
+        switch (decision.Routing)
+        {
+            case KeyboardEventRouting.Buffer:
+                BufferEvent(BufferedKeyboardEvent.From(keyboardData, state));
+                return new IntPtr(1);
+
+            case KeyboardEventRouting.Consume:
+                return new IntPtr(1);
+
+            case KeyboardEventRouting.Forward:
+                if (decision.ForwardCurrentEventViaForwarder)
+                {
+                    ReplayEvent(BufferedKeyboardEvent.From(keyboardData, state));
+                    return new IntPtr(1);
+                }
+
+                return CallNextHookEx(_hookHandle, code, wParam, lParam);
+
+            default:
+                return CallNextHookEx(_hookHandle, code, wParam, lParam);
+        }
+    }
+
+    private void BufferEvent(BufferedKeyboardEvent bufferedEvent)
+    {
+        lock (_bufferSync)
+        {
+            _bufferedEvents.Add(bufferedEvent);
+        }
+    }
+
+    private void ClearBufferedEvents()
+    {
+        lock (_bufferSync)
+        {
+            _bufferedEvents.Clear();
+        }
+    }
+
+    private void ReplayBufferedEvents()
+    {
+        BufferedKeyboardEvent[] snapshot;
+        lock (_bufferSync)
+        {
+            if (_bufferedEvents.Count == 0)
+                return;
+
+            snapshot = _bufferedEvents.ToArray();
+        }
+
+        ReplayEvents(snapshot);
+    }
+
+    private void ReplayEvent(BufferedKeyboardEvent bufferedEvent)
+    {
+        ReplayEvents([bufferedEvent]);
+    }
+
+    private void ReplayEvents(IReadOnlyList<BufferedKeyboardEvent> bufferedEvents)
+    {
+        if (bufferedEvents.Count == 0)
+            return;
+
+        NativeInput[] inputs = bufferedEvents.Select(CreateNativeInput).ToArray();
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeInput>());
+        if (sent == inputs.Length)
+            return;
+
+        int error = Marshal.GetLastWin32Error();
+        GlobalKeyboardTrace.Warning(
+            $"SendInput replay was partial ({sent}/{inputs.Length}, Win32={error})."
+        );
+    }
+
+    private static NativeInput CreateNativeInput(BufferedKeyboardEvent bufferedEvent)
+    {
+        bool useScanCode = bufferedEvent.ScanCode != 0;
+        uint flags = 0;
+        if (bufferedEvent.IsExtended)
+            flags |= KeyeventfExtendedKey;
+        if (bufferedEvent.State == GlobalKeyState.Up)
+            flags |= KeyeventfKeyUp;
+        if (useScanCode)
+            flags |= KeyeventfScanCode;
+
+        return new NativeInput
+        {
+            Type = InputKeyboard,
+            Union = new InputUnion
+            {
+                Keyboard = new KeyboardInput
+                {
+                    VirtualKey = useScanCode ? (ushort)0 : (ushort)bufferedEvent.VirtualKeyCode,
+                    ScanCode = (ushort)bufferedEvent.ScanCode,
+                    Flags = flags,
+                    Time = 0,
+                    ExtraInfo = bufferedEvent.ExtraInfo,
+                },
+            },
+        };
     }
 
     private static string? ResolveKeyName(KeyboardHookData keyboardData)
@@ -289,6 +440,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             _pressedKeys.Clear();
         }
 
+        ClearBufferedEvents();
         _hookThreadId = 0;
         _hookProc = null;
     }
@@ -346,6 +498,49 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         public uint Private;
     }
 
+    private readonly record struct BufferedKeyboardEvent(
+        uint VirtualKeyCode,
+        uint ScanCode,
+        bool IsExtended,
+        GlobalKeyState State,
+        IntPtr ExtraInfo)
+    {
+        public static BufferedKeyboardEvent From(KeyboardHookData keyboardData, GlobalKeyState state)
+        {
+            return new BufferedKeyboardEvent(
+                keyboardData.VirtualKeyCode,
+                keyboardData.ScanCode,
+                (keyboardData.Flags & LlkhfExtended) != 0,
+                state,
+                keyboardData.ExtraInfo
+            );
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeInput
+    {
+        public uint Type;
+        public InputUnion Union;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)]
+        public KeyboardInput Keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardInput
+    {
+        public ushort VirtualKey;
+        public ushort ScanCode;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
     private delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -400,6 +595,9 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetKeyNameText(int lParam, StringBuilder keyName, int size);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint inputCount, NativeInput[] inputs, int inputSize);
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? moduleName);

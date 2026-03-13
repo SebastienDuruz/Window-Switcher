@@ -14,6 +14,7 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
     private readonly object _syncRoot = new();
     private readonly WinAccessorBase _accessor;
     private readonly Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> _cycleCandidatesResolver;
+    private readonly List<string> _cycleOrderWindowIds = [];
     private string _lastActivatedClientId = string.Empty;
 
     /// <inheritdoc />
@@ -87,6 +88,18 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         return true;
     }
 
+    /// <inheritdoc />
+    public void NotifyWindowActivated(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        lock (_syncRoot)
+        {
+            _lastActivatedClientId = windowId;
+        }
+    }
+
     private bool TryActivateRelativeClient(int step)
     {
         if (step is not (1 or -1))
@@ -100,24 +113,58 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         WindowConfig target;
         lock (_syncRoot)
         {
-            int currentIndex = FindIndexByWindowId(candidates, _lastActivatedClientId);
+            IReadOnlyList<WindowConfig> orderedCandidates = StabilizeCycleOrder(candidates);
+            int currentIndex = FindIndexByWindowId(orderedCandidates, _lastActivatedClientId);
 
             int nextIndex;
             if (currentIndex < 0)
-                nextIndex = step > 0 ? 0 : candidates.Count - 1;
+                nextIndex = step > 0 ? 0 : orderedCandidates.Count - 1;
             else
                 nextIndex =
                     step > 0
-                        ? (currentIndex + 1) % candidates.Count
-                        : (currentIndex - 1 + candidates.Count) % candidates.Count;
+                        ? (currentIndex + 1) % orderedCandidates.Count
+                        : (currentIndex - 1 + orderedCandidates.Count) % orderedCandidates.Count;
 
-            target = candidates[nextIndex];
+            target = orderedCandidates[nextIndex];
             _lastActivatedClientId = target.WindowId;
         }
 
         _accessor.RaiseWindow(target.WindowId);
         WindowActivated?.Invoke(this, target.WindowId);
         return true;
+    }
+
+    private IReadOnlyList<WindowConfig> StabilizeCycleOrder(IReadOnlyList<WindowConfig> candidates)
+    {
+        var windowsById = new Dictionary<string, WindowConfig>(StringComparer.Ordinal);
+        foreach (WindowConfig candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate.WindowId))
+                continue;
+
+            windowsById[candidate.WindowId] = candidate;
+        }
+
+        var ordered = new List<WindowConfig>(capacity: windowsById.Count);
+        foreach (string windowId in _cycleOrderWindowIds)
+        {
+            if (!windowsById.Remove(windowId, out WindowConfig? candidate))
+                continue;
+
+            ordered.Add(candidate);
+        }
+
+        foreach (WindowConfig candidate in candidates)
+        {
+            if (!windowsById.Remove(candidate.WindowId, out WindowConfig? remaining))
+                continue;
+
+            ordered.Add(remaining);
+        }
+
+        _cycleOrderWindowIds.Clear();
+        _cycleOrderWindowIds.AddRange(ordered.Select(window => window.WindowId));
+        return ordered;
     }
 
     private static int FindIndexByWindowId(IReadOnlyList<WindowConfig> windows, string windowId)

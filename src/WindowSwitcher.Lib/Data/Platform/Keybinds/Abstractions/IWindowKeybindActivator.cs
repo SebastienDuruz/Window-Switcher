@@ -15,4 +15,10 @@ public interface IWindowKeybindActivator
     /// Tries to activate a matching runtime window for the target id.
     /// </summary>
     bool TryActivateTarget(string targetId);
+
+    /// <summary>
+    /// Updates the runtime cycle anchor after a window was activated by another interaction path,
+    /// for example a mouse click on a preview.
+    /// </summary>
+    void NotifyWindowActivated(string windowId);
 }

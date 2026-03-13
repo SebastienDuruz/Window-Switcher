@@ -8,6 +8,11 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 public interface IWindowKeybindManager
 {
     /// <summary>
+    /// Raised after the configured bindings have changed.
+    /// </summary>
+    event EventHandler? BindingsChanged;
+
+    /// <summary>
     /// Returns all configured targets and their shortcuts.
     /// </summary>
     IReadOnlyCollection<WindowKeybindTargetConfig> GetTargets();

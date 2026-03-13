@@ -11,6 +11,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 internal static class LinuxNative
 {
     private const int O_RDONLY = 0;
+    private const int O_WRONLY = 1;
     private const int O_NONBLOCK = 0x800;
 
     // Common errno values used by retry, permission, and disconnect handling.
@@ -30,6 +31,9 @@ internal static class LinuxNative
     [DllImport("libc", SetLastError = true, EntryPoint = "read")]
     private static extern nint ReadInternal(int fd, byte[] buffer, nuint count);
 
+    [DllImport("libc", SetLastError = true, EntryPoint = "write")]
+    private static extern nint WriteInternal(int fd, byte[] buffer, nuint count);
+
     [DllImport("libc", SetLastError = true, EntryPoint = "close")]
     private static extern int CloseInternal(int fd);
 
@@ -37,7 +41,17 @@ internal static class LinuxNative
     private static extern int IoctlBytesInternal(int fd, ulong request, byte[] data);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")]
+    private static extern int IoctlIntInternal(int fd, ulong request, int data);
+
+    [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")]
     private static extern int IoctlInputIdInternal(int fd, ulong request, out NativeInputId data);
+
+    [DllImport("libc", SetLastError = true, EntryPoint = "ioctl")]
+    private static extern int IoctlUinputSetupInternal(
+        int fd,
+        ulong request,
+        ref NativeUinputSetup data
+    );
 
     /// <summary>
     /// Opens an evdev node as read-only and non-blocking.
@@ -48,11 +62,27 @@ internal static class LinuxNative
     }
 
     /// <summary>
+    /// Opens a device node as write-only and non-blocking.
+    /// </summary>
+    public static int OpenWriteOnlyNonBlocking(string path)
+    {
+        return OpenInternal(path, O_WRONLY | O_NONBLOCK);
+    }
+
+    /// <summary>
     /// Reads raw bytes from the file descriptor.
     /// </summary>
     public static nint Read(int fd, byte[] buffer, int count)
     {
         return ReadInternal(fd, buffer, (nuint)count);
+    }
+
+    /// <summary>
+    /// Writes raw bytes to the file descriptor.
+    /// </summary>
+    public static nint Write(int fd, byte[] buffer, int count)
+    {
+        return WriteInternal(fd, buffer, (nuint)count);
     }
 
     /// <summary>
@@ -72,11 +102,27 @@ internal static class LinuxNative
     }
 
     /// <summary>
+    /// Invokes ioctl with an integer argument.
+    /// </summary>
+    public static int Ioctl(int fd, ulong request, int data)
+    {
+        return IoctlIntInternal(fd, request, data);
+    }
+
+    /// <summary>
     /// Reads <c>input_id</c> metadata via <c>EVIOCGID</c>.
     /// </summary>
     public static int IoctlGetId(int fd, out NativeInputId data)
     {
         return IoctlInputIdInternal(fd, request: LinuxIoctl.EviocgId, out data);
+    }
+
+    /// <summary>
+    /// Invokes ioctl with a <c>uinput_setup</c> argument.
+    /// </summary>
+    public static int Ioctl(int fd, ulong request, ref NativeUinputSetup data)
+    {
+        return IoctlUinputSetupInternal(fd, request, ref data);
     }
 
     /// <summary>

@@ -9,20 +9,18 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 /// </summary>
 public static class PreviewFactory
 {
-    private static IPreviewFrameProviderFactory _current = new RuntimePreviewFrameProviderFactory();
-
     /// <summary>
     /// Gets or sets the underlying preview provider factory implementation.
     /// </summary>
     public static IPreviewFrameProviderFactory Current
     {
-        get => _current;
+        get;
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            _current = value;
+            field = value;
         }
-    }
+    } = new RuntimePreviewFrameProviderFactory();
 
     /// <summary>
     /// Creates a preview provider using <see cref="Current"/>.

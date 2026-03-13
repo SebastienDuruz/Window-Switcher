@@ -8,5 +8,6 @@ public interface IFloatingWindowHost
     void AddToTempBlacklist(string windowId);
     void SetActivePreview(IFloatingPreviewWindow floatingWindow);
     void ClearActivePreview(IFloatingPreviewWindow floatingWindow);
+    void NotifyPreviewWindowActivated(string windowId);
     Task RenameWindowTitleAsync(string windowId);
 }
