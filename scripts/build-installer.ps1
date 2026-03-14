@@ -45,6 +45,7 @@ $publishArgs = @(
     "-c", $Configuration,
     "-r", $Runtime,
     "-o", $PublishDir,
+    "-p:UsedAvaloniaProducts=",
     "-p:Version=$Version",
     "-p:PackageVersion=$Version",
     "-p:InformationalVersion=$Version"
@@ -62,10 +63,13 @@ else {
 Write-Host "Publishing..." -ForegroundColor Cyan
 dotnet @publishArgs
 
-$setupName = "WindowSwitcher-Setup-$Runtime-$Version.exe"
+$setupName = "WindowSwitcher-setup-$Version-$Runtime.exe"
 $outFile = Join-Path $OutDir $setupName
 
 $makensisCmd = Get-Command "makensis.exe" -ErrorAction SilentlyContinue
+if (-not $makensisCmd) {
+    $makensisCmd = Get-Command "makensis" -ErrorAction SilentlyContinue
+}
 $makensis = $null
 if ($makensisCmd) {
     $makensis = $makensisCmd.Source
@@ -78,10 +82,15 @@ if (-not $makensis) {
 }
 
 if (-not $makensis) {
-    throw "NSIS not found. Install NSIS (makensis.exe), then re-run this script."
+    throw "NSIS not found. Install NSIS (makensis), then re-run this script."
 }
 
 Write-Host "Building installer..." -ForegroundColor Cyan
-& $makensis "/DAPP_VERSION=$Version" "/DPUBLISH_DIR=$PublishDir" "/DOUT_FILE=$outFile" $nsi | Write-Host
+if ($IsWindows -or $makensis.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
+    & $makensis "/DAPP_VERSION=$Version" "/DPUBLISH_DIR=$PublishDir" "/DOUT_FILE=$outFile" $nsi | Write-Host
+}
+else {
+    & $makensis "-DAPP_VERSION=$Version" "-DPUBLISH_DIR=$PublishDir" "-DOUT_FILE=$outFile" $nsi | Write-Host
+}
 
 Write-Host "Installer created: $outFile" -ForegroundColor Green
