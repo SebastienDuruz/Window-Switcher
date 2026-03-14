@@ -113,23 +113,29 @@ From the repo root:
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
+The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
+
 ## Build Windows installer (scripted)
 
 Prerequisite: install NSIS (so `makensis.exe` is available).
 
 From the repo root:
 
-`pwsh ./scripts/build-installer.ps1 -Version 0.7.0`
+`pwsh ./scripts/build-installer.ps1`
 
-(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.7.0`.)
+The script reads the version from `./Directory.Build.props` by default. Use `-Version` only to override it for a specific build.
+
+(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1`.)
 
 ## Build Linux AppImage (scripted)
 
 From the repo root:
 
-`./scripts/build-appimage.sh -v 0.7.0`
+`./scripts/build-appimage.sh`
 
-Output: `./artifacts/appimage/WindowSwitcher-0.7.0-linux-x64.AppImage`
+The script reads the version from `./Directory.Build.props` by default. Use `-v` only to override it for a specific build.
+
+Output: `./artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
 
 ### Linux dependencies
 

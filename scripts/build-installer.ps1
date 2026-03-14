@@ -1,7 +1,7 @@
 param(
     [string] $Configuration = "Release",
     [string] $Runtime = "win-x64",
-    [string] $Version = "0.7.0",
+    [string] $Version = "",
     [switch] $SelfContained,
     [string] $PublishDir = (Join-Path $PSScriptRoot "..\\artifacts\\publish\\$Runtime"),
     [string] $OutDir = (Join-Path $PSScriptRoot "..\\artifacts\\installer")
@@ -9,9 +9,31 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-WindowSwitcherVersion {
+    param([string] $PropsPath)
+
+    if (-not (Test-Path $PropsPath)) {
+        throw "Version file not found: $PropsPath"
+    }
+
+    [xml] $props = Get-Content -Path $PropsPath -Raw
+    $versionNode = $props.SelectSingleNode("/Project/PropertyGroup/WindowSwitcherVersion")
+
+    if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+        throw "WindowSwitcherVersion not found in: $PropsPath"
+    }
+
+    return $versionNode.InnerText.Trim()
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $project = Join-Path $repoRoot "src\\WindowSwitcher\\WindowSwitcher.csproj"
 $nsi = Join-Path $repoRoot "installer\\WindowSwitcher.nsi"
+$versionProps = Join-Path $repoRoot "Directory.Build.props"
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = Get-WindowSwitcherVersion -PropsPath $versionProps
+}
 
 New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -24,15 +46,9 @@ $publishArgs = @(
     "-r", $Runtime,
     "-o", $PublishDir,
     "-p:Version=$Version",
+    "-p:PackageVersion=$Version",
     "-p:InformationalVersion=$Version"
 )
-
-$semver = [regex]::Match($Version, "^(\\d+)\\.(\\d+)\\.(\\d+)$")
-if ($semver.Success) {
-    $fourPart = "$($semver.Groups[1].Value).$($semver.Groups[2].Value).$($semver.Groups[3].Value).0"
-    $publishArgs += "-p:AssemblyVersion=$fourPart"
-    $publishArgs += "-p:FileVersion=$fourPart"
-}
 
 if ($SelfContained) {
     $publishArgs += "--self-contained"

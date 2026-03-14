@@ -1,0 +1,10 @@
+<Project>
+    <PropertyGroup>
+        <!-- Single source of truth for the application version. -->
+        <WindowSwitcherVersion>0.8.0</WindowSwitcherVersion>
+        <Version>$(WindowSwitcherVersion)</Version>
+        <PackageVersion>$(WindowSwitcherVersion)</PackageVersion>
+        <InformationalVersion>$(WindowSwitcherVersion)</InformationalVersion>
+        <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    </PropertyGroup>
+</Project>

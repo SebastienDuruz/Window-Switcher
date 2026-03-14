@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -42,7 +43,7 @@ public partial class AppInfoViewModel : ObservableObject
 
     public void Refresh()
     {
-        AppVersion = "0.7.0";
+        AppVersion = GetApplicationVersion();
         PlatformAppInfoSnapshot snapshot = _appInfoProvider.GetSnapshot();
         OsDescription = snapshot.OsDescription;
         FrameworkDescription = snapshot.FrameworkDescription;
@@ -51,5 +52,24 @@ public partial class AppInfoViewModel : ObservableObject
         ConfigPath = snapshot.ConfigPath;
         LinuxDependenciesStatus = snapshot.DependencyStatus;
         PreviewMode = snapshot.PreviewMode;
+    }
+
+    private static string GetApplicationVersion()
+    {
+        Assembly assembly = typeof(AppInfoViewModel).Assembly;
+        string? informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            int metadataSeparatorIndex = informationalVersion.IndexOf('+', StringComparison.Ordinal);
+            return metadataSeparatorIndex >= 0
+                ? informationalVersion[..metadataSeparatorIndex]
+                : informationalVersion;
+        }
+
+        Version? assemblyVersion = assembly.GetName().Version;
+        return assemblyVersion?.ToString(3) ?? string.Empty;
     }
 }

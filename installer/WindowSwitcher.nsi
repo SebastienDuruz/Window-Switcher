@@ -1,5 +1,5 @@
 ; Window Switcher - NSIS installer
-; Build via: makensis /DAPP_VERSION=0.7.0 /DPUBLISH_DIR=... /DOUT_FILE=... installer\WindowSwitcher.nsi
+; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DOUT_FILE=... installer\WindowSwitcher.nsi
 
 !include "MUI2.nsh"
 
@@ -9,7 +9,7 @@
 !define APP_ICON_REL "Assets\\WS_logo.ico"
 
 !ifndef APP_VERSION
-!define APP_VERSION "0.7.0"
+!error "APP_VERSION is required. Pass /DAPP_VERSION=x.y.z"
 !endif
 
 !ifndef PUBLISH_DIR
