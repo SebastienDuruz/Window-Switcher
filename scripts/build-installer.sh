@@ -75,7 +75,7 @@ resolve_makensis() {
     return
   fi
 
-  echo "Missing dependency: 'makensis'." >&2
+  echo "Missing dependency: 'makensis'. Install NSIS or pass --makensis <path>." >&2
   exit 1
 }
 

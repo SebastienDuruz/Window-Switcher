@@ -3,7 +3,8 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Build both release artifacts from Linux in one command:
+Build Window Switcher release artifacts from Linux in one command.
+By default, this builds:
   - Windows installer (.exe)
   - Linux AppImage (.AppImage)
 
@@ -24,6 +25,8 @@ Options:
       --appimage-out-dir <path>           AppImage output directory
       --makensis <path>                   Use a specific makensis binary
       --appimagetool <path>               Use a specific appimagetool binary
+      --skip-installer                    Build only the Linux AppImage
+      --skip-appimage                     Build only the Windows installer
   -h, --help                              Show help
 EOF
 }
@@ -32,6 +35,24 @@ repo_root() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   (cd "${script_dir}/.." && pwd)
+}
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "Missing dependency: '$cmd'." >&2
+    exit 1
+  fi
+}
+
+validate_provided_executable() {
+  local name="$1"
+  local path="$2"
+
+  if [[ ! -f "$path" || ! -x "$path" ]]; then
+    echo "${name} not found or not executable at: $path" >&2
+    exit 1
+  fi
 }
 
 configuration="Release"
@@ -45,6 +66,8 @@ installer_out_dir=""
 appimage_out_dir=""
 makensis_path=""
 appimagetool_path=""
+build_installer="true"
+build_appimage="true"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,10 +83,17 @@ while [[ $# -gt 0 ]]; do
     --appimage-out-dir) appimage_out_dir="$2"; shift 2 ;;
     --makensis) makensis_path="$2"; shift 2 ;;
     --appimagetool) appimagetool_path="$2"; shift 2 ;;
+    --skip-installer) build_installer="false"; shift 1 ;;
+    --skip-appimage) build_appimage="false"; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
 done
+
+if [[ "$build_installer" == "false" && "$build_appimage" == "false" ]]; then
+  echo "Nothing to build: both --skip-installer and --skip-appimage were specified." >&2
+  exit 2
+fi
 
 repo="$(repo_root)"
 installer_script="${repo}/scripts/build-installer.sh"
@@ -104,5 +134,26 @@ if [[ -n "$appimagetool_path" ]]; then
   appimage_args+=( --appimagetool "$appimagetool_path" )
 fi
 
-"$installer_script" "${installer_args[@]}"
-"$appimage_script" "${appimage_args[@]}"
+require_cmd dotnet
+
+if [[ "$build_installer" == "true" ]]; then
+  if [[ -n "$makensis_path" ]]; then
+    validate_provided_executable "makensis" "$makensis_path"
+  elif ! command -v makensis >/dev/null 2>&1; then
+    echo "Missing dependency for Windows installer: 'makensis'." >&2
+    echo "Install NSIS, pass --makensis <path>, or rerun with --skip-installer to build only the AppImage." >&2
+    exit 1
+  fi
+fi
+
+if [[ "$build_appimage" == "true" && -n "$appimagetool_path" ]]; then
+  validate_provided_executable "appimagetool" "$appimagetool_path"
+fi
+
+if [[ "$build_installer" == "true" ]]; then
+  "$installer_script" "${installer_args[@]}"
+fi
+
+if [[ "$build_appimage" == "true" ]]; then
+  "$appimage_script" "${appimage_args[@]}"
+fi

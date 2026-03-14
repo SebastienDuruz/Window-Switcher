@@ -147,15 +147,20 @@ From the repo root:
 
 `./scripts/build-artifacts.sh`
 
-This produces both:
+By default, this produces both:
 
 - `./artifacts/installer/WindowSwitcher-setup-<version>-win-x64.exe`
 - `./artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
 
+You can also target a single artifact from the wrapper:
+
+- `./scripts/build-artifacts.sh --skip-installer` builds only the Linux AppImage
+- `./scripts/build-artifacts.sh --skip-appimage` builds only the Windows installer
+
 Prerequisites on Linux:
 
 - `.NET SDK`
-- `NSIS` (`makensis`)
+- `NSIS` (`makensis`) when building the Windows installer
 - `appimagetool` in `PATH`, or let the AppImage script download it automatically
 
 ### Linux dependencies
