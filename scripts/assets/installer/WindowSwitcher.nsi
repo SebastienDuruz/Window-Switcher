@@ -1,5 +1,5 @@
 ; Window Switcher - NSIS installer
-; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DOUT_FILE=... installer\WindowSwitcher.nsi
+; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DOUT_FILE=... scripts\assets\installer\WindowSwitcher.nsi
 
 !include "MUI2.nsh"
 
@@ -29,8 +29,8 @@ Unicode True
 Name "${APP_NAME} ${APP_VERSION}"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "../src/WindowSwitcher/Assets/WS_logo.ico"
-!define MUI_UNICON "../src/WindowSwitcher/Assets/WS_logo.ico"
+!define MUI_ICON "../../../src/WindowSwitcher/Assets/WS_logo.ico"
+!define MUI_UNICON "../../../src/WindowSwitcher/Assets/WS_logo.ico"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY

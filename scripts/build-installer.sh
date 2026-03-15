@@ -13,8 +13,8 @@ Options:
   -r, --runtime <win-x64|win-arm64>   Runtime identifier (default: win-x64)
   -v, --version <x.y.z>               App version override (default: value from Directory.Build.props)
       --[no-]self-contained           Publish self-contained (default: framework-dependent)
-      --publish-dir <path>            Dotnet publish output dir (default: artifacts/publish/<rid>)
-      --out-dir <path>                Output directory (default: artifacts/installer)
+      --publish-dir <path>            Dotnet publish output dir (default: scripts/artifacts/publish/<rid>)
+      --out-dir <path>                Output directory (default: scripts/artifacts/installer)
       --makensis <path>               Use a specific makensis binary
   -h, --help                          Show help
 
@@ -109,14 +109,14 @@ esac
 
 repo="$(repo_root)"
 project="${repo}/src/WindowSwitcher/WindowSwitcher.csproj"
-nsi="${repo}/installer/WindowSwitcher.nsi"
+nsi="${repo}/scripts/assets/installer/WindowSwitcher.nsi"
 version_props="${repo}/Directory.Build.props"
 
 if [[ -z "$publish_dir" ]]; then
-  publish_dir="${repo}/artifacts/publish/${runtime}"
+  publish_dir="${repo}/scripts/artifacts/publish/${runtime}"
 fi
 if [[ -z "$out_dir" ]]; then
-  out_dir="${repo}/artifacts/installer"
+  out_dir="${repo}/scripts/artifacts/installer"
 fi
 if [[ -z "$version" ]]; then
   version="$(read_version_from_props "$version_props")"

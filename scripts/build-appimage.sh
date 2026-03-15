@@ -13,14 +13,14 @@ Options:
   -r, --runtime <linux-x64|linux-arm64> Runtime identifier (default: linux-x64)
   -v, --version <x.y.z>                 App version override (default: value from Directory.Build.props)
       --[no-]self-contained             Publish self-contained (default: self-contained)
-      --publish-dir <path>              Dotnet publish output dir (default: artifacts/publish/<rid>)
-      --out-dir <path>                  Output directory (default: artifacts/appimage)
+      --publish-dir <path>              Dotnet publish output dir (default: scripts/artifacts/publish/<rid>)
+      --out-dir <path>                  Output directory (default: scripts/artifacts/appimage)
       --appimagetool <path>             Use a specific appimagetool (or AppImage) binary
   -h, --help                            Show help
 
 Dependencies:
   - dotnet (SDK)
-  - appimagetool (will be downloaded into artifacts/tools/ if missing)
+  - appimagetool (will be downloaded into scripts/artifacts/tools/ if missing)
 EOF
 }
 
@@ -94,7 +94,7 @@ ensure_appimagetool() {
     return
   fi
 
-  local tools_dir="${repo}/artifacts/tools"
+  local tools_dir="${repo}/scripts/artifacts/tools"
   mkdir -p "$tools_dir"
 
   local appimagetool_path="${tools_dir}/appimagetool-${desired_arch}.AppImage"
@@ -148,14 +148,14 @@ esac
 
 repo="$(repo_root)"
 project="${repo}/src/WindowSwitcher/WindowSwitcher.csproj"
-packaging_dir="${repo}/packaging/linux"
+packaging_dir="${repo}/scripts/assets/packaging/linux"
 version_props="${repo}/Directory.Build.props"
 
 if [[ -z "$publish_dir" ]]; then
-  publish_dir="${repo}/artifacts/publish/${runtime}"
+  publish_dir="${repo}/scripts/artifacts/publish/${runtime}"
 fi
 if [[ -z "$out_dir" ]]; then
-  out_dir="${repo}/artifacts/appimage"
+  out_dir="${repo}/scripts/artifacts/appimage"
 fi
 if [[ -z "$version" ]]; then
   version="$(read_version_from_props "$version_props")"

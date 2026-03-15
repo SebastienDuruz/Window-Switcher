@@ -3,8 +3,8 @@ param(
     [string] $Runtime = "win-x64",
     [string] $Version = "",
     [switch] $SelfContained,
-    [string] $PublishDir = (Join-Path $PSScriptRoot "..\\artifacts\\publish\\$Runtime"),
-    [string] $OutDir = (Join-Path $PSScriptRoot "..\\artifacts\\installer")
+    [string] $PublishDir = (Join-Path $PSScriptRoot "artifacts\\publish\\$Runtime"),
+    [string] $OutDir = (Join-Path $PSScriptRoot "artifacts\\installer")
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +28,7 @@ function Get-WindowSwitcherVersion {
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $project = Join-Path $repoRoot "src\\WindowSwitcher\\WindowSwitcher.csproj"
-$nsi = Join-Path $repoRoot "installer\\WindowSwitcher.nsi"
+$nsi = Join-Path $repoRoot "scripts\\assets\\installer\\WindowSwitcher.nsi"
 $versionProps = Join-Path $repoRoot "Directory.Build.props"
 
 if ([string]::IsNullOrWhiteSpace($Version)) {

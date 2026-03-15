@@ -115,6 +115,15 @@ From the repo root:
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
+Build resources used by the packaging scripts now live under:
+
+- `./scripts/assets/installer/`
+- `./scripts/assets/packaging/linux/`
+
+Generated build outputs now live under:
+
+- `./scripts/artifacts/`
+
 ## Build Windows installer (scripted)
 
 Prerequisite: install NSIS (so `makensis` is available).
@@ -122,6 +131,8 @@ Prerequisite: install NSIS (so `makensis` is available).
 From the repo root:
 
 `pwsh ./scripts/build-installer.ps1`
+
+The NSIS definition used by these scripts is stored in `./scripts/assets/installer/WindowSwitcher.nsi`.
 
 The script reads the version from `./Directory.Build.props` by default. Use `-Version` only to override it for a specific build.
 
@@ -137,9 +148,11 @@ From the repo root:
 
 `./scripts/build-appimage.sh`
 
+The AppImage packaging resources used by this script are stored in `./scripts/assets/packaging/linux/`.
+
 The script reads the version from `./Directory.Build.props` by default. Use `-v` only to override it for a specific build.
 
-Output: `./artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+Output: `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
 
 ## Build all artifacts from Linux
 
@@ -149,8 +162,8 @@ From the repo root:
 
 By default, this produces both:
 
-- `./artifacts/installer/WindowSwitcher-setup-<version>-win-x64.exe`
-- `./artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+- `./scripts/artifacts/installer/WindowSwitcher-setup-<version>-win-x64.exe`
+- `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
 
 You can also target a single artifact from the wrapper:
 
