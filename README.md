@@ -4,9 +4,9 @@
 
 # Window Switcher
 
-**Window Switcher** is an open-source desktop app that creates small always-on-top preview windows for selected applications.
+**Window Switcher** is an open-source desktop app that creates small always-on-top preview windows for selected applications and lets you switch between them quickly.
 
-It is designed for fast window switching and multibox workflows (games, tools, multi-client setups), without modifying target applications.
+It is designed for multibox and multi-client workflows without modifying the target applications, with support for floating previews, filtering, renaming, diagnostics, and global keybinds.
 
 Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the project focuses on broader use cases and cross-platform support.
 
@@ -14,14 +14,23 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 - Display floating previews for selected windows
 - Bring the original window to foreground by clicking a preview
+- Trigger a specific client, or cycle to the next/previous selected client, with global keybinds
 - Optionally focus windows on mouse hover
 - Filter displayed windows with whitelist prefixes
 - Exclude windows with blacklist entries
 - Temporarily hide a window for the current session (temp blacklist)
 - Rename a window title directly from the UI
 - Persist floating window size/position per window
-- Tune preview behavior and highlight color from Settings
-- Inspect runtime/OS/dependency status from the About window
+- Tune preview behavior, sizing, decorations, and highlight color from Settings
+- Open the app data folder and inspect runtime/OS/dependency status from the About window
+
+## Main areas
+
+- `Filters`: manage whitelist prefixes and blacklist entries.
+- `Keybinds`: assign global shortcuts to built-in actions or specific client targets.
+- `Settings`: control preview behavior, movement, sizing, decorations, startup mode, and highlight color.
+- `Help > About`: inspect runtime information, preview mode, config path, and Linux dependency status.
+- `File > Open data folder`: open the persisted application data directory directly.
 
 ## Compatibility
 
@@ -32,25 +41,45 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 ## Limitations
 
 - 🖵 **Fullscreen applications** not supported
+- ⌨️ **Linux global keybinds** require access to `/dev/input/event*` and `/dev/uinput`; previews still work without that access
 
 ## How it works
 
-- **Windows:** native DWM thumbnail previews are used in floating windows.
+- **Windows:** native DWM thumbnail previews are used in floating windows, and global shortcuts use a low-level keyboard hook.
 - **Linux (X11):** screenshots are captured via ImageMagick `import`, and window actions use `wmctrl`.
 - **Linux (Wayland):** PipeWire preview is used when dependencies are available; otherwise it falls back to screenshot mode.
+- **Linux global keybinds:** evdev devices are read and forwarded back through `uinput`, so matching shortcuts can be intercepted without swallowing unrelated typing.
 
 ## Typical workflow
 
 1. Launch Window Switcher.
-2. Open `Settings > Configure prefixes` and add entries to the whitelist.
-3. Open `Settings > Configure blacklist` to exclude titles you do not want to see.
+2. Open `Settings > Filters`, then use the `Prefixes` tab to add whitelist entries.
+3. In the same `Filters` window, use the `Blacklist` tab to exclude titles you do not want to see.
 4. Floating previews are created for matching windows.
-5. Click a preview to focus the original window, or enable `Focus on hover`.
-6. Right-click a preview (or list item) to blacklist, temp-blacklist, or rename a window.
+5. Open `Settings > Keybinds` and assign shortcuts to `Next client`, `Previous client`, or a specific client target.
+6. Click a preview to focus the original window, or enable `Focus on hover`.
+7. Right-click a preview (or list item) to blacklist, temp-blacklist, or rename a window.
 
 ## Demo
 
 <details open>
+  <summary>v0.8.0</summary>
+
+### Features
+
+- Add a window to configure **keybinds**
+
+| Keybinds window                                  |
+|--------------------------------------------------|
+| ![Screenshot 1](./docs/0.8.0/keybindswindow.png) |
+
+🎥 Example with 5 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
+
+[![Watch the video](https://img.youtube.com/vi/YDAKNa9B7fg/0.jpg)](https://youtu.be/YDAKNa9B7fg)
+
+</details>
+
+<details>
   <summary>v0.7.0</summary>
 
   🎥 Example with 3 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
@@ -212,17 +241,27 @@ Wayland PipeWire packages (examples):
 - Resize previews when `Resize windows` is enabled.
 - With `Fixed size`, all previews share configured width/height.
 - Preview position and size are restored per window key on next launch.
+- The active preview highlight is updated when a preview is clicked or activated through a keybind.
+
+### Global keybinds
+
+- Open `Settings > Keybinds` to assign shortcuts to built-in actions or to a specific client window.
+- `Next client` and `Previous client` cycle through the currently selected client set, meaning windows that match the whitelist and are not excluded by the blacklist.
+- Client targets are populated from currently detected windows, and previously saved targets remain available even when that window is not running yet.
+- Duplicate shortcuts on the same target and conflicts across different targets are rejected by the UI.
+- On Linux, keybind capture is optional but requires input-device permissions; without them, the app still runs but global shortcuts are unavailable.
 
 ### Settings available in-app
 
 - `Disable previews`
-- `Move windows`
 - `Resize windows`
+- `Move windows`
 - `Focus on hover`
 - `Start minimized`
 - `Window decorations` (Linux policy)
 - `Fixed size` + `Width/Height`
 - `Highlight color`
+- `Apply` is mainly needed when toggling `Disable previews`; other values are persisted as they change
 
 ### In-app diagnostics
 
@@ -241,6 +280,21 @@ Settings are persisted to `config.json` under the app data folder:
 
 - Windows: `%APPDATA%\\WindowSwitcher\\config.json`
 - Linux: `~/.config/WindowSwitcher/config.json` (typically)
+
+The file stores:
+
+- UI and preview settings
+- Whitelist / blacklist filters
+- Saved floating window positions and sizes
+- Global keybind target definitions
+
+### Linux global keybind requirements
+
+Global keybinds are optional on Linux, but when you use them the listener needs:
+
+- Read access to `/dev/input/event*`
+- Write access to `/dev/uinput` or `/dev/input/uinput`
+- Typically: root, membership in the appropriate input group, or custom udev rules
 
 ## License
 
