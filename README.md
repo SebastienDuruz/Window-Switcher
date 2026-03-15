@@ -63,6 +63,23 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 ## Demo
 
 <details open>
+  <summary>v0.8.0</summary>
+
+### Features
+
+- Add a window to configure **keybinds**
+
+| Keybinds window                                  |
+|--------------------------------------------------|
+| ![Screenshot 1](./docs/0.8.0/keybindswindow.png) |
+
+🎥 Example with 5 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
+
+[![Watch the video](https://img.youtube.com/vi/YDAKNa9B7fg/0.jpg)](https://youtu.be/YDAKNa9B7fg)
+
+</details>
+
+<details>
   <summary>v0.7.0</summary>
 
   🎥 Example with 3 **World of Warcraft** clients, on Arch Linux KDE (Wayland)
