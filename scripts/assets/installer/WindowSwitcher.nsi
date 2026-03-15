@@ -1,5 +1,5 @@
 ; Window Switcher - NSIS installer
-; Build via: makensis /DAPP_VERSION=0.7.0 /DPUBLISH_DIR=... /DOUT_FILE=... installer\WindowSwitcher.nsi
+; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DOUT_FILE=... scripts\assets\installer\WindowSwitcher.nsi
 
 !include "MUI2.nsh"
 
@@ -9,7 +9,7 @@
 !define APP_ICON_REL "Assets\\WS_logo.ico"
 
 !ifndef APP_VERSION
-!define APP_VERSION "0.7.0"
+!error "APP_VERSION is required. Pass /DAPP_VERSION=x.y.z"
 !endif
 
 !ifndef PUBLISH_DIR
@@ -17,7 +17,7 @@
 !endif
 
 !ifndef OUT_FILE
-!define OUT_FILE "WindowSwitcher-Setup.exe"
+!define OUT_FILE "WindowSwitcher-setup.exe"
 !endif
 
 OutFile "${OUT_FILE}"
@@ -29,8 +29,8 @@ Unicode True
 Name "${APP_NAME} ${APP_VERSION}"
 
 !define MUI_ABORTWARNING
-!define MUI_ICON "..\\src\\WindowSwitcher\\Assets\\WS_logo.ico"
-!define MUI_UNICON "..\\src\\WindowSwitcher\\Assets\\WS_logo.ico"
+!define MUI_ICON "../../../src/WindowSwitcher/Assets/WS_logo.ico"
+!define MUI_UNICON "../../../src/WindowSwitcher/Assets/WS_logo.ico"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
@@ -44,7 +44,7 @@ Name "${APP_NAME} ${APP_VERSION}"
 
 Section "Install" SecInstall
   SetOutPath "$INSTDIR"
-  File /r "${PUBLISH_DIR}\\*"
+  File /r "${PUBLISH_DIR}/*"
 
   ; Registry: remember install dir
   WriteRegStr HKCU "Software\\${APP_PUBLISHER}\\${APP_NAME}" "InstallDir" "$INSTDIR"

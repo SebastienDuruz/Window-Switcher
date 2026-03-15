@@ -96,7 +96,7 @@ Download the latest release [here](https://github.com/SebastienDuruz/Window-Swit
 
 **Windows**
 
-- Download and run the `WindowSwitcher-Setup-*.exe` installer from the releases page.
+- Download and run the `WindowSwitcher-setup-*.exe` installer from the releases page.
 
 **Linux**
 
@@ -113,23 +113,68 @@ From the repo root:
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
+The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
+
+Build resources used by the packaging scripts now live under:
+
+- `./scripts/assets/installer/`
+- `./scripts/assets/packaging/linux/`
+
+Generated build outputs now live under:
+
+- `./scripts/artifacts/`
+
 ## Build Windows installer (scripted)
 
-Prerequisite: install NSIS (so `makensis.exe` is available).
+Prerequisite: install NSIS (so `makensis` is available).
 
 From the repo root:
 
-`pwsh ./scripts/build-installer.ps1 -Version 0.7.0`
+`pwsh ./scripts/build-installer.ps1`
 
-(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1 -Version 0.7.0`.)
+The NSIS definition used by these scripts is stored in `./scripts/assets/installer/WindowSwitcher.nsi`.
+
+The script reads the version from `./Directory.Build.props` by default. Use `-Version` only to override it for a specific build.
+
+(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1`.)
+
+From Linux/macOS, you can also use:
+
+`./scripts/build-installer.sh`
 
 ## Build Linux AppImage (scripted)
 
 From the repo root:
 
-`./scripts/build-appimage.sh -v 0.7.0`
+`./scripts/build-appimage.sh`
 
-Output: `./artifacts/appimage/WindowSwitcher-0.7.0-linux-x64.AppImage`
+The AppImage packaging resources used by this script are stored in `./scripts/assets/packaging/linux/`.
+
+The script reads the version from `./Directory.Build.props` by default. Use `-v` only to override it for a specific build.
+
+Output: `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+
+## Build all artifacts from Linux
+
+From the repo root:
+
+`./scripts/build-artifacts.sh`
+
+By default, this produces both:
+
+- `./scripts/artifacts/installer/WindowSwitcher-setup-<version>-win-x64.exe`
+- `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+
+You can also target a single artifact from the wrapper:
+
+- `./scripts/build-artifacts.sh --skip-installer` builds only the Linux AppImage
+- `./scripts/build-artifacts.sh --skip-appimage` builds only the Windows installer
+
+Prerequisites on Linux:
+
+- `.NET SDK`
+- `NSIS` (`makensis`) when building the Windows installer
+- `appimagetool` in `PATH`, or let the AppImage script download it automatically
 
 ### Linux dependencies
 

@@ -32,4 +32,5 @@ WindowSwitcherWinSetup/.vs/WindowSwitcherWinSetup/v17/.suo
 .vs/ProjectEvaluation/window-switcher.projects.v9.bin
 .vs/ProjectEvaluation/window-switcher.metadata.v9.bin
 /artifacts
+/scripts/artifacts
 *.user

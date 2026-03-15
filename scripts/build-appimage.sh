@@ -11,16 +11,16 @@ Usage:
 Options:
   -c, --configuration <Release|Debug>   Build configuration (default: Release)
   -r, --runtime <linux-x64|linux-arm64> Runtime identifier (default: linux-x64)
-  -v, --version <x.y.z>                 App version for the output name (default: 0.6.0)
+  -v, --version <x.y.z>                 App version override (default: value from Directory.Build.props)
       --[no-]self-contained             Publish self-contained (default: self-contained)
-      --publish-dir <path>              Dotnet publish output dir (default: artifacts/publish/<rid>)
-      --out-dir <path>                  Output directory (default: artifacts/appimage)
+      --publish-dir <path>              Dotnet publish output dir (default: scripts/artifacts/publish/<rid>)
+      --out-dir <path>                  Output directory (default: scripts/artifacts/appimage)
       --appimagetool <path>             Use a specific appimagetool (or AppImage) binary
   -h, --help                            Show help
 
 Dependencies:
   - dotnet (SDK)
-  - appimagetool (will be downloaded into artifacts/tools/ if missing)
+  - appimagetool (will be downloaded into scripts/artifacts/tools/ if missing)
 EOF
 }
 
@@ -36,6 +36,25 @@ require_cmd() {
     echo "Missing dependency: '$cmd'." >&2
     exit 1
   fi
+}
+
+read_version_from_props() {
+  local props_file="$1"
+
+  if [[ ! -f "$props_file" ]]; then
+    echo "Version file not found: $props_file" >&2
+    exit 1
+  fi
+
+  local version
+  version="$(sed -n 's:.*<WindowSwitcherVersion>\(.*\)</WindowSwitcherVersion>.*:\1:p' "$props_file" | head -n 1 | tr -d '[:space:]')"
+
+  if [[ -z "$version" ]]; then
+    echo "Unable to read WindowSwitcherVersion from: $props_file" >&2
+    exit 1
+  fi
+
+  echo "$version"
 }
 
 download_file() {
@@ -75,7 +94,7 @@ ensure_appimagetool() {
     return
   fi
 
-  local tools_dir="${repo}/artifacts/tools"
+  local tools_dir="${repo}/scripts/artifacts/tools"
   mkdir -p "$tools_dir"
 
   local appimagetool_path="${tools_dir}/appimagetool-${desired_arch}.AppImage"
@@ -100,7 +119,7 @@ ensure_appimagetool() {
 
 configuration="Release"
 runtime="linux-x64"
-version="0.7.0"
+version=""
 self_contained="true"
 publish_dir=""
 out_dir=""
@@ -129,13 +148,17 @@ esac
 
 repo="$(repo_root)"
 project="${repo}/src/WindowSwitcher/WindowSwitcher.csproj"
-packaging_dir="${repo}/packaging/linux"
+packaging_dir="${repo}/scripts/assets/packaging/linux"
+version_props="${repo}/Directory.Build.props"
 
 if [[ -z "$publish_dir" ]]; then
-  publish_dir="${repo}/artifacts/publish/${runtime}"
+  publish_dir="${repo}/scripts/artifacts/publish/${runtime}"
 fi
 if [[ -z "$out_dir" ]]; then
-  out_dir="${repo}/artifacts/appimage"
+  out_dir="${repo}/scripts/artifacts/appimage"
+fi
+if [[ -z "$version" ]]; then
+  version="$(read_version_from_props "$version_props")"
 fi
 
 require_cmd dotnet
@@ -145,10 +168,7 @@ mkdir -p "$publish_dir" "$out_dir"
 export AVALONIA_TELEMETRY_OPTOUT="1"
 
 echo "Publishing (${configuration}, ${runtime}, self-contained=${self_contained})..." >&2
-publish_msbuild_props=( -p:UsedAvaloniaProducts= -p:Version="$version" -p:InformationalVersion="$version" )
-if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  publish_msbuild_props+=( -p:AssemblyVersion="${version}.0" -p:FileVersion="${version}.0" )
-fi
+publish_msbuild_props=( -p:UsedAvaloniaProducts= -p:Version="$version" -p:PackageVersion="$version" -p:InformationalVersion="$version" )
 
 dotnet publish "$project" -c "$configuration" -r "$runtime" -o "$publish_dir" --self-contained "$self_contained" "${publish_msbuild_props[@]}"
 
