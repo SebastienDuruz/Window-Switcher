@@ -139,10 +139,16 @@ publish_msbuild_props=(
 
 dotnet publish "$project" -c "$configuration" -r "$runtime" -o "$publish_dir" --self-contained "$self_contained" "${publish_msbuild_props[@]}"
 
+if [[ -z "$(find "$publish_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+  echo "dotnet publish produced no files in: $publish_dir" >&2
+  exit 1
+fi
+
 installer_file="${out_dir}/WindowSwitcher-setup-${version}-${runtime}.exe"
+publish_glob="${publish_dir%/}/*"
 
 echo "Building NSIS installer: ${installer_file}" >&2
-"$makensis" "-DAPP_VERSION=$version" "-DPUBLISH_DIR=$publish_dir" "-DOUT_FILE=$installer_file" "$nsi"
+"$makensis" "-DAPP_VERSION=$version" "-DPUBLISH_DIR=$publish_dir" "-DPUBLISH_GLOB=$publish_glob" "-DOUT_FILE=$installer_file" "$nsi"
 
 if [[ ! -f "$installer_file" ]]; then
   echo "Installer was not created at: $installer_file" >&2

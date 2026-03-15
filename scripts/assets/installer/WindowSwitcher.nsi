@@ -1,5 +1,5 @@
 ; Window Switcher - NSIS installer
-; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DOUT_FILE=... scripts\assets\installer\WindowSwitcher.nsi
+; Build via: makensis /DAPP_VERSION=<version> /DPUBLISH_DIR=... /DPUBLISH_GLOB=... /DOUT_FILE=... scripts\assets\installer\WindowSwitcher.nsi
 
 !include "MUI2.nsh"
 
@@ -14,6 +14,10 @@
 
 !ifndef PUBLISH_DIR
 !error "PUBLISH_DIR is required. Pass /DPUBLISH_DIR=path_to_dotnet_publish_output"
+!endif
+
+!ifndef PUBLISH_GLOB
+!error "PUBLISH_GLOB is required. Pass /DPUBLISH_GLOB=path_to_dotnet_publish_output_with_wildcard"
 !endif
 
 !ifndef OUT_FILE
@@ -44,7 +48,7 @@ Name "${APP_NAME} ${APP_VERSION}"
 
 Section "Install" SecInstall
   SetOutPath "$INSTDIR"
-  File /r "${PUBLISH_DIR}/*"
+  File /r "${PUBLISH_GLOB}"
 
   ; Registry: remember install dir
   WriteRegStr HKCU "Software\\${APP_PUBLISHER}\\${APP_NAME}" "InstallDir" "$INSTDIR"

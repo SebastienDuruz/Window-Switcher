@@ -3,8 +3,8 @@ param(
     [string] $Runtime = "win-x64",
     [string] $Version = "",
     [switch] $SelfContained,
-    [string] $PublishDir = (Join-Path $PSScriptRoot "artifacts\\publish\\$Runtime"),
-    [string] $OutDir = (Join-Path $PSScriptRoot "artifacts\\installer")
+    [string] $PublishDir = [System.IO.Path]::Combine($PSScriptRoot, "artifacts", "publish", $Runtime),
+    [string] $OutDir = [System.IO.Path]::Combine($PSScriptRoot, "artifacts", "installer")
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,13 +27,16 @@ function Get-WindowSwitcherVersion {
 }
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$project = Join-Path $repoRoot "src\\WindowSwitcher\\WindowSwitcher.csproj"
-$nsi = Join-Path $repoRoot "scripts\\assets\\installer\\WindowSwitcher.nsi"
-$versionProps = Join-Path $repoRoot "Directory.Build.props"
+$project = [System.IO.Path]::Combine($repoRoot, "src", "WindowSwitcher", "WindowSwitcher.csproj")
+$nsi = [System.IO.Path]::Combine($repoRoot, "scripts", "assets", "installer", "WindowSwitcher.nsi")
+$versionProps = [System.IO.Path]::Combine($repoRoot, "Directory.Build.props")
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Get-WindowSwitcherVersion -PropsPath $versionProps
 }
+
+$PublishDir = [System.IO.Path]::GetFullPath($PublishDir)
+$OutDir = [System.IO.Path]::GetFullPath($OutDir)
 
 New-Item -ItemType Directory -Force -Path $PublishDir | Out-Null
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -62,9 +65,18 @@ else {
 
 Write-Host "Publishing..." -ForegroundColor Cyan
 dotnet @publishArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed with exit code $LASTEXITCODE."
+}
+
+$publishedEntries = @(Get-ChildItem -Path $PublishDir -Force -ErrorAction Stop)
+if ($publishedEntries.Count -eq 0) {
+    throw "dotnet publish produced no files in: $PublishDir"
+}
 
 $setupName = "WindowSwitcher-setup-$Version-$Runtime.exe"
 $outFile = Join-Path $OutDir $setupName
+$publishGlob = Join-Path $PublishDir "*"
 
 $makensisCmd = Get-Command "makensis.exe" -ErrorAction SilentlyContinue
 if (-not $makensisCmd) {
@@ -75,7 +87,7 @@ if ($makensisCmd) {
     $makensis = $makensisCmd.Source
 }
 if (-not $makensis) {
-    $candidate = "${env:ProgramFiles(x86)}\\NSIS\\makensis.exe"
+    $candidate = [System.IO.Path]::Combine(${env:ProgramFiles(x86)}, "NSIS", "makensis.exe")
     if (Test-Path $candidate) {
         $makensis = $candidate
     }
@@ -87,10 +99,18 @@ if (-not $makensis) {
 
 Write-Host "Building installer..." -ForegroundColor Cyan
 if ($IsWindows -or $makensis.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
-    & $makensis "/DAPP_VERSION=$Version" "/DPUBLISH_DIR=$PublishDir" "/DOUT_FILE=$outFile" $nsi | Write-Host
+    & $makensis "/DAPP_VERSION=$Version" "/DPUBLISH_DIR=$PublishDir" "/DPUBLISH_GLOB=$publishGlob" "/DOUT_FILE=$outFile" $nsi | Write-Host
 }
 else {
-    & $makensis "-DAPP_VERSION=$Version" "-DPUBLISH_DIR=$PublishDir" "-DOUT_FILE=$outFile" $nsi | Write-Host
+    & $makensis "-DAPP_VERSION=$Version" "-DPUBLISH_DIR=$PublishDir" "-DPUBLISH_GLOB=$publishGlob" "-DOUT_FILE=$outFile" $nsi | Write-Host
+}
+
+if ($LASTEXITCODE -ne 0) {
+    throw "makensis failed with exit code $LASTEXITCODE."
+}
+
+if (-not (Test-Path -Path $outFile -PathType Leaf)) {
+    throw "Installer was not created at: $outFile"
 }
 
 Write-Host "Installer created: $outFile" -ForegroundColor Green
