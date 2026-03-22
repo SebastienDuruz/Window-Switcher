@@ -49,8 +49,6 @@ public sealed class PreviewFrameProviderFactoryTests
 
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry
     {
-        public event Action<string>? DependencyMissing;
-
         public bool IsWmctrlAvailable { get; init; }
         public bool IsImportAvailable { get; init; }
         public bool IsGstLaunchAvailable { get; init; }
@@ -59,17 +57,9 @@ public sealed class PreviewFrameProviderFactoryTests
         public bool IsGstPipeWireSrcAvailable { get; init; }
         public HashSet<string> ReportedMissing { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        public IReadOnlyCollection<string> GetReportedMissing()
-        {
-            return ReportedMissing.ToArray();
-        }
-
         public void ReportMissingOnce(string dependency)
         {
-            if (!ReportedMissing.Add(dependency))
-                return;
-
-            DependencyMissing?.Invoke(dependency);
+            _ = ReportedMissing.Add(dependency);
         }
     }
 

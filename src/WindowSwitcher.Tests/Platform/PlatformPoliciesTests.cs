@@ -25,18 +25,4 @@ public sealed class PlatformPoliciesTests
         Assert.False(windowsPolicy.ShowScreenshotControl);
         Assert.False(windowsPolicy.RefreshScreenshotWhenDeselected);
     }
-
-    [Fact]
-    public void NoOpDependencyNotificationService_ReturnsEmptyMissingDependencies()
-    {
-        var sut = new NoOpDependencyNotificationService();
-        var raised = false;
-        void OnDependencyMissing(string _) => raised = true;
-
-        sut.DependencyMissing += OnDependencyMissing;
-        sut.DependencyMissing -= OnDependencyMissing;
-
-        Assert.Empty(sut.GetReportedMissing());
-        Assert.False(raised);
-    }
 }

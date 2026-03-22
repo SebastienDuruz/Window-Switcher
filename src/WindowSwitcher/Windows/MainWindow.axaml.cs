@@ -12,8 +12,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
@@ -36,18 +36,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private RenameWindow RenameWindow { get; }
     private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
-    private readonly IDependencyNotificationService _dependencyNotificationService;
     private readonly IWindowKeybindActivator _windowKeybindActivator;
-    private readonly HashSet<string> _missingDependenciesShown = new(
-        StringComparer.OrdinalIgnoreCase
-    );
+    private readonly HashSet<string> _missingDependencies = new(StringComparer.OrdinalIgnoreCase);
+    private Window? _missingDependenciesDialog;
+    private TextBlock? _missingDependenciesTextBlock;
 
     public MainWindow()
     {
         InitializeComponent();
-        _dependencyNotificationService =
-            AppServiceProvider.GetRequiredService<IDependencyNotificationService>();
-        _dependencyNotificationService.DependencyMissing += OnDependencyMissing;
         _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;
 
@@ -73,7 +69,11 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
         _floatingWindowRegistry.Initialize(ViewModel.WindowsConfigs);
-        ShowPreviouslyReportedDependencies();
+        if (OperatingSystem.IsLinux())
+        {
+            LinuxDependencies.DependencyMissing += OnDependencyMissing;
+            ShowPreviouslyReportedDependencies();
+        }
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
             Dispatcher.UIThread.Post(
@@ -88,7 +88,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
-        _dependencyNotificationService.DependencyMissing -= OnDependencyMissing;
+        if (OperatingSystem.IsLinux())
+            LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         FiltersWindow.Close();
@@ -96,6 +97,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         KeybindsWindow.Close();
         AppInfoWindow.Close();
         RenameWindow.Close();
+        _missingDependenciesDialog?.Close();
         _floatingWindowRegistry.CloseAll();
         PreviewFrameProvider.Dispose();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
@@ -228,24 +230,81 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void ShowPreviouslyReportedDependencies()
     {
-        foreach (string dependency in _dependencyNotificationService.GetReportedMissing())
-            OnDependencyMissing(dependency);
+        IReadOnlyCollection<string> reportedMissing = LinuxDependencies.GetReportedMissing();
+        if (reportedMissing.Count == 0)
+            return;
+
+        Dispatcher.UIThread.Post(() => RegisterMissingDependencies(reportedMissing));
     }
 
     private void OnDependencyMissing(string dependency)
     {
         if (StaticData.AppClosing)
             return;
-        if (!_missingDependenciesShown.Add(dependency))
+        if (string.IsNullOrWhiteSpace(dependency))
             return;
 
-        Dispatcher.UIThread.Post(() => ShowDependencyMissingDialog(dependency));
+        Dispatcher.UIThread.Post(() => RegisterMissingDependency(dependency));
     }
 
-    private void ShowDependencyMissingDialog(string dependency)
+    private void RegisterMissingDependencies(IEnumerable<string> dependencies)
     {
-        var message = $"Missing dependency: {dependency}\nInstall it and restart the app.";
+        ArgumentNullException.ThrowIfNull(dependencies);
 
+        bool hasChanges = false;
+        foreach (string dependency in dependencies)
+        {
+            if (string.IsNullOrWhiteSpace(dependency))
+                continue;
+
+            hasChanges |= _missingDependencies.Add(dependency);
+        }
+
+        if (!hasChanges)
+            return;
+
+        ShowOrUpdateDependencyMissingDialog();
+    }
+
+    private void RegisterMissingDependency(string dependency)
+    {
+        if (StaticData.AppClosing)
+            return;
+        if (!_missingDependencies.Add(dependency))
+            return;
+
+        ShowOrUpdateDependencyMissingDialog();
+    }
+
+    private void ShowOrUpdateDependencyMissingDialog()
+    {
+        if (_missingDependencies.Count == 0)
+            return;
+
+        if (_missingDependenciesDialog is null || _missingDependenciesTextBlock is null)
+            _missingDependenciesDialog = CreateDependencyMissingDialog();
+
+        Window dialog =
+            _missingDependenciesDialog
+            ?? throw new InvalidOperationException("The dependency dialog was not created.");
+        TextBlock textBlock =
+            _missingDependenciesTextBlock
+            ?? throw new InvalidOperationException("The dependency dialog content was not created.");
+
+        dialog.Title = DependencyNotificationDialogContent.CreateTitle(_missingDependencies.Count);
+        textBlock.Text = DependencyNotificationDialogContent.CreateMessage(_missingDependencies);
+
+        if (dialog.IsVisible)
+            return;
+
+        if (IsVisible)
+            _ = dialog.ShowDialog(this);
+        else
+            dialog.Show();
+    }
+
+    private Window CreateDependencyMissingDialog()
+    {
         var okButton = new Button
         {
             Content = "OK",
@@ -253,12 +312,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
         };
 
         var panel = new StackPanel { Margin = new Thickness(12), Spacing = 10 };
-        panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+        _missingDependenciesTextBlock = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        panel.Children.Add(_missingDependenciesTextBlock);
         panel.Children.Add(okButton);
 
         var dialog = new Window
         {
-            Title = "Missing dependency",
             CanResize = false,
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -266,11 +325,19 @@ public partial class MainWindow : Window, IFloatingWindowHost
         };
 
         okButton.Click += (_, _) => dialog.Close();
+        dialog.Closed += OnMissingDependenciesDialogClosed;
+        return dialog;
+    }
 
-        if (IsVisible)
-            _ = dialog.ShowDialog(this);
-        else
-            dialog.Show();
+    private void OnMissingDependenciesDialogClosed(object? sender, EventArgs e)
+    {
+        Window? dialog = _missingDependenciesDialog;
+        if (dialog is null || !ReferenceEquals(sender, dialog))
+            return;
+
+        dialog.Closed -= OnMissingDependenciesDialogClosed;
+        _missingDependenciesDialog = null;
+        _missingDependenciesTextBlock = null;
     }
 
     private void WindowsConfigsChanged(object? sender, NotifyCollectionChangedEventArgs e)
