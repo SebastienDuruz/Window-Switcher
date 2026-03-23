@@ -280,21 +280,15 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         CancellationToken cancellationToken
     )
     {
-        WindowCaptureContext? staleCapture = null;
-        Task<WindowCaptureContext?> createTask;
+        WindowCaptureContext? reusableCapture = null;
+        Task<WindowCaptureContext?>? createTask = null;
         lock (_capturesSync)
         {
             if (_captures.TryGetValue(windowId, out WindowCaptureContext? existing))
             {
-                if (CaptureMatchesRequest(existing, request))
-                    return existing;
-
-                _captures.Remove(windowId);
-                _pendingNodeIdsByWindow.Remove(windowId);
-                staleCapture = existing;
+                reusableCapture = existing;
             }
-
-            if (!_captureCreationTasks.TryGetValue(windowId, out createTask!))
+            else if (!_captureCreationTasks.TryGetValue(windowId, out createTask!))
             {
                 var createCancellationSource = new CancellationTokenSource();
                 _captureCreationCancellationSources[windowId] = createCancellationSource;
@@ -307,11 +301,19 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
         }
 
-        staleCapture?.Dispose(ClosePortalSession);
+        if (reusableCapture is not null)
+        {
+            reusableCapture.ApplyRequest(request);
+            return reusableCapture;
+        }
 
         try
         {
-            return await createTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            WindowCaptureContext? capture = await createTask!
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+            capture?.ApplyRequest(request);
+            return capture;
         }
         catch (OperationCanceledException)
         {
@@ -920,18 +922,6 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             return null;
 
         return value.Value;
-    }
-
-    private static bool CaptureMatchesRequest(
-        WindowCaptureContext capture,
-        ScreenshotRequest request
-    )
-    {
-        ArgumentNullException.ThrowIfNull(capture);
-
-        int? requestWidth = NormalizeTargetDimension(request.MaxWidthPx);
-        int? requestHeight = NormalizeTargetDimension(request.MaxHeightPx);
-        return capture.TargetWidthPx == requestWidth && capture.TargetHeightPx == requestHeight;
     }
 
     private async Task<Bitmap?> TryRequestCaptureFrameAsync(
@@ -3782,11 +3772,31 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         public string? PortalSessionPath { get; } = portalSessionPath;
         public string? PortalSessionDestination { get; } = portalSessionDestination;
         public PipeWireWindowStream Stream { get; } = stream;
-        public int? TargetWidthPx { get; } = targetWidthPx;
-        public int? TargetHeightPx { get; } = targetHeightPx;
+        private readonly object _syncRoot = new();
+        public int? TargetWidthPx { get; private set; } = targetWidthPx;
+        public int? TargetHeightPx { get; private set; } = targetHeightPx;
         public int ConsecutiveFailures { get; set; }
         public int ConsecutiveNoFrameTimeouts { get; set; }
         public bool IsDisposed { get; private set; }
+
+        public void ApplyRequest(ScreenshotRequest request)
+        {
+            int? requestWidth = NormalizeTargetDimension(request.MaxWidthPx);
+            int? requestHeight = NormalizeTargetDimension(request.MaxHeightPx);
+            bool updated = false;
+            lock (_syncRoot)
+            {
+                if (TargetWidthPx == requestWidth && TargetHeightPx == requestHeight)
+                    return;
+
+                TargetWidthPx = requestWidth;
+                TargetHeightPx = requestHeight;
+                updated = true;
+            }
+
+            if (updated)
+                Stream.UpdateTargetDimensions(requestWidth, requestHeight);
+        }
 
         public void Dispose(Action<string, string?> closePortalSession)
         {
@@ -3865,6 +3875,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
         private bool _disposed;
         private bool _faulted;
         private bool _restartInProgress;
+        private bool _restartRequested;
 
         public PipeWireWindowStream(
             string nodeId,
@@ -3886,8 +3897,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             _rawFrameHeightPx = normalizedMaxHeightPx ?? DefaultRawFrameHeightPx;
         }
 
-        private readonly int _rawFrameWidthPx;
-        private readonly int _rawFrameHeightPx;
+        private int _rawFrameWidthPx;
+        private int _rawFrameHeightPx;
         private const int DefaultRawFrameWidthPx = 640;
         private const int DefaultRawFrameHeightPx = 360;
 
@@ -3935,19 +3946,33 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
 
             Stop();
 
+            int rawFrameWidthPx;
+            int rawFrameHeightPx;
+            lock (_syncRoot)
+            {
+                if (_disposed)
+                {
+                    _restartInProgress = false;
+                    return;
+                }
+
+                rawFrameWidthPx = _rawFrameWidthPx;
+                rawFrameHeightPx = _rawFrameHeightPx;
+            }
+
             int? remoteFd = GetPipeWireRemoteFd();
             Process? process = null;
             if (
-                _rawFrameWidthPx > 0
-                && _rawFrameHeightPx > 0
-                && TryComputeRawFrameByteCount(_rawFrameWidthPx, _rawFrameHeightPx, out int rawBytes)
+                rawFrameWidthPx > 0
+                && rawFrameHeightPx > 0
+                && TryComputeRawFrameByteCount(rawFrameWidthPx, rawFrameHeightPx, out int rawBytes)
                 && rawBytes <= MaxFrameBytes
             )
             {
                 process = _gstLaunch.StartPipeWireRawBgraStream(
                     _nodeId,
-                    _rawFrameWidthPx,
-                    _rawFrameHeightPx,
+                    rawFrameWidthPx,
+                    rawFrameHeightPx,
                     remoteFd
                 );
             }
@@ -3965,6 +3990,7 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
             }
 
             long generation;
+            bool restartRequested;
             lock (_syncRoot)
             {
                 _activeGeneration++;
@@ -3972,8 +3998,8 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                 _faulted = false;
                 _hasReceivedFrame = false;
                 _latestFrameFormat = FrameFormat.Bgra32;
-                _latestFrameWidthPx = _rawFrameWidthPx;
-                _latestFrameHeightPx = _rawFrameHeightPx;
+                _latestFrameWidthPx = rawFrameWidthPx;
+                _latestFrameHeightPx = rawFrameHeightPx;
                 _process = process;
                 _cts = cts;
                 _readerTask = Task.Run(
@@ -3982,16 +4008,56 @@ public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPre
                             process,
                             cts.Token,
                             generation,
-                            _rawFrameWidthPx,
-                            _rawFrameHeightPx
+                            rawFrameWidthPx,
+                            rawFrameHeightPx
                         )
                 );
                 _ = Task.Run(() => DrainErrors(process, cts.Token));
+                restartRequested = _restartRequested;
+                _restartRequested = false;
                 _restartInProgress = false;
             }
 
+            if (restartRequested)
+                _ = Task.Run(Restart);
 
             DrainFrameSignal();
+        }
+
+        public void UpdateTargetDimensions(int? maxWidthPx, int? maxHeightPx)
+        {
+            int normalizedWidthPx = NormalizeTargetDimension(maxWidthPx) ?? DefaultRawFrameWidthPx;
+            int normalizedHeightPx =
+                NormalizeTargetDimension(maxHeightPx) ?? DefaultRawFrameHeightPx;
+
+            bool shouldRestart = false;
+            lock (_syncRoot)
+            {
+                if (_disposed)
+                    return;
+
+                if (
+                    _rawFrameWidthPx == normalizedWidthPx
+                    && _rawFrameHeightPx == normalizedHeightPx
+                )
+                {
+                    return;
+                }
+
+                _rawFrameWidthPx = normalizedWidthPx;
+                _rawFrameHeightPx = normalizedHeightPx;
+
+                if (_restartInProgress)
+                {
+                    _restartRequested = true;
+                    return;
+                }
+
+                shouldRestart = _process is not null || _readerTask is not null || _faulted;
+            }
+
+            if (shouldRestart)
+                Restart();
         }
 
         public async Task<Bitmap?> GetFrameAsync(int timeoutMs, CancellationToken cancellationToken)

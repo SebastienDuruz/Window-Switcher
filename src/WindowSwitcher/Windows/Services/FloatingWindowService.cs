@@ -20,6 +20,7 @@ internal sealed class FloatingWindowService
     private const int DefaultPreviewRefreshIntervalMs = 100;
     private const int PreviewRequestTimeoutMs = 1_500;
     private const int StreamPreviewRequestTimeoutMs = 1_500;
+    private const int ResizePreviewRefreshDebounceMs = 250;
 
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
@@ -41,8 +42,11 @@ internal sealed class FloatingWindowService
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
     private readonly Lock _streamFrameSync = new();
+    private readonly Lock _resizePreviewRefreshSync = new();
     private Bitmap? _pendingStreamFrame;
     private int _streamFrameDrainScheduled;
+    private CancellationTokenSource? _resizePreviewRefreshCancellation;
+    private bool _resizePreviewRefreshPending;
 
     public FloatingWindowService(
         Window ownerWindow,
@@ -80,10 +84,15 @@ internal sealed class FloatingWindowService
         UpdateLayout();
 
         if (_streamingPreviewFrameProvider is not null)
-            CancelPreviewOperations(recreateTokenSource: true);
+            ScheduleResizePreviewRefresh();
 
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview && IsPreviewCaptureEnabled())
             RegisterWindowThumbnail();
+    }
+
+    public void OnPointerReleased()
+    {
+        FlushPendingResizePreviewRefresh();
     }
 
     public void SetPreviewHighlight(bool isSelected)
@@ -139,6 +148,7 @@ internal sealed class FloatingWindowService
             return;
 
         _isClosing = true;
+        CancelPendingResizePreviewRefresh(executeRefresh: false);
         _previewFrameProvider.ForgetWindow(windowId);
         _cts.Cancel();
         CancelPreviewOperations(recreateTokenSource: false);
@@ -160,6 +170,7 @@ internal sealed class FloatingWindowService
         if (_isClosing)
             return;
 
+        CancelPendingResizePreviewRefresh(executeRefresh: false);
         UpdateLayout();
         CancelPreviewOperations(recreateTokenSource: true);
         if (!IsPreviewCaptureEnabled())
@@ -177,9 +188,102 @@ internal sealed class FloatingWindowService
         }
 
         _previewCaptureForgottenWhileDisabled = false;
-        _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
             RegisterWindowThumbnail();
+    }
+
+    private void ScheduleResizePreviewRefresh()
+    {
+        CancellationTokenSource refreshCancellation = new();
+        CancellationTokenSource? previousCancellation;
+        lock (_resizePreviewRefreshSync)
+        {
+            previousCancellation = _resizePreviewRefreshCancellation;
+            _resizePreviewRefreshCancellation = refreshCancellation;
+            _resizePreviewRefreshPending = true;
+        }
+
+        previousCancellation?.Cancel();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(
+                    ResizePreviewRefreshDebounceMs,
+                    refreshCancellation.Token
+                ).ConfigureAwait(false);
+
+                if (TryConsumePendingResizePreviewRefresh(refreshCancellation))
+                    CancelPreviewOperations(recreateTokenSource: true);
+            }
+            catch (OperationCanceledException)
+            {
+                // Resize is still in progress or the window is shutting down.
+            }
+            finally
+            {
+                refreshCancellation.Dispose();
+            }
+        });
+    }
+
+    private void FlushPendingResizePreviewRefresh()
+    {
+        CancellationTokenSource? pendingCancellation;
+        bool shouldRefresh = false;
+        lock (_resizePreviewRefreshSync)
+        {
+            pendingCancellation = _resizePreviewRefreshCancellation;
+            _resizePreviewRefreshCancellation = null;
+            if (_resizePreviewRefreshPending)
+            {
+                _resizePreviewRefreshPending = false;
+                shouldRefresh = true;
+            }
+        }
+
+        pendingCancellation?.Cancel();
+
+        if (shouldRefresh && !_isClosing)
+            CancelPreviewOperations(recreateTokenSource: true);
+    }
+
+    private void CancelPendingResizePreviewRefresh(bool executeRefresh)
+    {
+        CancellationTokenSource? pendingCancellation;
+        bool shouldRefresh = false;
+        lock (_resizePreviewRefreshSync)
+        {
+            pendingCancellation = _resizePreviewRefreshCancellation;
+            _resizePreviewRefreshCancellation = null;
+            if (_resizePreviewRefreshPending)
+            {
+                _resizePreviewRefreshPending = false;
+                shouldRefresh = true;
+            }
+        }
+
+        pendingCancellation?.Cancel();
+
+        if (executeRefresh && shouldRefresh && !_isClosing)
+            CancelPreviewOperations(recreateTokenSource: true);
+    }
+
+    private bool TryConsumePendingResizePreviewRefresh(CancellationTokenSource refreshCancellation)
+    {
+        lock (_resizePreviewRefreshSync)
+        {
+            if (!ReferenceEquals(_resizePreviewRefreshCancellation, refreshCancellation))
+                return false;
+
+            _resizePreviewRefreshCancellation = null;
+            if (!_resizePreviewRefreshPending || _isClosing)
+                return false;
+
+            _resizePreviewRefreshPending = false;
+            return true;
+        }
     }
 
     private async Task RunPreviewLoopAsync(CancellationToken cancellationToken)
