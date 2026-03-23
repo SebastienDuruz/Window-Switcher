@@ -37,7 +37,7 @@ internal sealed class FloatingWindowService
     private Bitmap? _previousScreenshot;
     private IntPtr _thumbnailHandle = IntPtr.Zero;
     private volatile bool _isClosing;
-    private bool _previewCaptureForgottenWhileDisabled;
+    private bool _previewCaptureSuspendedWhileDisabled;
     private bool _isPreviewSurfaceCleared = true;
     private int _targetScreenshotWidthPx;
     private int _targetScreenshotHeightPx;
@@ -71,7 +71,7 @@ internal sealed class FloatingWindowService
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
-        _previewCaptureForgottenWhileDisabled = !IsPreviewCaptureEnabled();
+        _previewCaptureSuspendedWhileDisabled = !IsPreviewCaptureEnabled();
     }
 
     public void Start()
@@ -175,10 +175,10 @@ internal sealed class FloatingWindowService
         CancelPreviewOperations(recreateTokenSource: true);
         if (!IsPreviewCaptureEnabled())
         {
-            if (!_previewCaptureForgottenWhileDisabled)
+            if (!_previewCaptureSuspendedWhileDisabled)
             {
-                _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
-                _previewCaptureForgottenWhileDisabled = true;
+                _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
+                _previewCaptureSuspendedWhileDisabled = true;
             }
 
             if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
@@ -187,7 +187,7 @@ internal sealed class FloatingWindowService
             return;
         }
 
-        _previewCaptureForgottenWhileDisabled = false;
+        _previewCaptureSuspendedWhileDisabled = false;
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
             RegisterWindowThumbnail();
     }
@@ -520,15 +520,15 @@ internal sealed class FloatingWindowService
     {
         if (IsPreviewCaptureEnabled())
         {
-            _previewCaptureForgottenWhileDisabled = false;
+            _previewCaptureSuspendedWhileDisabled = false;
             return true;
         }
 
         DisposePendingStreamFrame();
-        if (!_previewCaptureForgottenWhileDisabled)
+        if (!_previewCaptureSuspendedWhileDisabled)
         {
-            _previewFrameProvider.ForgetWindow(_windowConfig.WindowId);
-            _previewCaptureForgottenWhileDisabled = true;
+            _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
+            _previewCaptureSuspendedWhileDisabled = true;
         }
 
         await ClearPreviewSurfaceAsync(cancellationToken).ConfigureAwait(false);

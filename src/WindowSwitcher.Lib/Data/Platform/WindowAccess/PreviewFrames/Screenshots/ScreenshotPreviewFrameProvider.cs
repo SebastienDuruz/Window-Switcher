@@ -24,6 +24,8 @@ public sealed class ScreenshotPreviewFrameProvider : IPreviewFrameProvider
         return _screenshotQueue.RequestAsync(windowId, request, cancellationToken);
     }
 
+    public void SuspendWindow(string windowId) { }
+
     public void ForgetWindow(string windowId)
     {
         _screenshotQueue.ForgetWindow(windowId);

@@ -105,6 +105,8 @@ public sealed class StaticFactoriesTests
             return Task.FromResult<Bitmap?>(null);
         }
 
+        public void SuspendWindow(string windowId) { }
+
         public void ForgetWindow(string windowId) { }
 
         public void Dispose() { }
