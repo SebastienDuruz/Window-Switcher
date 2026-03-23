@@ -77,6 +77,8 @@ public class SettingsViewModel : ObservableObject
             );
     }
 
+    public bool CanEditResizeWindows => !UseFixedWindowSize;
+
     public bool MoveWindows
     {
         get => ReadSetting(config => config.MoveWindows);
@@ -116,13 +118,17 @@ public class SettingsViewModel : ObservableObject
     public bool UseFixedWindowSize
     {
         get => ReadSetting(config => config.UseFixedWindowSize);
-        set =>
-            UpdateSetting(
+        set
+        {
+            bool updated = UpdateSetting(
                 nameof(UseFixedWindowSize),
                 value,
                 config => config.UseFixedWindowSize,
                 (config, currentValue) => config.UseFixedWindowSize = currentValue
             );
+            if (updated)
+                OnPropertyChanged(nameof(CanEditResizeWindows));
+        }
     }
 
     public int WindowWidth
@@ -207,7 +213,7 @@ public class SettingsViewModel : ObservableObject
         return _configAccessor.ReadConfig(selector);
     }
 
-    private void UpdateSetting<T>(
+    private bool UpdateSetting<T>(
         string propertyName,
         T newValue,
         Func<ConfigFile, T> selector,
@@ -226,5 +232,7 @@ public class SettingsViewModel : ObservableObject
 
         if (updated)
             OnPropertyChanged(propertyName);
+
+        return updated;
     }
 }

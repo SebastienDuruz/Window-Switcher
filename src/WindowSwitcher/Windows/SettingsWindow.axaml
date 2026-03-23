@@ -19,7 +19,9 @@
               ColumnSpacing="16"
               RowSpacing="8">
                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
-                        <CheckBox Content="Resize windows" IsChecked="{Binding ResizeWindows, Mode=TwoWay}" />
+                        <CheckBox Content="Resize windows"
+                                  IsChecked="{Binding ResizeWindows, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditResizeWindows}" />
                         <CheckBox Content="Window decorations"
                                   IsVisible="{Binding ShowWindowDecorationSetting}"
                                   IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
