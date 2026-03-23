@@ -14,7 +14,7 @@ public sealed class LinuxWinAccessorFactoryTests
 
         WinAccessorBase accessor = factory.Create();
 
-        Assert.IsType<LinuxWaylandWinAccessor>(accessor);
+        Assert.IsType<WaylandWinAccessor>(accessor);
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public sealed class LinuxWinAccessorFactoryTests
 
         WinAccessorBase accessor = factory.Create();
 
-        Assert.IsType<LinuxX11WinAccessor>(accessor);
+        Assert.IsType<X11WinAccessor>(accessor);
     }
 
     [Fact]
@@ -34,6 +34,6 @@ public sealed class LinuxWinAccessorFactoryTests
 
         WinAccessorBase accessor = factory.Create();
 
-        Assert.IsType<LinuxX11WinAccessor>(accessor);
+        Assert.IsType<X11WinAccessor>(accessor);
     }
 }

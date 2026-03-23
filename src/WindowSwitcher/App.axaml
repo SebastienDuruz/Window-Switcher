@@ -9,6 +9,7 @@
                        ToolTipText="WindowSwitcher Tray menu">
                  <TrayIcon.Menu>
                      <NativeMenu>
+                         <NativeMenuItem Header="Open" Click="OpenMenuItemClicked"></NativeMenuItem>
                          <NativeMenuItem Header="Exit" Click="ExitMenuItemClicked"></NativeMenuItem>
                      </NativeMenu>
                  </TrayIcon.Menu>
@@ -17,6 +18,7 @@
     </TrayIcon.Icons>
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://WindowSwitcher/Theming/AppTheme.axaml" />
         <!-- Avalonia.Controls.ColorPicker styles are not part of FluentTheme by default. -->
         <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     </Application.Styles>

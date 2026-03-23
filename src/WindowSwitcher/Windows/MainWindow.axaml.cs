@@ -40,10 +40,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private readonly HashSet<string> _missingDependencies = new(StringComparer.OrdinalIgnoreCase);
     private Window? _missingDependenciesDialog;
     private TextBlock? _missingDependenciesTextBlock;
+    private bool _suppressWindowStateHandling;
+    private bool _isHiddenToTray;
 
     public MainWindow()
     {
         InitializeComponent();
+        PropertyChanged += OnWindowPropertyChanged;
         _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;
 
@@ -77,10 +80,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
         if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
             Dispatcher.UIThread.Post(
-                () =>
-                {
-                    this.WindowState = WindowState.Minimized;
-                },
+                HideToTray,
                 DispatcherPriority.Background
             );
     }
@@ -90,6 +90,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         StaticData.AppClosing = true;
         if (OperatingSystem.IsLinux())
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
+        PropertyChanged -= OnWindowPropertyChanged;
         _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         FiltersWindow.Close();
@@ -103,6 +104,55 @@ public partial class MainWindow : Window, IFloatingWindowHost
         ConfigFileAccessor.GetInstance().WriteUserSettings();
         ViewModel.Dispose();
         base.OnClosing(e);
+    }
+
+    public void RestoreFromTray()
+    {
+        if (_isHiddenToTray)
+        {
+            ShowInTaskbar = true;
+            Show();
+        }
+
+        _isHiddenToTray = false;
+        SetWindowStateWithoutTrayHandling(WindowState.Normal);
+        Activate();
+    }
+
+    private void HideToTray()
+    {
+        if (_isHiddenToTray || StaticData.AppClosing)
+            return;
+
+        _isHiddenToTray = true;
+        ShowInTaskbar = false;
+        SetWindowStateWithoutTrayHandling(WindowState.Normal);
+        Hide();
+    }
+
+    private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (_suppressWindowStateHandling || e.Property != WindowStateProperty)
+            return;
+
+        if (WindowState == WindowState.Minimized)
+            HideToTray();
+    }
+
+    private void SetWindowStateWithoutTrayHandling(WindowState state)
+    {
+        if (WindowState == state)
+            return;
+
+        _suppressWindowStateHandling = true;
+        try
+        {
+            WindowState = state;
+        }
+        finally
+        {
+            _suppressWindowStateHandling = false;
+        }
     }
 
     private void OpenDataFolderClick(object? sender, RoutedEventArgs e)

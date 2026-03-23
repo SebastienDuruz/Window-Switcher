@@ -13,53 +13,87 @@
         SystemDecorations="Full"
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
-        <Grid Margin="8"
-              ColumnDefinitions="Auto,Auto"
-              RowDefinitions="Auto,Auto"
-              ColumnSpacing="16"
-              RowSpacing="8">
-                <StackPanel Grid.Row="0" Grid.Column="0" Spacing="6">
-                        <CheckBox Content="Resize windows"
-                                  IsChecked="{Binding ResizeWindows, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditResizeWindows}" />
+        <StackPanel Margin="10"
+                    MinWidth="200"
+                    Spacing="8"
+                    Orientation="Vertical">
+                <StackPanel Spacing="6">
+                        <CheckBox Content="Move windows"
+                                  IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
+                        <CheckBox Content="Focus on hover"
+                                  IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
                         <CheckBox Content="Window decorations"
                                   IsVisible="{Binding ShowWindowDecorationSetting}"
                                   IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
-                        <CheckBox Content="Fixed size" IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
-                        <StackPanel Name="FixedWidthStackPanel"
-                                    IsVisible="{Binding UseFixedWindowSize}"
-                                    Orientation="Horizontal"
-                                    Spacing="6">
-                                <TextBlock VerticalAlignment="Center">Width</TextBlock>
-                                <NumericUpDown Width="130" Value="{Binding WindowWidth, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />
-                        </StackPanel>
-
-                        <StackPanel Name="FixedHeightStackPanel"
-                                    IsVisible="{Binding UseFixedWindowSize}"
-                                    Orientation="Horizontal"
-                                    Spacing="6">
-                                <TextBlock VerticalAlignment="Center">Height</TextBlock>
-                                <NumericUpDown Width="130" Value="{Binding WindowHeight, Mode=TwoWay}" Minimum="10" Maximum="2000" Increment="1" />
-                        </StackPanel>
+                        <CheckBox Content="Disable previews"
+                                  IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
+                        <CheckBox Content="Start minimized"
+                                  IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="0" Grid.Column="1" Spacing="8">
-                        <CheckBox Content="Disable previews" IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
-                        <CheckBox Content="Move windows" IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
-                        <CheckBox Content="Focus on hover" IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
-                        <CheckBox Content="Start minimized" IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
-                        <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
-                                <TextBlock VerticalAlignment="Center">Highlight color</TextBlock>
+                <StackPanel Spacing="6">
+                        <CheckBox Content="Resize windows"
+                                  IsChecked="{Binding ResizeWindows, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditResizeWindows}" />
+                        <CheckBox Content="Fixed size"
+                                  IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
+                        <Grid IsEnabled="{Binding UseFixedWindowSize}"
+                              Margin="18 0 0 0"
+                              HorizontalAlignment="Stretch"
+                              ColumnDefinitions="*,Auto"
+                              RowDefinitions="Auto,Auto"
+                              ColumnSpacing="8"
+                              RowSpacing="6">
+                                <TextBlock Grid.Row="0"
+                                           Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left"
+                                           Text="Width" />
+                                <NumericUpDown Grid.Row="0"
+                                               Grid.Column="1"
+                                               HorizontalAlignment="Right"
+                                               Value="{Binding WindowWidth, Mode=TwoWay}"
+                                               Minimum="10"
+                                               Maximum="2000"
+                                               Increment="1" />
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left"
+                                           Text="Height" />
+                                <NumericUpDown Grid.Row="1"
+                                               Grid.Column="1"
+                                               HorizontalAlignment="Right"
+                                               Value="{Binding WindowHeight, Mode=TwoWay}"
+                                               Minimum="10"
+                                               Maximum="2000"
+                                               Increment="1" />
+                        </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="120,Auto"
+                              ColumnSpacing="8">
+                                <TextBlock Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           Text="Highlight color" />
                                 <colorPicker:ColorPicker Grid.Column="1"
                                                          Width="60"
                                                          Color="{Binding PreviewHighlightColor, Mode=TwoWay}"
                                                          IsAlphaVisible="False" />
                         </Grid>
-
                 </StackPanel>
-
-                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Command="{Binding ApplyCommand}">Apply</Button>
-                </StackPanel>
-        </Grid>
+                <Border Padding="10 0 0 0"
+                        BorderBrush="{StaticResource SettingsSectionBorderBrush}"
+                        BorderThickness="0,1,0,0">
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Margin="0 8 0 0"
+                                    Spacing="6">
+                                <Button Command="{Binding ApplyCommand}">
+                                        Apply
+                                </Button>
+                        </StackPanel>
+                </Border>
+        </StackPanel>
 </Window>

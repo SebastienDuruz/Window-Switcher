@@ -18,11 +18,12 @@
         <TabControl.Styles>
             <Style Selector="TabItem">
                 <Setter Property="FontSize" Value="13" />
-                <Setter Property="Padding" Value="10,4" />
+                <Setter Property="Padding" Value="10,0" />
             </Style>
         </TabControl.Styles>
         <TabItem Header="Prefixes">
-            <Grid RowDefinitions="Auto,*"
+            <Grid Margin="8, 0, 8, 8"
+                  RowDefinitions="Auto,*"
                   RowSpacing="8">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">
@@ -41,7 +42,8 @@
             </Grid>
         </TabItem>
         <TabItem Header="Blacklist">
-            <Grid RowDefinitions="Auto,*"
+            <Grid Margin="10"
+                  RowDefinitions="Auto,*"
                   RowSpacing="8">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">

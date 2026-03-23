@@ -19,95 +19,98 @@
           RowSpacing="10">
         <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
                    Text="Configure global keybinds per target."
-                   FontWeight="Bold" />
+                   FontWeight="Normal" />
 
-        <Border Grid.Row="1" Grid.Column="0" BorderThickness="1" Padding="8">
-            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
-                  RowSpacing="8">
-                <TextBlock Grid.Row="0"
-                           Text="Actions"
-                           FontWeight="SemiBold" />
+        <Grid Grid.Row="1" Grid.Column="0"
+              RowDefinitions="Auto,Auto,Auto,*,Auto"
+              RowSpacing="8">
+            <TextBlock Grid.Row="0"
+                       Text="Actions"
+                       FontWeight="Normal" />
 
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding ActionTargets}"
-                         SelectedItem="{Binding SelectedActionTarget, Mode=TwoWay}"
-                         MaxHeight="110">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding DisplayName}" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                    <ListBox.Styles>
-                        <Style Selector="ListBoxItem">
-                            <Setter Property="Height" Value="22" />
-                            <Setter Property="FontSize" Value="14" />
-                            <Setter Property="Padding" Value="8,2" />
-                        </Style>
-                    </ListBox.Styles>
-                </ListBox>
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding ActionTargets}"
+                     SelectedItem="{Binding SelectedActionTarget, Mode=TwoWay}"
+                     MaxHeight="110">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Height" Value="22" />
+                        <Setter Property="FontSize" Value="14" />
+                        <Setter Property="Padding" Value="8,2" />
+                    </Style>
+                </ListBox.Styles>
+            </ListBox>
 
-                <TextBlock Grid.Row="2"
-                           Text="Client windows"
-                           FontWeight="SemiBold" />
+            <TextBlock Grid.Row="2"
+                       Text="Client windows"
+                       FontWeight="Normal" />
 
-                <ListBox Grid.Row="3"
-                         ItemsSource="{Binding ClientTargets}"
-                         SelectedItem="{Binding SelectedClientTarget, Mode=TwoWay}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding DisplayName}" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                    <ListBox.Styles>
-                        <Style Selector="ListBoxItem">
-                            <Setter Property="Height" Value="22" />
-                            <Setter Property="FontSize" Value="14" />
-                            <Setter Property="Padding" Value="8,2" />
-                        </Style>
-                    </ListBox.Styles>
-                </ListBox>
+            <ListBox Grid.Row="3"
+                     ItemsSource="{Binding ClientTargets}"
+                     SelectedItem="{Binding SelectedClientTarget, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Height" Value="22" />
+                        <Setter Property="FontSize" Value="14" />
+                        <Setter Property="Padding" Value="8,2" />
+                    </Style>
+                </ListBox.Styles>
+            </ListBox>
 
-                <Button Grid.Row="4"
-                        Content="Refresh client targets"
-                        Command="{Binding RefreshTargetsCommand}"
-                        HorizontalAlignment="Right" />
-            </Grid>
-        </Border>
+            <Button Grid.Row="4"
+                    Content="Refresh client targets"
+                    Command="{Binding RefreshTargetsCommand}"
+                    HorizontalAlignment="Right" />
+        </Grid>
 
-        <Border Grid.Row="1" Grid.Column="1" BorderThickness="1" Padding="8">
-            <StackPanel Spacing="8">
-                <TextBlock Text="Shortcuts for selected target" FontWeight="SemiBold" />
-                <ListBox ItemsSource="{Binding Shortcuts}"
-                         SelectedItem="{Binding SelectedShortcut, Mode=TwoWay}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="{Binding Display}" FontWeight="Medium" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                    <Button Content="Add shortcut" Command="{Binding BeginCaptureCommand}" />
-                    <Button Content="Remove selected" Command="{Binding RemoveShortcutCommand}" />
-                </StackPanel>
+        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8">
+            <TextBlock Text="Shortcuts for selected target" FontWeight="Normal" />
+            <ListBox ItemsSource="{Binding Shortcuts}"
+                     SelectedItem="{Binding SelectedShortcut, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding Display}" FontWeight="Medium" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="8,2" />
+                    </Style>
+                </ListBox.Styles>
+            </ListBox>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Add shortcut" Command="{Binding BeginCaptureCommand}" />
+                <Button Content="Remove selected" Command="{Binding RemoveShortcutCommand}" />
             </StackPanel>
-        </Border>
+        </StackPanel>
 
-        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Padding="8"
-                IsVisible="{Binding IsCapturing}">
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <TextBlock Text="Capture mode:" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding CapturePreview}" VerticalAlignment="Center" />
-                <Button Content="Save"
-                        Command="{Binding ConfirmCaptureCommand}" />
-                <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
-            </StackPanel>
-        </Border>
+        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsCapturing}">
+            <TextBlock Text="Capture mode:" FontWeight="Normal" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding CapturePreview}" VerticalAlignment="Center" />
+            <Button Content="Save"
+                    Command="{Binding ConfirmCaptureCommand}" />
+            <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
+        </StackPanel>
 
         <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
                    Text="{Binding StatusMessage}"
-                   Foreground="Tomato"
+                   Foreground="{StaticResource ErrorTextBrush}"
                    TextWrapping="Wrap" />
     </Grid>
 </Window>
