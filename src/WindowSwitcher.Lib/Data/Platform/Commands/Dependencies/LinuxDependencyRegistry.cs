@@ -3,6 +3,9 @@ using WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 
 namespace WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 
+/// <summary>
+/// Caches Linux dependency availability and records missing dependencies once.
+/// </summary>
 public sealed class LinuxDependencyRegistry(
     ICommandWrapper? whichWrapper = null,
     ICommandWrapper? gstInspectWrapper = null
@@ -29,13 +32,27 @@ public sealed class LinuxDependencyRegistry(
 
     public event Action<string>? DependencyMissing;
 
+    /// <inheritdoc />
     public bool IsWmctrlAvailable => CheckBinaryCached(WmctrlBinary);
+
+    /// <inheritdoc />
     public bool IsImportAvailable => CheckBinaryCached(ImportBinary);
+
+    /// <inheritdoc />
     public bool IsGstLaunchAvailable => CheckBinaryCached(GstLaunchBinary);
+
+    /// <inheritdoc />
     public bool IsPwDumpAvailable => CheckBinaryCached(PwDumpBinary);
+
+    /// <inheritdoc />
     public bool IsGdbusAvailable => CheckBinaryCached(GdbusBinary);
+
+    /// <inheritdoc />
     public bool IsGstPipeWireSrcAvailable => CheckGstPipeWireSrcCached();
 
+    /// <summary>
+    /// Returns missing dependencies already reported to the application.
+    /// </summary>
     public IReadOnlyCollection<string> GetReportedMissing()
     {
         lock (_syncRoot)
@@ -44,6 +61,7 @@ public sealed class LinuxDependencyRegistry(
         }
     }
 
+    /// <inheritdoc />
     public void ReportMissingOnce(string dependency)
     {
         if (string.IsNullOrWhiteSpace(dependency))

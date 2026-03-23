@@ -27,8 +27,8 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
         var reported = LinuxDependencies.GetReportedMissing().ToArray();
         string dependencies =
             reported.Length == 0
-                ? string.Join(", ", statuses)
-                : $"{string.Join(", ", statuses)}\nReported missing: {string.Join(", ", reported)}";
+                ? string.Join(Environment.NewLine, statuses)
+                : $"{string.Join(Environment.NewLine, statuses)}{Environment.NewLine}Reported missing:{Environment.NewLine}{string.Join(Environment.NewLine, reported)}";
 
         bool pipeWireReady =
             LinuxDependencies.IsGstLaunchAvailable

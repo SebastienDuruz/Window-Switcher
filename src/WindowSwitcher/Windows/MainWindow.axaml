@@ -10,6 +10,7 @@
         SizeToContent="Height"
         x:Class="WindowSwitcher.Windows.MainWindow"
         ShowInTaskbar="True"
+        CanMinimize="True"
         Topmost="True"
         Title="WindowSwitcher"
         ClosingBehavior="OwnerAndChildWindows"
@@ -28,7 +29,7 @@
                 <MenuItem Header="_About" Click="OpenAppInfoWindowClick" />
             </MenuItem>
         </Menu>
-        <StackPanel Orientation="Vertical" Margin="0 0" Spacing="0">
+        <StackPanel Orientation="Vertical" Margin="8" Spacing="0">
             <ListBox x:Name="WindowsListBox"
                      ItemsSource="{Binding WindowsConfigs}"
                      SelectedItem="{Binding SelectedWindow, Mode=TwoWay}">

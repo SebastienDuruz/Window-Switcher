@@ -169,6 +169,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         WindowConfig.WindowLeft = Position.X;
         WindowConfig.WindowTop = Position.Y;
+        _service.OnPointerReleased();
     }
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)

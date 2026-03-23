@@ -32,10 +32,6 @@ public static class PlatformServiceCollectionExtensions
                 IFloatingWindowHandleConfigurator,
                 WindowsFloatingWindowHandleConfigurator
             >();
-            services.AddSingleton<
-                IDependencyNotificationService,
-                NoOpDependencyNotificationService
-            >();
             services.AddSingleton<ISettingsPlatformPolicy, WindowsSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, WindowsPlatformAppInfoProvider>();
         }
@@ -48,10 +44,6 @@ public static class PlatformServiceCollectionExtensions
             services.AddSingleton<
                 IFloatingWindowHandleConfigurator,
                 NoOpFloatingWindowHandleConfigurator
-            >();
-            services.AddSingleton<
-                IDependencyNotificationService,
-                LinuxDependencyNotificationService
             >();
             services.AddSingleton<ISettingsPlatformPolicy, LinuxSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, LinuxPlatformAppInfoProvider>();

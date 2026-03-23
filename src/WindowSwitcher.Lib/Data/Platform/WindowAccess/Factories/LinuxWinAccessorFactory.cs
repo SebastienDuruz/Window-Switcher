@@ -30,9 +30,9 @@ public sealed class LinuxWinAccessorFactory : IWinAccessorFactory
     {
         string sessionType = NormalizeSessionType(_sessionTypeResolver());
         if (string.Equals(sessionType, "wayland", StringComparison.Ordinal))
-            return new LinuxWaylandWinAccessor();
+            return new WaylandWinAccessor();
 
-        return new LinuxX11WinAccessor();
+        return new X11WinAccessor();
     }
 
     private static string NormalizeSessionType(string? value)

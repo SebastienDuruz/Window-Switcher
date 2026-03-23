@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+        Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         x:Class="WindowSwitcher.Windows.AppInfoWindow"
         x:DataType="viewModels:AppInfoViewModel"
@@ -10,32 +11,36 @@
         CanResize="False"
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner">
-    <Grid Margin="12" ColumnDefinitions="Auto, *" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Version:" FontWeight="SemiBold"/>
+    <Grid Margin="10"
+          ColumnDefinitions="Auto,*"
+          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+          ColumnSpacing="10"
+          RowSpacing="2">
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Version:" FontWeight="Normal"/>
         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AppVersion}"/>
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Text="UI backend:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="UI backend:" FontWeight="Normal"/>
         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding UiBackend}"/>
 
-        <TextBlock Grid.Row="4" Grid.Column="0" Text="OS:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="3" Grid.Column="0" Text="Preview mode:" FontWeight="Normal"/>
+        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Text="OS:" FontWeight="Normal"/>
         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding OsDescription}" TextWrapping="Wrap"/>
 
-        <TextBlock Grid.Row="5" Grid.Column="0" Text=".NET:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="5" Grid.Column="0" Text=".NET:" FontWeight="Normal"/>
         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding FrameworkDescription}" TextWrapping="Wrap"/>
 
-        <TextBlock Grid.Row="6" Grid.Column="0" Text="Arch:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="6" Grid.Column="0" Text="Arch:" FontWeight="Normal"/>
         <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ProcessArchitecture}"/>
 
-        <TextBlock Grid.Row="7" Grid.Column="0" Text="Config:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="7" Grid.Column="0" Text="Config:" FontWeight="Normal"/>
         <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ConfigPath}" TextWrapping="Wrap"/>
 
-        <TextBlock Grid.Row="3" Grid.Column="0" Text="Preview mode:" FontWeight="SemiBold"/>
-        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
-        
-        <TextBlock Grid.Row="8" Grid.Column="0" Text="Deps:" FontWeight="SemiBold"/>
+        <TextBlock Grid.Row="8" Grid.Column="0" Text="Deps:" FontWeight="Normal"/>
         <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding LinuxDependenciesStatus}" TextWrapping="Wrap"/>
 
-        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Spacing="8">
+        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0" Spacing="8">
             <Button Content="Close" Click="CloseClick"/>
         </StackPanel>
     </Grid>

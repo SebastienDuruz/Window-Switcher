@@ -65,12 +65,14 @@ public partial class App : Application
         MainWindow?.Close();
     }
 
+    private void OpenMenuItemClicked(object? sender, EventArgs e)
+    {
+        MainWindow?.RestoreFromTray();
+    }
+
     private void TrayIconClicked(object? sender, EventArgs e)
     {
-        if (MainWindow is null)
-            return;
-        if (MainWindow.WindowState == WindowState.Minimized)
-            MainWindow.WindowState = WindowState.Normal;
+        MainWindow?.RestoreFromTray();
     }
 
     private static async Task StartGlobalKeyboardPipelineAsync(
