@@ -25,6 +25,7 @@
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="NSIS" Version="2.51.0" />
+        <PackageReference Include="Sentry" Version="6.2.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -33,16 +34,8 @@
     <ItemGroup>
         <AvaloniaResource Include="Assets\WS_logo.ico" />
         <AvaloniaResource Include="Assets\WS_logo.png" />
-        <Content
-            Include="Assets\WS_logo.ico"
-            CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="PreserveNewest"
-        />
-        <Content
-            Include="Assets\WS_logo.png"
-            CopyToOutputDirectory="PreserveNewest"
-            CopyToPublishDirectory="PreserveNewest"
-        />
+        <Content Include="Assets\WS_logo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+        <Content Include="Assets\WS_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
     <ItemGroup>
         <Compile Update="Windows\FloatingWindow.axaml.cs">

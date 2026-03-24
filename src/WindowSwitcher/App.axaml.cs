@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
+using Sentry;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
@@ -16,10 +18,26 @@ namespace WindowSwitcher;
 
 public partial class App : Application
 {
+    private const string SentryDsn = "";
+
     private Windows.MainWindow? MainWindow { get; set; }
     private IGlobalKeyboardService? GlobalKeyboardService { get; set; }
     private IGlobalWindowKeybindRuntimeService? GlobalWindowKeybindRuntimeService { get; set; }
     private CancellationTokenSource? GlobalKeyboardCts { get; set; }
+    private IDisposable? SentrySdkHandle { get; set; }
+
+    public App()
+    {
+        SentrySdkHandle = SentrySdk.Init(options =>
+        {
+            options.Dsn = SentryDsn;
+#if DEBUG
+            options.Debug = true;
+#endif
+        });
+
+        Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+    }
 
     public override void Initialize()
     {
@@ -163,6 +181,8 @@ public partial class App : Application
         if (GlobalKeyboardService is null)
         {
             GlobalKeyboardCts?.Dispose();
+            GlobalKeyboardCts = null;
+            await ShutdownSentryAsync().ConfigureAwait(false);
             return;
         }
 
@@ -192,6 +212,51 @@ public partial class App : Application
             GlobalKeyboardCts?.Dispose();
             GlobalKeyboardCts = null;
             GlobalKeyboardService = null;
+        }
+
+        await ShutdownSentryAsync().ConfigureAwait(false);
+    }
+
+    private static void CaptureExceptionWithSentry(Exception exception)
+    {
+        try
+        {
+            SentrySdk.CaptureException(exception);
+        }
+        catch (Exception sentryException)
+        {
+            Trace.TraceWarning(
+                $"[Sentry] Failed to capture exception cleanly: {sentryException.Message}"
+            );
+        }
+    }
+
+    private void OnDispatcherUnhandledException(
+        object? sender,
+        DispatcherUnhandledExceptionEventArgs e)
+    {
+        CaptureExceptionWithSentry(e.Exception);
+    }
+
+    private async Task ShutdownSentryAsync()
+    {
+        Dispatcher.UIThread.UnhandledException -= OnDispatcherUnhandledException;
+
+        if (SentrySdkHandle is null)
+            return;
+
+        try
+        {
+            await SentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"[Sentry] Failed to flush events cleanly: {ex.Message}");
+        }
+        finally
+        {
+            SentrySdkHandle.Dispose();
+            SentrySdkHandle = null;
         }
     }
 }
