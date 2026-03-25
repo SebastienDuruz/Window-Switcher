@@ -23,7 +23,6 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
-    private readonly IFloatingWindowHandleConfigurator _floatingWindowHandleConfigurator;
     private readonly FloatingWindowService _service;
     public WindowConfig WindowConfig { get; private set; }
 
@@ -45,8 +44,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _winAccessorBase = winAccessorBase;
         _floatingWindowHost = floatingWindowHost;
         _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
-        _floatingWindowHandleConfigurator =
-            AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
+        var floatingWindowHandleConfigurator = AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
 
@@ -65,7 +63,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         var platformHandle = TryGetPlatformHandle();
         if (platformHandle is not null)
-            _floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
+            floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
     }
 
     public sealed override void Show()
@@ -160,8 +158,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
     {
-        WindowConfig.WindowHeight = Height;
-        WindowConfig.WindowWidth = Width;
+        WindowConfig.WindowHeight = (Int32)Height;
+        WindowConfig.WindowWidth = (Int32)Width;
         _service.OnWindowResized();
     }
 
