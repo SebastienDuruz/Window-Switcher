@@ -24,7 +24,7 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.FloatingWindowsConfig);
             Assert.NotNull(sut.Config.WindowKeybindTargets);
             Assert.True(sut.Config.EnableSentry);
-            Assert.Equal(string.Empty, sut.Config.SentryDsn);
+            Assert.Equal(new ConfigFile().SentryDsn, sut.Config.SentryDsn);
         }
         finally
         {
