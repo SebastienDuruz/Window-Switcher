@@ -322,13 +322,14 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             string? restoreToken = GetStoredWaylandScreenCastRestoreToken(windowId);
 
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath createRequestPath = await screenCast
-                .CreateSessionAsync(
-                    new Dictionary<string, object>
-                    {
-                        ["handle_token"] = $"ws_create_{token}",
-                        ["session_handle_token"] = sessionToken,
-                    }
+            ObjectPath createRequestPath = await RunWithoutSynchronizationContext(() =>
+                    screenCast.CreateSessionAsync(
+                        new Dictionary<string, object>
+                        {
+                            ["handle_token"] = $"ws_create_{token}",
+                            ["session_handle_token"] = sessionToken,
+                        }
+                    )
                 )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
@@ -364,8 +365,9 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
             var sessionObjectPath = new ObjectPath(sessionPath);
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath selectRequestPath = await screenCast
-                .SelectSourcesAsync(sessionObjectPath, selectOptions)
+            ObjectPath selectRequestPath = await RunWithoutSynchronizationContext(() =>
+                    screenCast.SelectSourcesAsync(sessionObjectPath, selectOptions)
+                )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
 
@@ -384,11 +386,12 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath startRequestPath = await screenCast
-                .StartAsync(
-                    sessionObjectPath,
-                    string.Empty,
-                    new Dictionary<string, object> { ["handle_token"] = $"ws_start_{token}" }
+            ObjectPath startRequestPath = await RunWithoutSynchronizationContext(() =>
+                    screenCast.StartAsync(
+                        sessionObjectPath,
+                        string.Empty,
+                        new Dictionary<string, object> { ["handle_token"] = $"ws_start_{token}" }
+                    )
                 )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
@@ -436,8 +439,12 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 SaveStoredWaylandScreenCastStreamId(windowId, selectedStreamStableId);
 
             cancellationToken.ThrowIfCancellationRequested();
-            pipeWireRemoteHandle = await screenCast
-                .OpenPipeWireRemoteAsync(sessionObjectPath, new Dictionary<string, object>())
+            pipeWireRemoteHandle = await RunWithoutSynchronizationContext(() =>
+                    screenCast.OpenPipeWireRemoteAsync(
+                        sessionObjectPath,
+                        new Dictionary<string, object>()
+                    )
+                )
                 .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
             if (pipeWireRemoteHandle.IsInvalid || pipeWireRemoteHandle.IsClosed)
@@ -502,8 +509,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
         try
         {
-            await connection
-                .ConnectAsync()
+            await RunWithoutSynchronizationContext(() => connection.ConnectAsync())
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
                 .ConfigureAwait(false);
             return connection;
@@ -1778,13 +1784,15 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
-        (uint createResponseCode, IDictionary<string, object> _) = await screenCast
-            .CreateSessionAsync(
-                new ObjectPath(requestPaths.CreateHandlePath),
-                new ObjectPath(requestPaths.SessionPath),
-                KdePortalAppId,
-                new Dictionary<string, object>()
-            )
+        (uint createResponseCode, IDictionary<string, object> _) =
+            await RunWithoutSynchronizationContext(() =>
+                    screenCast.CreateSessionAsync(
+                        new ObjectPath(requestPaths.CreateHandlePath),
+                        new ObjectPath(requestPaths.SessionPath),
+                        KdePortalAppId,
+                        new Dictionary<string, object>()
+                    )
+                )
             .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
             .ConfigureAwait(false);
         return createResponseCode == 0;
@@ -1854,13 +1862,15 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
-        (uint selectResponseCode, IDictionary<string, object> _) = await screenCast
-            .SelectSourcesAsync(
-                new ObjectPath(requestPaths.SelectHandlePath),
-                new ObjectPath(requestPaths.SessionPath),
-                KdePortalAppId,
-                selectOptions
-            )
+        (uint selectResponseCode, IDictionary<string, object> _) =
+            await RunWithoutSynchronizationContext(() =>
+                    screenCast.SelectSourcesAsync(
+                        new ObjectPath(requestPaths.SelectHandlePath),
+                        new ObjectPath(requestPaths.SessionPath),
+                        KdePortalAppId,
+                        selectOptions
+                    )
+                )
             .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
             .ConfigureAwait(false);
         return selectResponseCode == 0;
@@ -1874,14 +1884,16 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
-        (uint startResponseCode, IDictionary<string, object> startResults) = await screenCast
-            .StartAsync(
-                new ObjectPath(requestPaths.StartHandlePath),
-                new ObjectPath(requestPaths.SessionPath),
-                KdePortalAppId,
-                string.Empty,
-                new Dictionary<string, object>()
-            )
+        (uint startResponseCode, IDictionary<string, object> startResults) =
+            await RunWithoutSynchronizationContext(() =>
+                    screenCast.StartAsync(
+                        new ObjectPath(requestPaths.StartHandlePath),
+                        new ObjectPath(requestPaths.SessionPath),
+                        KdePortalAppId,
+                        string.Empty,
+                        new Dictionary<string, object>()
+                    )
+                )
             .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
             .ConfigureAwait(false);
         if (startResponseCode != 0)
@@ -2921,8 +2933,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                     new ObjectPath(sessionPath)
                 );
 
-                await kdeSession
-                    .CloseAsync()
+                await RunWithoutSynchronizationContext(() => kdeSession.CloseAsync())
                     .WaitAsync(TimeSpan.FromSeconds(2), cancellationToken)
                     .ConfigureAwait(false);
                 return;
@@ -2933,8 +2944,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 new ObjectPath(sessionPath)
             );
 
-            await session
-                .CloseAsync()
+            await RunWithoutSynchronizationContext(() => session.CloseAsync())
                 .WaitAsync(TimeSpan.FromSeconds(2), cancellationToken)
                 .ConfigureAwait(false);
         }
