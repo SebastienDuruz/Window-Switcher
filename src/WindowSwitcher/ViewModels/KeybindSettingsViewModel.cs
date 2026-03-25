@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Avalonia.Input;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Models;
+using WindowSwitcher.Windows.Services;
 using WindowSwitcher.Windows.Keybinds;
 
 namespace WindowSwitcher.ViewModels;
@@ -17,6 +19,7 @@ public partial class KeybindSettingsViewModel : ObservableObject
 {
     private readonly IWindowKeybindManager _keybindManager;
     private readonly IWindowKeybindTargetCatalogService _targetCatalogService;
+    private readonly IGlobalKeyboardStartupStatusService _globalKeyboardStartupStatusService;
     private readonly Func<IReadOnlyCollection<WindowConfig>> _selectedClientsProvider;
     private readonly RelayCommand _beginCaptureCommand;
     private readonly RelayCommand _confirmCaptureCommand;
@@ -47,6 +50,24 @@ public partial class KeybindSettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private string _statusMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _showGlobalKeyboardSetupBanner;
+
+    [ObservableProperty]
+    private string _globalKeyboardSetupTitle = string.Empty;
+
+    [ObservableProperty]
+    private string _globalKeyboardSetupMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _globalKeyboardSetupCommand = string.Empty;
+
+    [ObservableProperty]
+    private bool _showGlobalKeyboardSetupCommand;
+
+    [ObservableProperty]
+    private string _globalKeyboardSetupGuidance = string.Empty;
 
     public IRelayCommand RefreshTargetsCommand { get; }
     public IRelayCommand BeginCaptureCommand { get; }
@@ -79,15 +100,18 @@ public partial class KeybindSettingsViewModel : ObservableObject
     public KeybindSettingsViewModel(
         IWindowKeybindManager keybindManager,
         IWindowKeybindTargetCatalogService targetCatalogService,
+        IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
         Func<IReadOnlyCollection<WindowConfig>> selectedClientsProvider
     )
     {
         ArgumentNullException.ThrowIfNull(keybindManager);
         ArgumentNullException.ThrowIfNull(targetCatalogService);
+        ArgumentNullException.ThrowIfNull(globalKeyboardStartupStatusService);
         ArgumentNullException.ThrowIfNull(selectedClientsProvider);
 
         _keybindManager = keybindManager;
         _targetCatalogService = targetCatalogService;
+        _globalKeyboardStartupStatusService = globalKeyboardStartupStatusService;
         _selectedClientsProvider = selectedClientsProvider;
 
         RefreshTargetsCommand = new RelayCommand(RefreshTargets);
@@ -100,7 +124,21 @@ public partial class KeybindSettingsViewModel : ObservableObject
         CancelCaptureCommand = _cancelCaptureCommand;
         RemoveShortcutCommand = _removeShortcutCommand;
 
+        _globalKeyboardStartupStatusService.StatusChanged += OnGlobalKeyboardStartupStatusChanged;
+        ApplyGlobalKeyboardStartupStatus(_globalKeyboardStartupStatusService.Current);
         RefreshTargets();
+    }
+
+    private void OnGlobalKeyboardStartupStatusChanged(object? sender, EventArgs e)
+    {
+        GlobalKeyboardStartupStatus status = _globalKeyboardStartupStatusService.Current;
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplyGlobalKeyboardStartupStatus(status);
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() => ApplyGlobalKeyboardStartupStatus(status));
     }
 
     public void RefreshTargets()
@@ -288,6 +326,31 @@ public partial class KeybindSettingsViewModel : ObservableObject
         _confirmCaptureCommand.NotifyCanExecuteChanged();
         _cancelCaptureCommand.NotifyCanExecuteChanged();
         _removeShortcutCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ApplyGlobalKeyboardStartupStatus(GlobalKeyboardStartupStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+
+        ShowGlobalKeyboardSetupBanner = status.HasIssue;
+        if (!status.HasIssue)
+        {
+            GlobalKeyboardSetupTitle = string.Empty;
+            GlobalKeyboardSetupMessage = string.Empty;
+            GlobalKeyboardSetupCommand = string.Empty;
+            ShowGlobalKeyboardSetupCommand = false;
+            GlobalKeyboardSetupGuidance = string.Empty;
+            return;
+        }
+
+        GlobalKeyboardSetupTitle =
+            status.IssueKind == GlobalKeyboardStartupIssueKind.LinuxInputAccessDenied
+                ? "Linux input access required"
+                : "Global shortcuts unavailable";
+        GlobalKeyboardSetupMessage = status.Message;
+        GlobalKeyboardSetupCommand = status.RemediationCommand ?? string.Empty;
+        ShowGlobalKeyboardSetupCommand = !string.IsNullOrWhiteSpace(status.RemediationCommand);
+        GlobalKeyboardSetupGuidance = status.Guidance ?? string.Empty;
     }
 }
 

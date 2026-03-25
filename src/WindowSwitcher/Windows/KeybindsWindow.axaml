@@ -14,14 +14,41 @@
         x:DataType="viewModels:KeybindSettingsViewModel">
     <Grid Margin="10"
           ColumnDefinitions="2*,3*"
-          RowDefinitions="Auto,*,Auto,Auto"
+          RowDefinitions="Auto,Auto,*,Auto,Auto"
           ColumnSpacing="12"
           RowSpacing="10">
         <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
                    Text="Configure global keybinds per target."
                    FontWeight="Normal" />
 
-        <Grid Grid.Row="1" Grid.Column="0"
+        <Border Grid.Row="1"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                Padding="10"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{StaticResource ErrorTextBrush}"
+                Background="#14FF6347"
+                IsVisible="{Binding ShowGlobalKeyboardSetupBanner}">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding GlobalKeyboardSetupTitle}"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{Binding GlobalKeyboardSetupMessage}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="Recommended command"
+                           IsVisible="{Binding ShowGlobalKeyboardSetupCommand}"
+                           Foreground="{StaticResource MutedTextBrush}" />
+                <TextBox Text="{Binding GlobalKeyboardSetupCommand}"
+                         IsVisible="{Binding ShowGlobalKeyboardSetupCommand}"
+                         IsReadOnly="True"
+                         HorizontalAlignment="Stretch" />
+                <TextBlock Text="{Binding GlobalKeyboardSetupGuidance}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2" Grid.Column="0"
               RowDefinitions="Auto,Auto,Auto,*,Auto"
               RowSpacing="8">
             <TextBlock Grid.Row="0"
@@ -73,7 +100,7 @@
                     HorizontalAlignment="Right" />
         </Grid>
 
-        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8">
+        <StackPanel Grid.Row="2" Grid.Column="1" Spacing="8">
             <TextBlock Text="Shortcuts for selected target" FontWeight="Normal" />
             <ListBox ItemsSource="{Binding Shortcuts}"
                      SelectedItem="{Binding SelectedShortcut, Mode=TwoWay}">
@@ -96,7 +123,7 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+        <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
                     Orientation="Horizontal"
                     Spacing="10"
                     VerticalAlignment="Center"
@@ -108,7 +135,7 @@
             <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
         </StackPanel>
 
-        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+        <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
                    Text="{Binding StatusMessage}"
                    Foreground="{StaticResource ErrorTextBrush}"
                    TextWrapping="Wrap" />

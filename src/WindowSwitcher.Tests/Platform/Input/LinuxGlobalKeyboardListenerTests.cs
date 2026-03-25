@@ -43,11 +43,12 @@ public sealed class LinuxGlobalKeyboardListenerTests
             },
         };
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
-            LinuxGlobalKeyboardListener.EnsureKeyboardAccess(devices)
+        LinuxInputAccessException exception = Assert.Throws<LinuxInputAccessException>(
+            () => LinuxGlobalKeyboardListener.EnsureKeyboardAccess(devices)
         );
 
         Assert.Contains("/dev/input/event*", exception.Message, StringComparison.Ordinal);
         Assert.Contains("input group", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(["/dev/input/event0", "/dev/input/event1"], exception.DevicePaths);
     }
 }
