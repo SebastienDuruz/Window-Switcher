@@ -807,7 +807,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         PortalRestoreData? restoreData = ExtractPortalRestoreData(results);
         bool restoreDataMatchesRequestedWindowTitle =
             restoreData is PortalRestoreData typedRestoreData
-            && MatchesRestoreDataWindowTitle(typedRestoreData, windowTitlePatterns);
+            && MatchesRestoreDataWindowTitle(typedRestoreData, windowTitle);
         IReadOnlyList<NodeCandidate>? discoveredNodes = null;
         bool discoveredNodesForceRefreshed = false;
         IReadOnlyCollection<WindowConfig>? windowsSnapshot = null;
@@ -950,17 +950,20 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
         MatchState EvaluateWindowTitleMatchState(PortalStreamDescriptor stream)
         {
-            if (windowTitlePatterns.Count == 0)
+            if (string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle))
                 return MatchState.Unknown;
 
-            if (ComputePatternScore(stream.NormalizedSearchText, windowTitlePatterns) > 0)
+            if (MatchesExactRequestedWindowTitle(stream))
                 return MatchState.Match;
 
             NodeCandidate? candidate = FindNodeCandidate(stream.NodeId);
             if (candidate is null)
                 return MatchState.Unknown;
 
-            return MatchesWindowId(candidate.Value, windowTitlePatterns)
+            return candidate.Value.NormalizedSearchText.Contains(
+                normalizedRequestedWindowTitle,
+                StringComparison.Ordinal
+            )
                 ? MatchState.Match
                 : MatchState.Mismatch;
         }
@@ -1042,8 +1045,14 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
         if (windowPatterns.Count > 0)
         {
+            IReadOnlyList<PortalStreamDescriptor> portalMetadataCandidates =
+                string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle)
+                    ? streams
+                    : streams
+                        .Where(stream => EvaluateWindowTitleMatchState(stream) is MatchState.Match)
+                        .ToArray();
             PortalStreamDescriptor? matchedByPortalMetadata = FindBestMatchingPortalStream(
-                streams,
+                portalMetadataCandidates,
                 blockedNodeIds,
                 windowPatterns
             );
@@ -1070,6 +1079,13 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 discoveredNodes = nodes;
                 discoveredNodesForceRefreshed = true;
             }
+            HashSet<string>? titleMatchedNodeIds =
+                string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle)
+                    ? null
+                    : streams
+                        .Where(stream => EvaluateWindowTitleMatchState(stream) is MatchState.Match)
+                        .Select(stream => stream.NodeId)
+                        .ToHashSet(StringComparer.Ordinal);
             var matchingCandidates = new List<NodeCandidate>(capacity: streams.Count);
             for (int index = 0; index < nodes.Count; index++)
             {
@@ -1077,6 +1093,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 if (!candidateIds.Contains(node.Id))
                     continue;
                 if (blockedNodeIds.Contains(node.Id))
+                    continue;
+                if (titleMatchedNodeIds is not null && !titleMatchedNodeIds.Contains(node.Id))
                     continue;
                 matchingCandidates.Add(node);
             }
@@ -2029,19 +2047,26 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
     private static bool MatchesRestoreDataWindowTitle(
         PortalRestoreData restoreData,
-        IReadOnlyCollection<string> requestedWindowTitlePatterns
+        string? requestedWindowTitle
     )
     {
-        if (requestedWindowTitlePatterns.Count == 0 || restoreData.Bytes.Length == 0)
+        string normalizedRequestedWindowTitle = NormalizeForSearch(requestedWindowTitle);
+        if (
+            string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle)
+            || restoreData.Bytes.Length == 0
+        )
             return false;
 
         string normalizedSearchText = BuildRestoreDataSearchText(restoreData);
-        return ComputePatternScore(normalizedSearchText, requestedWindowTitlePatterns) > 0;
+        return normalizedSearchText.Contains(
+            normalizedRequestedWindowTitle,
+            StringComparison.Ordinal
+        );
     }
 
     private static bool SerializedRestoreDataMatchesTitle(
         string serializedRestoreData,
-        IReadOnlyCollection<string> requestedWindowTitlePatterns
+        string? requestedWindowTitle
     )
     {
         if (
@@ -2052,7 +2077,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         )
             return false;
 
-        return MatchesRestoreDataWindowTitle(parsedRestoreData, requestedWindowTitlePatterns);
+        return MatchesRestoreDataWindowTitle(parsedRestoreData, requestedWindowTitle);
     }
 
     private static string BuildRestoreDataSearchText(PortalRestoreData restoreData)

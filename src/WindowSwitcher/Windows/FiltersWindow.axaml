@@ -4,9 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        Width="320"
-        MinWidth="320"
-        MaxWidth="320"
+        Width="300"
         CanResize="False"
         Topmost="True"
         SizeToContent="Height"
@@ -24,7 +22,7 @@
         <TabItem Header="Prefixes">
             <Grid Margin="8, 0, 8, 8"
                   RowDefinitions="Auto,*"
-                  RowSpacing="8">
+                  RowSpacing="2">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">
                     <TextBox Name="WhitelistTextBox"
@@ -42,9 +40,9 @@
             </Grid>
         </TabItem>
         <TabItem Header="Blacklist">
-            <Grid Margin="10"
+            <Grid Margin="8, 0, 8, 8"
                   RowDefinitions="Auto,*"
-                  RowSpacing="8">
+                  RowSpacing="2">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">
                     <TextBox Name="BlacklistTextBox"

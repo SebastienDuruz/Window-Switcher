@@ -227,20 +227,19 @@ public sealed partial class PipeWireFrameProvider
             return null;
 
         string? windowTitle = TryGetWindowTitleById(windowId);
-        IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
         IReadOnlyList<string> preferredValues = _waylandScreenCastMemoryCache
             .GetRestoreDataCandidates(restoreKeys);
 
         if (preferredValues.Count == 0)
             return null;
 
-        if (windowTitlePatterns.Count == 0)
+        if (string.IsNullOrWhiteSpace(windowTitle))
             return preferredValues[0];
 
         for (int index = 0; index < preferredValues.Count; index++)
         {
             string candidate = preferredValues[index];
-            if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
+            if (SerializedRestoreDataMatchesTitle(candidate, windowTitle))
                 return candidate;
         }
 

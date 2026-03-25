@@ -18,9 +18,6 @@ public partial class FiltersWindow : Window
 
     public FiltersWindow(List<string> whitelistPrefixes, List<string> blacklistPrefixes)
     {
-        ArgumentNullException.ThrowIfNull(whitelistPrefixes);
-        ArgumentNullException.ThrowIfNull(blacklistPrefixes);
-
         InitializeComponent();
 
         _whitelistService = new PrefixListService(
