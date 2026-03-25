@@ -16,7 +16,9 @@
         <TabControl.Styles>
             <Style Selector="TabItem">
                 <Setter Property="FontSize" Value="13" />
+                <Setter Property="MinHeight" Value="30" />
                 <Setter Property="Padding" Value="10,0" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
             </Style>
         </TabControl.Styles>
         <TabItem Header="Prefixes">
