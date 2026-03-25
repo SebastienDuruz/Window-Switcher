@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Avalonia.Media.Imaging;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -208,42 +207,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0)
             return null;
 
-        (string? mappedToken, string? legacyToken, bool hasPerWindowMappings) = ConfigFileAccessor
-            .GetInstance()
-            .ReadConfig(config =>
-            {
-                for (int index = 0; index < restoreKeys.Count; index++)
-                {
-                    string key = restoreKeys[index];
-                    if (
-                        !config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(
-                            key,
-                            out string? existing
-                        )
-                    )
-                        continue;
-                    if (string.IsNullOrWhiteSpace(existing))
-                        continue;
-                    return (existing, config.LinuxWaylandScreenCastRestoreToken, true);
-                }
-
-                return (
-                    (string?)null,
-                    config.LinuxWaylandScreenCastRestoreToken,
-                    config.LinuxWaylandScreenCastRestoreTokensByWindowId.Count > 0
-                );
-            });
-
-        if (!string.IsNullOrWhiteSpace(mappedToken))
-            return mappedToken.Trim();
-
-        if (hasPerWindowMappings)
-            return null;
-
-        if (string.IsNullOrWhiteSpace(legacyToken))
-            return null;
-
-        return legacyToken.Trim();
+        return _waylandScreenCastMemoryCache.GetRestoreToken(restoreKeys);
     }
 
     private void SaveStoredWaylandScreenCastRestoreToken(string windowId, string restoreToken)
@@ -253,37 +217,7 @@ public sealed partial class PipeWireFrameProvider
             return;
 
         ArgumentException.ThrowIfNullOrWhiteSpace(restoreToken);
-
-        string normalizedToken = restoreToken.Trim();
-        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        bool needsUpdate = configAccessor.ReadConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-            {
-                string key = restoreKeys[index];
-                if (
-                    !config.LinuxWaylandScreenCastRestoreTokensByWindowId.TryGetValue(
-                        key,
-                        out string? existing
-                    ) || !string.Equals(existing, normalizedToken, StringComparison.Ordinal)
-                )
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-        if (!needsUpdate)
-            return;
-
-        configAccessor.UpdateConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-                config.LinuxWaylandScreenCastRestoreTokensByWindowId[restoreKeys[index]] =
-                    normalizedToken;
-        });
-        configAccessor.WriteUserSettings();
+        _waylandScreenCastMemoryCache.SetRestoreToken(restoreKeys, restoreToken);
     }
 
     private string? GetStoredWaylandScreenCastRestoreData(string windowId)
@@ -294,46 +228,23 @@ public sealed partial class PipeWireFrameProvider
 
         string? windowTitle = TryGetWindowTitleById(windowId);
         IReadOnlyCollection<string> windowTitlePatterns = BuildWindowTitlePatterns(windowTitle);
-        string? configuredValue = ConfigFileAccessor
-            .GetInstance()
-            .ReadConfig(config =>
-            {
-                var preferredValues = new List<string>(capacity: restoreKeys.Count);
-                for (int index = 0; index < restoreKeys.Count; index++)
-                {
-                    string key = restoreKeys[index];
-                    if (
-                        !config.LinuxWaylandScreenCastRestoreDataByWindowId.TryGetValue(
-                            key,
-                            out string? value
-                        )
-                    )
-                        continue;
-                    if (string.IsNullOrWhiteSpace(value))
-                        continue;
-                    preferredValues.Add(value.Trim());
-                }
+        IReadOnlyList<string> preferredValues = _waylandScreenCastMemoryCache
+            .GetRestoreDataCandidates(restoreKeys);
 
-                if (preferredValues.Count == 0)
-                    return null;
-
-                if (windowTitlePatterns.Count == 0)
-                    return preferredValues[0];
-
-                for (int index = 0; index < preferredValues.Count; index++)
-                {
-                    string candidate = preferredValues[index];
-                    if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
-                        return candidate;
-                }
-
-                return null;
-            });
-
-        if (string.IsNullOrWhiteSpace(configuredValue))
+        if (preferredValues.Count == 0)
             return null;
 
-        return configuredValue.Trim();
+        if (windowTitlePatterns.Count == 0)
+            return preferredValues[0];
+
+        for (int index = 0; index < preferredValues.Count; index++)
+        {
+            string candidate = preferredValues[index];
+            if (SerializedRestoreDataMatchesTitle(candidate, windowTitlePatterns))
+                return candidate;
+        }
+
+        return null;
     }
 
     private void SaveStoredWaylandScreenCastRestoreData(
@@ -345,36 +256,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0 || string.IsNullOrWhiteSpace(serializedRestoreData))
             return;
 
-        string normalizedValue = serializedRestoreData.Trim();
-        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        bool needsUpdate = configAccessor.ReadConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-            {
-                string key = restoreKeys[index];
-                if (
-                    !config.LinuxWaylandScreenCastRestoreDataByWindowId.TryGetValue(
-                        key,
-                        out string? existing
-                    ) || !string.Equals(existing, normalizedValue, StringComparison.Ordinal)
-                )
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-        if (!needsUpdate)
-            return;
-
-        configAccessor.UpdateConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-                config.LinuxWaylandScreenCastRestoreDataByWindowId[restoreKeys[index]] =
-                    normalizedValue;
-        });
-        configAccessor.WriteUserSettings();
+        _waylandScreenCastMemoryCache.SetRestoreData(restoreKeys, serializedRestoreData);
     }
 
     private string? GetStoredWaylandScreenCastStreamId(string windowId)
@@ -383,32 +265,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0)
             return null;
 
-        string? configuredId = ConfigFileAccessor
-            .GetInstance()
-            .ReadConfig(config =>
-            {
-                for (int index = 0; index < restoreKeys.Count; index++)
-                {
-                    string key = restoreKeys[index];
-                    if (
-                        !config.LinuxWaylandScreenCastStreamIdsByWindowId.TryGetValue(
-                            key,
-                            out string? value
-                        )
-                    )
-                        continue;
-                    if (string.IsNullOrWhiteSpace(value))
-                        continue;
-                    return value;
-                }
-
-                return null;
-            });
-
-        if (string.IsNullOrWhiteSpace(configuredId))
-            return null;
-
-        return configuredId.Trim();
+        return _waylandScreenCastMemoryCache.GetStreamId(restoreKeys);
     }
 
     private void SaveStoredWaylandScreenCastStreamId(string windowId, string streamId)
@@ -417,36 +274,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0 || string.IsNullOrWhiteSpace(streamId))
             return;
 
-        string normalizedStreamId = streamId.Trim();
-        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        bool needsUpdate = configAccessor.ReadConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-            {
-                string key = restoreKeys[index];
-                if (
-                    !config.LinuxWaylandScreenCastStreamIdsByWindowId.TryGetValue(
-                        key,
-                        out string? existing
-                    ) || !string.Equals(existing, normalizedStreamId, StringComparison.Ordinal)
-                )
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-        if (!needsUpdate)
-            return;
-
-        configAccessor.UpdateConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-                config.LinuxWaylandScreenCastStreamIdsByWindowId[restoreKeys[index]] =
-                    normalizedStreamId;
-        });
-        configAccessor.WriteUserSettings();
+        _waylandScreenCastMemoryCache.SetStreamId(restoreKeys, streamId);
     }
 
     private void ClearStoredWaylandScreenCastArtifacts(string windowId)
@@ -455,30 +283,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0)
             return;
 
-        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        bool changed = false;
-        configAccessor.UpdateConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-            {
-                string key = restoreKeys[index];
-                changed |= config.LinuxWaylandScreenCastRestoreTokensByWindowId.Remove(key);
-                changed |= config.LinuxWaylandScreenCastRestoreDataByWindowId.Remove(key);
-                changed |= config.LinuxWaylandScreenCastStreamIdsByWindowId.Remove(key);
-            }
-
-            if (
-                !string.IsNullOrWhiteSpace(config.LinuxWaylandScreenCastRestoreToken)
-                && config.LinuxWaylandScreenCastRestoreTokensByWindowId.Count == 0
-            )
-            {
-                config.LinuxWaylandScreenCastRestoreToken = string.Empty;
-                changed = true;
-            }
-        });
-
-        if (changed)
-            configAccessor.WriteUserSettings();
+        _waylandScreenCastMemoryCache.ClearArtifacts(restoreKeys);
     }
 
     private void ClearStoredWaylandScreenCastStreamId(string windowId)
@@ -487,16 +292,7 @@ public sealed partial class PipeWireFrameProvider
         if (restoreKeys.Count == 0)
             return;
 
-        ConfigFileAccessor configAccessor = ConfigFileAccessor.GetInstance();
-        bool changed = false;
-        configAccessor.UpdateConfig(config =>
-        {
-            for (int index = 0; index < restoreKeys.Count; index++)
-                changed |= config.LinuxWaylandScreenCastStreamIdsByWindowId.Remove(restoreKeys[index]);
-        });
-
-        if (changed)
-            configAccessor.WriteUserSettings();
+        _waylandScreenCastMemoryCache.ClearStreamId(restoreKeys);
     }
 
     private IReadOnlyList<string> BuildWaylandRestoreKeys(string windowId)

@@ -59,6 +59,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
     private readonly Dictionary<string, string> _pendingNodeIdsByWindow = new(
         StringComparer.Ordinal
     );
+    private readonly WaylandScreenCastMemoryCache _waylandScreenCastMemoryCache =
+        WaylandScreenCastMemoryCache.Shared;
     private IReadOnlyList<NodeCandidate> _cachedNodeCandidates = Array.Empty<NodeCandidate>();
     private DateTime _nodeCandidatesCachedAtUtc = DateTime.MinValue;
     private bool _nodeCandidatesRefreshInProgress;
