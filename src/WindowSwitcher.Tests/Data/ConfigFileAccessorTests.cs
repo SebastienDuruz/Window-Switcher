@@ -33,7 +33,7 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
-    public void ReadUserSettings_NormalizesCollectionsAndRestoreMaps()
+    public void ReadUserSettings_NormalizesCollections()
     {
         string dataFolder = CreateTempDataFolder();
         try
@@ -43,20 +43,6 @@ public sealed class ConfigFileAccessorTests
                   "WhitelistPrefixes": null,
                   "BlacklistPrefixes": null,
                   "SentryDsn": null,
-                  "LinuxWaylandScreenCastRestoreToken": null,
-                  "LinuxWaylandScreenCastRestoreTokensByWindowId": {
-                    "  win-1  ": "  token-1  ",
-                    "": "ignored",
-                    "win-2": "   "
-                  },
-                  "LinuxWaylandScreenCastRestoreDataByWindowId": {
-                    "  win-2  ": "  restore-data  ",
-                    "  ": "ignored"
-                  },
-                  "LinuxWaylandScreenCastStreamIdsByWindowId": {
-                    "  win-3  ": "  stream-3  ",
-                    "win-4": ""
-                  },
                   "FloatingWindowsConfig": [
                     null,
                     {
@@ -104,25 +90,6 @@ public sealed class ConfigFileAccessorTests
             Assert.Empty(config.BlacklistPrefixes);
             Assert.True(config.EnableSentry);
             Assert.Equal(string.Empty, config.SentryDsn);
-            Assert.Equal(string.Empty, config.LinuxWaylandScreenCastRestoreToken);
-
-            Assert.Single(config.LinuxWaylandScreenCastRestoreTokensByWindowId);
-            Assert.Equal(
-                "token-1",
-                config.LinuxWaylandScreenCastRestoreTokensByWindowId["win-1"]
-            );
-
-            Assert.Single(config.LinuxWaylandScreenCastRestoreDataByWindowId);
-            Assert.Equal(
-                "restore-data",
-                config.LinuxWaylandScreenCastRestoreDataByWindowId["win-2"]
-            );
-
-            Assert.Single(config.LinuxWaylandScreenCastStreamIdsByWindowId);
-            Assert.Equal(
-                "stream-3",
-                config.LinuxWaylandScreenCastStreamIdsByWindowId["win-3"]
-            );
 
             WindowConfig persistedConfig = Assert.Single(
                 config.FloatingWindowsConfig.Where(entry => entry is not null).Select(entry => entry!)

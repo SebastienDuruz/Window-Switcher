@@ -62,44 +62,6 @@ namespace WindowSwitcher.Lib.Data;
                 .Build(_config.WindowKeybindTargets)
                 .Targets.Select(KeybindCatalogBuilder.CloneTarget)
                 .ToList();
-            _config.LinuxWaylandScreenCastRestoreToken ??= string.Empty;
-            _config.LinuxWaylandScreenCastRestoreTokensByWindowId ??= new Dictionary<
-                string,
-                string
-            >(StringComparer.Ordinal);
-            _config.LinuxWaylandScreenCastRestoreTokensByWindowId = _config
-                .LinuxWaylandScreenCastRestoreTokensByWindowId.Where(entry =>
-                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
-                )
-                .ToDictionary(
-                    entry => entry.Key.Trim(),
-                    entry => entry.Value.Trim(),
-                    StringComparer.Ordinal
-                );
-            _config.LinuxWaylandScreenCastRestoreDataByWindowId ??= new Dictionary<string, string>(
-                StringComparer.Ordinal
-            );
-            _config.LinuxWaylandScreenCastRestoreDataByWindowId = _config
-                .LinuxWaylandScreenCastRestoreDataByWindowId.Where(entry =>
-                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
-                )
-                .ToDictionary(
-                    entry => entry.Key.Trim(),
-                    entry => entry.Value.Trim(),
-                    StringComparer.Ordinal
-                );
-            _config.LinuxWaylandScreenCastStreamIdsByWindowId ??= new Dictionary<string, string>(
-                StringComparer.Ordinal
-            );
-            _config.LinuxWaylandScreenCastStreamIdsByWindowId = _config
-                .LinuxWaylandScreenCastStreamIdsByWindowId.Where(entry =>
-                    !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
-                )
-                .ToDictionary(
-                    entry => entry.Key.Trim(),
-                    entry => entry.Value.Trim(),
-                    StringComparer.Ordinal
-                );
             _config.FloatingWindowsConfig = _config
                 .FloatingWindowsConfig.Where(x => x != null)
                 .ToList();
