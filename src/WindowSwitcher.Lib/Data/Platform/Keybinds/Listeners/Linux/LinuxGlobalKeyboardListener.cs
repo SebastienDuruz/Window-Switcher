@@ -18,8 +18,6 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 [SupportedOSPlatform("linux")]
 public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 {
-    private const string PermissionDiagnostic =
-        "Reading /dev/input/event* requires elevated access. Use root, add the user to the input group, or configure udev rules.";
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly InputDeviceDiscovery _discovery = new(HandleInputServiceLog);
     private readonly EventDecoder _decoder = new();
@@ -197,10 +195,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             return;
         }
 
-        string paths = string.Join(", ", deniedDevices.Select(device => device.Path));
-        throw new InvalidOperationException(
-            $"Global keyboard startup failed on Linux due to inaccessible input devices ({paths}). {PermissionDiagnostic}"
-        );
+        throw new LinuxInputAccessException(deniedDevices.Select(device => device.Path).ToArray());
     }
 
     private async Task ReadDeviceLoopAsync(

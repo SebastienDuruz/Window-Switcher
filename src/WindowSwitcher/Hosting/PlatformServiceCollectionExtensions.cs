@@ -10,6 +10,7 @@ using WindowSwitcher.Lib.Data.Platform.Policies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Hosting;
 
@@ -59,6 +60,7 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<IGlobalKeyboardListener>(serviceProvider =>
             serviceProvider.GetRequiredService<IGlobalKeyboardListenerFactory>().Create()
         );
+        services.AddSingleton<IGlobalKeyboardStartupStatusService, GlobalKeyboardStartupStatusService>();
         services.AddSingleton<IGlobalKeyboardService, GlobalKeyboardService>();
         services.AddSingleton<IWindowKeybindManager, WindowKeybindManager>();
         services.AddSingleton<IWindowKeybindTargetCatalogService, WindowKeybindTargetCatalogService>();

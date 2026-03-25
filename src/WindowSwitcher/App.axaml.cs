@@ -17,6 +17,7 @@ using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Theming;
+using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher;
 
@@ -53,10 +54,13 @@ public partial class App : Application
         GlobalKeyboardService = AppServiceProvider.GetRequiredService<IGlobalKeyboardService>();
         GlobalWindowKeybindRuntimeService =
             AppServiceProvider.GetRequiredService<IGlobalWindowKeybindRuntimeService>();
+        IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService =
+            AppServiceProvider.GetRequiredService<IGlobalKeyboardStartupStatusService>();
         GlobalKeyboardCts = new CancellationTokenSource();
         _ = StartGlobalKeyboardPipelineAsync(
             GlobalWindowKeybindRuntimeService,
             GlobalKeyboardService,
+            globalKeyboardStartupStatusService,
             GlobalKeyboardCts.Token
         );
 
@@ -90,21 +94,28 @@ public partial class App : Application
     private static async Task StartGlobalKeyboardPipelineAsync(
         IGlobalWindowKeybindRuntimeService runtimeService,
         IGlobalKeyboardService globalKeyboardService,
+        IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
         CancellationToken cancellationToken)
     {
         await StartGlobalWindowKeybindRuntimeServiceAsync(runtimeService, cancellationToken)
             .ConfigureAwait(false);
-        await StartGlobalKeyboardServiceAsync(globalKeyboardService, cancellationToken)
+        await StartGlobalKeyboardServiceAsync(
+                globalKeyboardService,
+                globalKeyboardStartupStatusService,
+                cancellationToken
+            )
             .ConfigureAwait(false);
     }
 
     private static async Task StartGlobalKeyboardServiceAsync(
         IGlobalKeyboardService globalKeyboardService,
+        IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
         CancellationToken cancellationToken)
     {
         try
         {
             await globalKeyboardService.StartAsync(cancellationToken).ConfigureAwait(false);
+            globalKeyboardStartupStatusService.ReportStarted();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -112,6 +123,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            globalKeyboardStartupStatusService.ReportStartupFailure(ex);
             Trace.TraceWarning(
                 $"[GlobalKeyboard] Global keyboard listening is unavailable: {ex.Message}"
             );

@@ -28,10 +28,13 @@ public partial class KeybindsWindow : Window
             AppServiceProvider.GetRequiredService<IWindowKeybindManager>();
         IWindowKeybindTargetCatalogService targetCatalogService =
             AppServiceProvider.GetRequiredService<IWindowKeybindTargetCatalogService>();
+        IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService =
+            AppServiceProvider.GetRequiredService<IGlobalKeyboardStartupStatusService>();
 
         _viewModel = new KeybindSettingsViewModel(
             keybindManager,
             targetCatalogService,
+            globalKeyboardStartupStatusService,
             selectedClientsProvider
         );
         DataContext = _viewModel;
