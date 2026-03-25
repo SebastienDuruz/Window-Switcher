@@ -5,89 +5,82 @@ namespace WindowSwitcher.Lib.Models;
 
 public class WindowConfig : INotifyPropertyChanged
 {
-    private string _windowTitle = string.Empty;
-    private string _shortWindowTitle = string.Empty;
-    private double _windowWidth = 100;
-    private double _windowHeight = 83;
-    private int _windowLeft = 100;
-    private int _windowTop = 100;
-
     public string WindowId { get; set; } = string.Empty;
     public string ProcessName { get; set; } = string.Empty;
     public string ConfigKey { get; set; } = string.Empty;
 
     public string WindowTitle
     {
-        get => _windowTitle;
+        get;
         set
         {
-            if (_windowTitle == value)
+            if (field == value)
                 return;
-            _windowTitle = value;
-            ShortWindowTitle = _windowTitle.Length > 40 ? $"{_windowTitle[..40]}..." : _windowTitle;
+            field = value;
+            ShortWindowTitle = field.Length > 40 ? $"{field[..40]}..." : field;
             OnPropertyChanged();
         }
-    }
+    } = string.Empty;
 
     public string ShortWindowTitle
     {
-        get => _shortWindowTitle;
+        get;
         set
         {
-            if (_shortWindowTitle == value)
+            if (field == value)
                 return;
-            _shortWindowTitle = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = string.Empty;
 
-    public double WindowWidth
+    public int WindowWidth
     {
-        get => _windowWidth;
+        get;
         set
         {
-            if (_windowWidth == value)
+            if (field == value)
                 return;
-            _windowWidth = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = 100;
 
-    public double WindowHeight
+    public int WindowHeight
     {
-        get => _windowHeight;
+        get;
         set
         {
-            if (_windowHeight == value)
+            if (field == value)
                 return;
-            _windowHeight = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = 83;
 
     public int WindowLeft
     {
-        get => _windowLeft;
+        get;
         set
         {
-            if (_windowLeft == value)
+            if (field == value)
                 return;
-            _windowLeft = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = 100;
 
     public int WindowTop
     {
-        get => _windowTop;
+        get;
         set
         {
-            if (_windowTop == value)
+            if (field == value)
                 return;
-            _windowTop = value;
+            field = value;
             OnPropertyChanged();
         }
-    }
+    } = 100;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
