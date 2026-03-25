@@ -10,7 +10,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using Sentry;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
@@ -47,9 +46,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public MainWindow()
     {
         InitializeComponent();
-        
-        SentrySdk.CaptureMessage("Hello Sentry");
-        
+
         PropertyChanged += OnWindowPropertyChanged;
         _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;

@@ -18,8 +18,6 @@ namespace WindowSwitcher;
 
 public partial class App : Application
 {
-    private const string SentryDsn = "";
-
     private Windows.MainWindow? MainWindow { get; set; }
     private IGlobalKeyboardService? GlobalKeyboardService { get; set; }
     private IGlobalWindowKeybindRuntimeService? GlobalWindowKeybindRuntimeService { get; set; }
@@ -28,15 +26,7 @@ public partial class App : Application
 
     public App()
     {
-        SentrySdkHandle = SentrySdk.Init(options =>
-        {
-            options.Dsn = SentryDsn;
-#if DEBUG
-            options.Debug = true;
-#endif
-        });
-
-        Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+        TryInitializeSentry();
     }
 
     public override void Initialize()
@@ -217,8 +207,43 @@ public partial class App : Application
         await ShutdownSentryAsync().ConfigureAwait(false);
     }
 
-    private static void CaptureExceptionWithSentry(Exception exception)
+    /// <summary>
+    /// Initialize Sentry if enabled AND sentryDsn is provided
+    /// </summary>
+    private void TryInitializeSentry()
     {
+        (bool enableSentry, string sentryDsn) = ConfigFileAccessor.GetInstance().ReadConfig(config =>
+            (config.EnableSentry, config.SentryDsn)
+        );
+        if (!enableSentry)
+            return;
+
+        if (string.IsNullOrWhiteSpace(sentryDsn))
+            return;
+
+        try
+        {
+            SentrySdkHandle = SentrySdk.Init(options =>
+            {
+                options.Dsn = sentryDsn.Trim();
+#if DEBUG
+                options.Debug = true;
+#endif
+            });
+
+            Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"[Sentry] Failed to initialize cleanly: {ex.Message}");
+        }
+    }
+
+    private void CaptureExceptionWithSentry(Exception exception)
+    {
+        if (SentrySdkHandle is null)
+            return;
+
         try
         {
             SentrySdk.CaptureException(exception);

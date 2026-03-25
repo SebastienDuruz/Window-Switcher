@@ -23,6 +23,8 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.BlacklistPrefixes);
             Assert.NotNull(sut.Config.FloatingWindowsConfig);
             Assert.NotNull(sut.Config.WindowKeybindTargets);
+            Assert.True(sut.Config.EnableSentry);
+            Assert.Equal(string.Empty, sut.Config.SentryDsn);
         }
         finally
         {
@@ -40,6 +42,7 @@ public sealed class ConfigFileAccessorTests
                 {
                   "WhitelistPrefixes": null,
                   "BlacklistPrefixes": null,
+                  "SentryDsn": null,
                   "LinuxWaylandScreenCastRestoreToken": null,
                   "LinuxWaylandScreenCastRestoreTokensByWindowId": {
                     "  win-1  ": "  token-1  ",
@@ -99,6 +102,8 @@ public sealed class ConfigFileAccessorTests
 
             Assert.Empty(config.WhitelistPrefixes);
             Assert.Empty(config.BlacklistPrefixes);
+            Assert.True(config.EnableSentry);
+            Assert.Equal(string.Empty, config.SentryDsn);
             Assert.Equal(string.Empty, config.LinuxWaylandScreenCastRestoreToken);
 
             Assert.Single(config.LinuxWaylandScreenCastRestoreTokensByWindowId);
@@ -272,6 +277,50 @@ public sealed class ConfigFileAccessorTests
 
             string json = File.ReadAllText(sut.GetFilePath());
             Assert.Contains("\"WindowWidth\": 777", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void WriteUserSettings_PersistsEnableSentryValueToDisk()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+
+            sut.UpdateConfig(config => config.EnableSentry = false);
+            sut.WriteUserSettings();
+
+            string json = File.ReadAllText(sut.GetFilePath());
+            Assert.Contains("\"EnableSentry\": false", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void WriteUserSettings_PersistsSentryDsnValueToDisk()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+
+            sut.UpdateConfig(config => config.SentryDsn = "https://examplePublicKey@o0.ingest.sentry.io/0");
+            sut.WriteUserSettings();
+
+            string json = File.ReadAllText(sut.GetFilePath());
+            Assert.Contains(
+                "\"SentryDsn\": \"https://examplePublicKey@o0.ingest.sentry.io/0\"",
+                json,
+                StringComparison.Ordinal
+            );
         }
         finally
         {
