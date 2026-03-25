@@ -296,6 +296,20 @@ Global keybinds are optional on Linux, but when you use them the listener needs:
 - Write access to `/dev/uinput` or `/dev/input/uinput`
 - Typically: root, membership in the appropriate input group, or custom udev rules
 
+### Error reporting with Sentry
+
+Window Switcher uses [Sentry](https://sentry.io/) to collect unhandled exceptions. This helps diagnose crashes and unexpected failures more efficiently during development and maintenance.
+
+If you do not want your exceptions to be sent, open the application `config.json` file and set:
+
+```json
+{
+  "EnableSentry": false
+}
+```
+
+You can find the config file path from `Help > About`.
+
 ## License
 
 This project is licensed under the [GPL3 License](LICENSE).
