@@ -83,7 +83,7 @@ public sealed partial class PipeWireFrameProvider
             {
                 if (_disposed)
                 {
-                    created.Dispose(ClosePortalSession);
+                    created.Dispose(ClosePortalSessionSynchronously);
                     return null;
                 }
 

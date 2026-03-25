@@ -253,10 +253,12 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         _disposed = true;
 
         List<WindowCaptureContext> captures;
+        List<Task<WindowCaptureContext?>> captureCreationTasks;
         List<CancellationTokenSource> captureCreationCancellations;
         lock (_capturesSync)
         {
             captures = _captures.Values.ToList();
+            captureCreationTasks = _captureCreationTasks.Values.ToList();
             captureCreationCancellations = _captureCreationCancellationSources.Values.ToList();
             _captures.Clear();
             _captureCreationTasks.Clear();
@@ -264,13 +266,15 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             _pendingNodeIdsByWindow.Clear();
         }
 
-        foreach (WindowCaptureContext capture in captures)
-            capture.Dispose(ClosePortalSession);
         foreach (CancellationTokenSource cancellation in captureCreationCancellations)
-        {
             cancellation.Cancel();
+
+        WaitForCaptureCreationTasksToComplete(captureCreationTasks);
+
+        foreach (WindowCaptureContext capture in captures)
+            capture.Dispose(ClosePortalSessionSynchronously);
+        foreach (CancellationTokenSource cancellation in captureCreationCancellations)
             cancellation.Dispose();
-        }
 
         Connection? sessionBusConnection;
         lock (_dbusSync)
@@ -525,14 +529,17 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
     private static Connection CreateSessionBusConnection()
     {
-        var connectionOptions = new ClientConnectionOptions(Address.Session)
+        return RunWithoutSynchronizationContext(() =>
         {
-            // Avoid capturing AvaloniaSynchronizationContext and dispatching callbacks on shutdown.
-            SynchronizationContext = null,
-            AutoConnect = true,
-            RunContinuationsAsynchronously = true,
-        };
-        return new Connection(connectionOptions);
+            var connectionOptions = new ClientConnectionOptions(Address.Session)
+            {
+                // Avoid capturing AvaloniaSynchronizationContext and dispatching callbacks on shutdown.
+                SynchronizationContext = null,
+                AutoConnect = true,
+                RunContinuationsAsynchronously = true,
+            };
+            return new Connection(connectionOptions);
+        });
     }
 
     private static void DisposeSessionBusConnection(Connection? connection)
@@ -568,15 +575,16 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
 
         try
         {
-            watcher = await request
-                .WatchResponseAsync(response =>
-                {
-                    IDictionary<string, object> safeResults =
-                        response.Results ?? new Dictionary<string, object>();
-                    _ = completion.TrySetResult(
-                        new PortalRequestResponse(response.Response, safeResults)
-                    );
-                })
+            watcher = await RunWithoutSynchronizationContext(() =>
+                    request.WatchResponseAsync(response =>
+                    {
+                        IDictionary<string, object> safeResults =
+                            response.Results ?? new Dictionary<string, object>();
+                        _ = completion.TrySetResult(
+                            new PortalRequestResponse(response.Response, safeResults)
+                        );
+                    })
+                )
                 .ConfigureAwait(false);
 
             return await completion
@@ -2791,6 +2799,31 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         _ = ClosePortalSessionBestEffortAsync(sessionPath, sessionDestination);
     }
 
+    private void ClosePortalSessionSynchronously(
+        string sessionPath,
+        string? sessionDestination = null
+    )
+    {
+        if (string.IsNullOrWhiteSpace(sessionPath))
+            return;
+
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            RunWithoutSynchronizationContext(() =>
+            {
+                ClosePortalSessionAsync(sessionPath, sessionDestination, timeoutCts.Token)
+                    .GetAwaiter()
+                    .GetResult();
+                return 0;
+            });
+        }
+        catch
+        {
+            // Best effort close.
+        }
+    }
+
     private async Task ClosePortalSessionBestEffortAsync(
         string sessionPath,
         string? sessionDestination
@@ -2805,6 +2838,50 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         catch
         {
             // Best effort close.
+        }
+    }
+
+    private static void WaitForCaptureCreationTasksToComplete(
+        IReadOnlyCollection<Task<WindowCaptureContext?>> captureCreationTasks
+    )
+    {
+        if (captureCreationTasks.Count == 0)
+            return;
+
+        Task[] taskArray = captureCreationTasks.Select(static task => (Task)task).ToArray();
+        try
+        {
+            _ = Task.WaitAll(taskArray, millisecondsTimeout: 2_000);
+        }
+        catch (AggregateException)
+        {
+            // Best effort shutdown.
+        }
+
+        for (int index = 0; index < taskArray.Length; index++)
+        {
+            Task task = taskArray[index];
+            if (task.IsFaulted)
+                _ = task.Exception;
+        }
+    }
+
+    private static T RunWithoutSynchronizationContext<T>(Func<T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        SynchronizationContext? previous = SynchronizationContext.Current;
+        if (previous is null)
+            return action();
+
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(null);
+            return action();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
         }
     }
 
