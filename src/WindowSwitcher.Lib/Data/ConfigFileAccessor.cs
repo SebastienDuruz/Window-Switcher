@@ -56,6 +56,7 @@ namespace WindowSwitcher.Lib.Data;
 
             _config.WhitelistPrefixes ??= new List<string>();
             _config.BlacklistPrefixes ??= new List<string>();
+            _config.SentryDsn ??= string.Empty;
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.WindowKeybindTargets = KeybindCatalogBuilder
                 .Build(_config.WindowKeybindTargets)
