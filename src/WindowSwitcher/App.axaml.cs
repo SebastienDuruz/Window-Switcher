@@ -232,6 +232,8 @@ public partial class App : Application
             });
 
             Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += OnCurrentDomainUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
         }
         catch (Exception ex)
         {
@@ -263,9 +265,31 @@ public partial class App : Application
         CaptureExceptionWithSentry(e.Exception);
     }
 
+    private void OnCurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        CaptureExceptionWithSentry(CreateUnhandledException(e.ExceptionObject));
+    }
+
+    private void OnTaskSchedulerUnobservedTaskException(
+        object? sender,
+        UnobservedTaskExceptionEventArgs e)
+    {
+        CaptureExceptionWithSentry(e.Exception);
+    }
+
+    internal static Exception CreateUnhandledException(object? exceptionObject)
+    {
+        return exceptionObject as Exception
+            ?? new InvalidOperationException(
+                $"Unhandled exception payload was not an Exception instance: {exceptionObject?.GetType().FullName ?? "null"}"
+            );
+    }
+
     private async Task ShutdownSentryAsync()
     {
         Dispatcher.UIThread.UnhandledException -= OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException -= OnCurrentDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException -= OnTaskSchedulerUnobservedTaskException;
 
         if (SentrySdkHandle is null)
             return;
