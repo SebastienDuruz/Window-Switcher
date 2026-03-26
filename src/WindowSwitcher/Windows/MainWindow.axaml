@@ -24,6 +24,8 @@
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
+                <MenuItem Header="_Clean config file" Click="ClearFloatingWindowSettings"></MenuItem>
+                <MenuItem Header="_Generate new config file" Click="ResetUserSettings"></MenuItem>
             </MenuItem>
             <MenuItem Header="_Help" Padding="4">
                 <MenuItem Header="_About" Click="OpenAppInfoWindowClick" />

@@ -109,6 +109,18 @@ namespace WindowSwitcher.Lib.Data;
         });
     }
 
+    public void ResetUserSettings()
+    {
+        _config = new ConfigFile();
+        WriteUserSettings();
+    }
+
+    public void ResetFloatingWindowSettings()
+    {
+        _config.FloatingWindowsConfig.Clear();
+        WriteUserSettings();
+    }
+
     public void SavePrefixesList(List<string> prefixes)
     {
         UpdateConfig(config => config.WhitelistPrefixes = prefixes.ToList());
