@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Sentry;
+using Tmds.DBus;
 using WindowSwitcher.Diagnostics;
 using WindowSwitcher.Lib.Models;
 using Xunit;
@@ -11,6 +12,7 @@ namespace WindowSwitcher.Tests;
 public sealed class SentryAppTelemetryTests
 {
     private const string ValidDsn = "https://examplePublicKey@o0.ingest.sentry.io/0";
+    private const string ValidTelemetryUserId = "e084ab00-8f33-4ad4-955a-bbc615590c6e";
     private static readonly string DefaultDsn = new ConfigFile().SentryDsn;
     public static TheoryData<string?, string> ResolveSentryDsnCases =>
         new()
@@ -23,6 +25,12 @@ public sealed class SentryAppTelemetryTests
             { string.Empty, DefaultDsn },
             { "   ", DefaultDsn },
             { null, DefaultDsn }
+        };
+    public static TheoryData<string?, string> ResolveTelemetryUserIdExplicitCases =>
+        new()
+        {
+            { ValidTelemetryUserId, ValidTelemetryUserId },
+            { "  e084ab00-8f33-4ad4-955a-bbc615590c6e  ", ValidTelemetryUserId }
         };
 
     [Fact]
@@ -119,13 +127,36 @@ public sealed class SentryAppTelemetryTests
         Assert.Equal(expected, resolvedDsn);
     }
 
+    [Theory]
+    [MemberData(nameof(ResolveTelemetryUserIdExplicitCases))]
+    public void ResolveTelemetryUserId_ReturnsConfiguredValueOrFallback(
+        string? telemetryUserId,
+        string expected
+    )
+    {
+        string resolvedTelemetryUserId = SentryAppTelemetry.ResolveTelemetryUserId(telemetryUserId);
+
+        Assert.Equal(expected, resolvedTelemetryUserId);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-guid")]
+    [InlineData(null)]
+    public void ResolveTelemetryUserId_ReturnsValidGuid_WhenFallbackIsUsed(string? telemetryUserId)
+    {
+        string resolvedTelemetryUserId = SentryAppTelemetry.ResolveTelemetryUserId(telemetryUserId);
+
+        Assert.True(Guid.TryParse(resolvedTelemetryUserId, out _));
+    }
+
     [Fact]
     public void Initialize_ConfiguresSdkAndBaseScope_WhenEnabled()
     {
         var sentrySdk = new FakeSentrySdkAdapter();
         var sut = CreateSut(
             sentrySdk,
-            new FakeTelemetrySettingsProvider(true, ValidDsn)
+            new FakeTelemetrySettingsProvider(true, ValidDsn, ValidTelemetryUserId)
         );
 
         sut.Initialize();
@@ -140,13 +171,18 @@ public sealed class SentryAppTelemetryTests
         Assert.True(sentrySdk.ScopeTags.ContainsKey("session_type"));
         Assert.Equal("0.9.0", sentrySdk.ScopeTags["app_version"]);
         Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.ScopeTags["build_channel"]);
+        Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeTags["telemetry_user_id"]);
+        Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeUserId);
     }
 
     [Fact]
     public void Initialize_SkipsSdkInitialization_WhenDisabled()
     {
         var sentrySdk = new FakeSentrySdkAdapter();
-        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(false, ValidDsn));
+        var sut = CreateSut(
+            sentrySdk,
+            new FakeTelemetrySettingsProvider(false, ValidDsn, ValidTelemetryUserId)
+        );
 
         sut.Initialize();
 
@@ -157,7 +193,10 @@ public sealed class SentryAppTelemetryTests
     public void Initialize_AttemptsSdkInitialization_WithoutPrevalidatingDsn()
     {
         var sentrySdk = new FakeSentrySdkAdapter();
-        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(true, "not-a-dsn"));
+        var sut = CreateSut(
+            sentrySdk,
+            new FakeTelemetrySettingsProvider(true, "not-a-dsn", ValidTelemetryUserId)
+        );
 
         sut.Initialize();
 
@@ -179,6 +218,7 @@ public sealed class SentryAppTelemetryTests
         Assert.Equal("pipewire", metric.Attributes!["preview_mode"]);
         Assert.Equal("linux", metric.Attributes["os"]);
         Assert.Equal("0.9.0", metric.Attributes["app_version"]);
+        Assert.Equal(ValidTelemetryUserId, metric.Attributes["telemetry_user_id"]);
         Assert.Equal(1, sentrySdk.FlushCallCount);
     }
 
@@ -198,12 +238,16 @@ public sealed class SentryAppTelemetryTests
     [Fact]
     public void CreateAppStartedMetricAttributes_ReturnsExpectedEnvironmentData()
     {
-        var attributes = SentryAppTelemetry.CreateAppStartedMetricAttributes("PipeWire");
+        var attributes = SentryAppTelemetry.CreateAppStartedMetricAttributes(
+            "PipeWire",
+            ValidTelemetryUserId
+        );
 
         Assert.Equal("linux", attributes["os"]);
         Assert.Equal("pipewire", attributes["preview_mode"]);
         Assert.Equal("0.9.0", attributes["app_version"]);
         Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), attributes["build_channel"]);
+        Assert.Equal(ValidTelemetryUserId, attributes["telemetry_user_id"]);
         Assert.True(attributes.ContainsKey("session_type"));
     }
 
@@ -234,7 +278,10 @@ public sealed class SentryAppTelemetryTests
     private static SentryAppTelemetry CreateInitializedSut(
         FakeSentrySdkAdapter sentrySdk)
     {
-        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(true, ValidDsn));
+        var sut = CreateSut(
+            sentrySdk,
+            new FakeTelemetrySettingsProvider(true, ValidDsn, ValidTelemetryUserId)
+        );
         sut.Initialize();
         sentrySdk.ClearCapturedTelemetry();
         return sut;
@@ -251,16 +298,22 @@ public sealed class SentryAppTelemetryTests
     {
         private readonly bool _enableSentry;
         private readonly string _sentryDsn;
+        private readonly string _telemetryUserId;
 
-        public FakeTelemetrySettingsProvider(bool enableSentry, string sentryDsn)
+        public FakeTelemetrySettingsProvider(
+            bool enableSentry,
+            string sentryDsn,
+            string telemetryUserId
+        )
         {
             _enableSentry = enableSentry;
             _sentryDsn = sentryDsn;
+            _telemetryUserId = telemetryUserId;
         }
 
-        public (bool EnableSentry, string SentryDsn) GetSettings()
+        public (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings()
         {
-            return (_enableSentry, _sentryDsn);
+            return (_enableSentry, _sentryDsn, _telemetryUserId);
         }
     }
 
@@ -271,6 +324,7 @@ public sealed class SentryAppTelemetryTests
         public bool HandleDisposed { get; private set; }
         public SentryOptions? LastOptions { get; private set; }
         public Dictionary<string, string> ScopeTags { get; } = new(StringComparer.Ordinal);
+        public string ScopeUserId { get; private set; } = string.Empty;
         public List<CapturedMetricRecord> CapturedMetrics { get; } = [];
         public List<CapturedExceptionRecord> CapturedExceptions { get; } = [];
 
@@ -293,6 +347,7 @@ public sealed class SentryAppTelemetryTests
 
             foreach ((string key, string value) in scope.Tags)
                 ScopeTags[key] = value;
+            ScopeUserId = scope.User?.Id ?? string.Empty;
         }
 
         public void CaptureException(Exception exception, Action<Scope> configureScope)

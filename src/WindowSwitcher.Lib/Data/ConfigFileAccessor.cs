@@ -34,6 +34,7 @@ namespace WindowSwitcher.Lib.Data;
     {
         lock (_syncRoot)
         {
+            bool shouldPersistConfig = false;
             if (File.Exists(_filePath))
             {
                 try
@@ -57,6 +58,12 @@ namespace WindowSwitcher.Lib.Data;
             _config.WhitelistPrefixes ??= new List<string>();
             _config.BlacklistPrefixes ??= new List<string>();
             _config.SentryDsn ??= string.Empty;
+            if (!Guid.TryParse(_config.TelemetryUserId, out _))
+            {
+                _config.TelemetryUserId = Guid.NewGuid().ToString("D");
+                shouldPersistConfig = true;
+            }
+
             _config.FloatingWindowsConfig ??= new List<WindowConfig?>();
             _config.WindowKeybindTargets = KeybindCatalogBuilder
                 .Build(_config.WindowKeybindTargets)
@@ -74,6 +81,9 @@ namespace WindowSwitcher.Lib.Data;
                 if (string.IsNullOrWhiteSpace(windowConfig.ConfigKey))
                     windowConfig.ConfigKey = CreateConfigKey(windowConfig);
             }
+
+            if (shouldPersistConfig)
+                WriteUserSettingsLocked();
         }
     }
 
