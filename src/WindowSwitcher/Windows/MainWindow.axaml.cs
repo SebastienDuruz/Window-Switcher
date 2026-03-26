@@ -163,6 +163,16 @@ public partial class MainWindow : Window, IFloatingWindowHost
         );
     }
 
+    private void ClearFloatingWindowSettings(object? sender, RoutedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().ResetFloatingWindowSettings();
+    }
+
+    private void ResetUserSettings(object? sender, RoutedEventArgs e)
+    {
+        ConfigFileAccessor.GetInstance().ResetUserSettings();
+    }
+
     private void OpenFiltersWindowClick(object? sender, RoutedEventArgs e)
     {
         FiltersWindow.ShowPrefixesTab();
