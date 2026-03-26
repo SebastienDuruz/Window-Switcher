@@ -1,86 +1,375 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Sentry;
-using WindowSwitcher;
+using WindowSwitcher.Diagnostics;
+using WindowSwitcher.Lib.Models;
 using Xunit;
 
-namespace WindowSwitcher.Tests
+namespace WindowSwitcher.Tests;
+
+public sealed class SentryAppTelemetryTests
 {
-    public sealed class AppExceptionTests
+    private const string ValidDsn = "https://examplePublicKey@o0.ingest.sentry.io/0";
+    private static readonly string DefaultDsn = new ConfigFile().SentryDsn;
+    public static TheoryData<string?, string> ResolveSentryDsnCases =>
+        new()
+        {
+            { ValidDsn, ValidDsn },
+            {
+                "  https://customPublicKey@o0.ingest.sentry.io/1  ",
+                "https://customPublicKey@o0.ingest.sentry.io/1"
+            },
+            { string.Empty, DefaultDsn },
+            { "   ", DefaultDsn },
+            { null, DefaultDsn }
+        };
+
+    [Fact]
+    public void CreateUnhandledException_ReturnsOriginalException_WhenPayloadIsException()
     {
-        [Fact]
-        public void CreateUnhandledException_ReturnsOriginalException_WhenPayloadIsException()
+        var exception = new InvalidOperationException("boom");
+
+        Exception result = SentryAppTelemetry.CreateUnhandledException(exception);
+
+        Assert.Same(exception, result);
+    }
+
+    [Fact]
+    public void CreateUnhandledException_WrapsNullPayload()
+    {
+        Exception result = SentryAppTelemetry.CreateUnhandledException(null);
+
+        InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
+        Assert.Contains("null", wrapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateUnhandledException_WrapsNonExceptionPayload()
+    {
+        Exception result = SentryAppTelemetry.CreateUnhandledException("boom");
+
+        InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
+        Assert.Contains("System.String", wrapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetSentryRelease_UsesApplicationVersion()
+    {
+        string release = SentryAppTelemetry.GetSentryRelease();
+
+        Assert.Equal("window-switcher@0.9.0", release);
+    }
+
+    [Fact]
+    public void FilterSentryEvent_ReturnsNull_ForOperationCanceledException()
+    {
+        var sentryEvent = new SentryEvent(new TaskCanceledException("cancelled"));
+
+        SentryEvent? filtered = SentryAppTelemetry.FilterSentryEvent(sentryEvent);
+
+        Assert.Null(filtered);
+    }
+
+    [Fact]
+    public void ShouldDropExceptionFromSentry_ReturnsTrue_WhenAllTerminalExceptionsAreIgnorable()
+    {
+        var exception = new AggregateException(
+            new TaskCanceledException("cancelled"),
+            new FakeDisconnectedException()
+        );
+
+        bool shouldDrop = SentryAppTelemetry.ShouldDropExceptionFromSentry(exception);
+
+        Assert.True(shouldDrop);
+    }
+
+    [Fact]
+    public void ShouldDropExceptionFromSentry_ReturnsFalse_WhenAnyTerminalExceptionIsUnexpected()
+    {
+        var exception = new AggregateException(
+            new TaskCanceledException("cancelled"),
+            new InvalidOperationException("boom")
+        );
+
+        bool shouldDrop = SentryAppTelemetry.ShouldDropExceptionFromSentry(exception);
+
+        Assert.False(shouldDrop);
+    }
+
+    [Theory]
+    [InlineData("PipeWire", "pipewire")]
+    [InlineData("Screenshots", "screenshots")]
+    [InlineData("Desktop Window Manager (DWM)", "dwm")]
+    [InlineData("SomethingElse", "other")]
+    [InlineData(null, "unknown")]
+    public void NormalizePreviewMode_ReturnsExpectedValue(string? previewMode, string expected)
+    {
+        string normalized = SentryAppTelemetry.NormalizePreviewMode(previewMode);
+
+        Assert.Equal(expected, normalized);
+    }
+
+    [Theory]
+    [MemberData(nameof(ResolveSentryDsnCases))]
+    public void ResolveSentryDsn_ReturnsConfiguredValueOrFallback(string? dsn, string expected)
+    {
+        string resolvedDsn = SentryAppTelemetry.ResolveSentryDsn(dsn);
+
+        Assert.Equal(expected, resolvedDsn);
+    }
+
+    [Fact]
+    public void Initialize_ConfiguresSdkAndBaseScope_WhenEnabled()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateSut(
+            sentrySdk,
+            new FakeTelemetrySettingsProvider(true, ValidDsn)
+        );
+
+        sut.Initialize();
+
+        Assert.Equal(1, sentrySdk.InitCallCount);
+        Assert.NotNull(sentrySdk.LastOptions);
+        Assert.Equal(ValidDsn, sentrySdk.LastOptions!.Dsn);
+        Assert.Equal("window-switcher@0.9.0", sentrySdk.LastOptions.Release);
+        Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.LastOptions.Environment);
+        Assert.False(sentrySdk.LastOptions.SendDefaultPii);
+        Assert.True(sentrySdk.ScopeTags.ContainsKey("os"));
+        Assert.True(sentrySdk.ScopeTags.ContainsKey("session_type"));
+        Assert.Equal("0.9.0", sentrySdk.ScopeTags["app_version"]);
+        Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.ScopeTags["build_channel"]);
+    }
+
+    [Fact]
+    public void Initialize_SkipsSdkInitialization_WhenDisabled()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(false, ValidDsn));
+
+        sut.Initialize();
+
+        Assert.Equal(0, sentrySdk.InitCallCount);
+    }
+
+    [Fact]
+    public void Initialize_AttemptsSdkInitialization_WithoutPrevalidatingDsn()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(true, "not-a-dsn"));
+
+        sut.Initialize();
+
+        Assert.Equal(1, sentrySdk.InitCallCount);
+        Assert.Equal("not-a-dsn", sentrySdk.LastOptions!.Dsn);
+    }
+
+    [Fact]
+    public async Task RecordAppStartedAsync_EmitsSingleCounterMetric()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateInitializedSut(sentrySdk);
+
+        await sut.RecordAppStartedAsync("PipeWire");
+
+        CapturedMetricRecord metric = Assert.Single(sentrySdk.CapturedMetrics);
+        Assert.Equal(SentryAppTelemetry.AppStartedMetricName, metric.Name);
+        Assert.Equal(1d, metric.Value);
+        Assert.Equal("pipewire", metric.Attributes!["preview_mode"]);
+        Assert.Equal("linux", metric.Attributes["os"]);
+        Assert.Equal("0.9.0", metric.Attributes["app_version"]);
+        Assert.Equal(1, sentrySdk.FlushCallCount);
+    }
+
+    [Fact]
+    public async Task RecordAppStartedAsync_DeduplicatesWithinSession()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateInitializedSut(sentrySdk);
+
+        await sut.RecordAppStartedAsync("pipewire");
+        await sut.RecordAppStartedAsync("pipewire");
+
+        Assert.Single(sentrySdk.CapturedMetrics);
+        Assert.Equal(1, sentrySdk.FlushCallCount);
+    }
+
+    [Fact]
+    public void CreateAppStartedMetricAttributes_ReturnsExpectedEnvironmentData()
+    {
+        var attributes = SentryAppTelemetry.CreateAppStartedMetricAttributes("PipeWire");
+
+        Assert.Equal("linux", attributes["os"]);
+        Assert.Equal("pipewire", attributes["preview_mode"]);
+        Assert.Equal("0.9.0", attributes["app_version"]);
+        Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), attributes["build_channel"]);
+        Assert.True(attributes.ContainsKey("session_type"));
+    }
+
+    [Fact]
+    public void CaptureUnhandledException_SetsCaptureSourceTag()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateInitializedSut(sentrySdk);
+
+        sut.CaptureUnhandledException(new InvalidOperationException("boom"), "dispatcher_unhandled");
+
+        CapturedExceptionRecord capturedException = Assert.Single(sentrySdk.CapturedExceptions);
+        Assert.Equal("dispatcher_unhandled", capturedException.Tags["capture_source"]);
+    }
+
+    [Fact]
+    public async Task ShutdownAsync_FlushesAndDisposesSdkHandle()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateInitializedSut(sentrySdk);
+
+        await sut.ShutdownAsync();
+
+        Assert.Equal(1, sentrySdk.FlushCallCount);
+        Assert.True(sentrySdk.HandleDisposed);
+    }
+
+    private static SentryAppTelemetry CreateInitializedSut(
+        FakeSentrySdkAdapter sentrySdk)
+    {
+        var sut = CreateSut(sentrySdk, new FakeTelemetrySettingsProvider(true, ValidDsn));
+        sut.Initialize();
+        sentrySdk.ClearCapturedTelemetry();
+        return sut;
+    }
+
+    private static SentryAppTelemetry CreateSut(
+        FakeSentrySdkAdapter sentrySdk,
+        ITelemetrySettingsProvider telemetrySettingsProvider)
+    {
+        return new SentryAppTelemetry(sentrySdk, telemetrySettingsProvider);
+    }
+
+    private sealed class FakeTelemetrySettingsProvider : ITelemetrySettingsProvider
+    {
+        private readonly bool _enableSentry;
+        private readonly string _sentryDsn;
+
+        public FakeTelemetrySettingsProvider(bool enableSentry, string sentryDsn)
         {
-            var exception = new InvalidOperationException("boom");
-
-            Exception result = App.CreateUnhandledException(exception);
-
-            Assert.Same(exception, result);
+            _enableSentry = enableSentry;
+            _sentryDsn = sentryDsn;
         }
 
-        [Fact]
-        public void CreateUnhandledException_WrapsNullPayload()
+        public (bool EnableSentry, string SentryDsn) GetSettings()
         {
-            Exception result = App.CreateUnhandledException(null);
-
-            InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
-            Assert.Contains("null", wrapped.Message, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void CreateUnhandledException_WrapsNonExceptionPayload()
-        {
-            Exception result = App.CreateUnhandledException("boom");
-
-            InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
-            Assert.Contains("System.String", wrapped.Message, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void GetSentryRelease_UsesApplicationVersion()
-        {
-            string release = App.GetSentryRelease();
-
-            Assert.Equal("window-switcher@0.9.0", release);
-        }
-
-        [Fact]
-        public void FilterSentryEvent_ReturnsNull_ForOperationCanceledException()
-        {
-            var sentryEvent = new SentryEvent(new TaskCanceledException("cancelled"));
-
-            SentryEvent? filtered = App.FilterSentryEvent(sentryEvent);
-
-            Assert.Null(filtered);
-        }
-
-        [Fact]
-        public void ShouldDropExceptionFromSentry_ReturnsTrue_WhenAllTerminalExceptionsAreIgnorable()
-        {
-            var exception = new AggregateException(
-                new TaskCanceledException("cancelled"),
-                new Tmds.DBus.FakeDisconnectedException()
-            );
-
-            bool shouldDrop = App.ShouldDropExceptionFromSentry(exception);
-
-            Assert.True(shouldDrop);
-        }
-
-        [Fact]
-        public void ShouldDropExceptionFromSentry_ReturnsFalse_WhenAnyTerminalExceptionIsUnexpected()
-        {
-            var exception = new AggregateException(
-                new TaskCanceledException("cancelled"),
-                new InvalidOperationException("boom")
-            );
-
-            bool shouldDrop = App.ShouldDropExceptionFromSentry(exception);
-
-            Assert.False(shouldDrop);
+            return (_enableSentry, _sentryDsn);
         }
     }
-}
 
-namespace Tmds.DBus
-{
-    public sealed class FakeDisconnectedException : Exception;
+    private sealed class FakeSentrySdkAdapter : ISentrySdkAdapter
+    {
+        public int InitCallCount { get; private set; }
+        public int FlushCallCount { get; private set; }
+        public bool HandleDisposed { get; private set; }
+        public SentryOptions? LastOptions { get; private set; }
+        public Dictionary<string, string> ScopeTags { get; } = new(StringComparer.Ordinal);
+        public List<CapturedMetricRecord> CapturedMetrics { get; } = [];
+        public List<CapturedExceptionRecord> CapturedExceptions { get; } = [];
+
+        public IDisposable Init(Action<SentryOptions> configureOptions)
+        {
+            ArgumentNullException.ThrowIfNull(configureOptions);
+
+            InitCallCount++;
+            LastOptions = new SentryOptions();
+            configureOptions(LastOptions);
+            return new DelegateDisposable(() => HandleDisposed = true);
+        }
+
+        public void ConfigureScope(Action<Scope> configureScope)
+        {
+            ArgumentNullException.ThrowIfNull(configureScope);
+
+            var scope = new Scope(new SentryOptions());
+            configureScope(scope);
+
+            foreach ((string key, string value) in scope.Tags)
+                ScopeTags[key] = value;
+        }
+
+        public void CaptureException(Exception exception, Action<Scope> configureScope)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            ArgumentNullException.ThrowIfNull(configureScope);
+
+            var scope = new Scope(new SentryOptions());
+            configureScope(scope);
+            CapturedExceptions.Add(
+                new CapturedExceptionRecord(
+                    exception,
+                    new Dictionary<string, string>(scope.Tags, StringComparer.Ordinal)
+                )
+            );
+        }
+
+        public void EmitCounter(
+            string name,
+            double value,
+            IReadOnlyDictionary<string, string>? attributes = null
+        )
+        {
+            CapturedMetrics.Add(
+                new CapturedMetricRecord(
+                    name,
+                    value,
+                    attributes is null
+                        ? null
+                        : new Dictionary<string, string>(attributes, StringComparer.Ordinal)
+                )
+            );
+        }
+
+        public Task FlushAsync(TimeSpan timeout)
+        {
+            FlushCallCount++;
+            return Task.CompletedTask;
+        }
+
+        public void ClearCapturedTelemetry()
+        {
+            CapturedMetrics.Clear();
+            CapturedExceptions.Clear();
+            FlushCallCount = 0;
+        }
+    }
+
+    private sealed class DelegateDisposable : IDisposable
+    {
+        private readonly Action _disposeAction;
+        private bool _isDisposed;
+
+        public DelegateDisposable(Action disposeAction)
+        {
+            ArgumentNullException.ThrowIfNull(disposeAction);
+            _disposeAction = disposeAction;
+        }
+
+        public void Dispose()
+        {
+            if (_isDisposed)
+                return;
+
+            _isDisposed = true;
+            _disposeAction();
+        }
+    }
+
+    private sealed record CapturedMetricRecord(
+        string Name,
+        double Value,
+        IReadOnlyDictionary<string, string>? Attributes
+    );
+
+    private sealed record CapturedExceptionRecord(
+        Exception Exception,
+        IReadOnlyDictionary<string, string> Tags
+    );
 }

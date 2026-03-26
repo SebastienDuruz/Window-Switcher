@@ -298,9 +298,25 @@ Global keybinds are optional on Linux, but when you use them the listener needs:
 
 ### Error reporting with Sentry
 
-Window Switcher uses [Sentry](https://sentry.io/) to collect unhandled exceptions. This helps diagnose crashes and unexpected failures more efficiently during development and maintenance.
+Window Switcher uses [Sentry](https://sentry.io/) for:
 
-If you do not want your exceptions to be sent, open the application `config.json` file and set:
+- unhandled exception reporting
+- a single startup metric
+
+Unhandled exceptions are always reported when Sentry is enabled. A single startup metric is emitted once per application start.
+
+Sentry is configured from the application `config.json` file. There is no in-app setting for it.
+
+Example:
+
+```json
+{
+  "EnableSentry": true,
+  "SentryDsn": "https://examplePublicKey@o0.ingest.sentry.io/0"
+}
+```
+
+To disable all Sentry traffic, set:
 
 ```json
 {
@@ -309,6 +325,25 @@ If you do not want your exceptions to be sent, open the application `config.json
 ```
 
 You can find the config file path from `Help > About`.
+
+Window Switcher sends only low-cardinality runtime metadata such as:
+
+- OS
+- session type
+- build channel
+- app version
+- preview mode
+- capture source for unhandled exceptions
+
+Window Switcher does not intentionally send:
+
+- window titles
+- process names from your session
+- local file paths
+- whitelist / blacklist contents
+- global keybind definitions
+- screenshots or window previews
+- shell commands
 
 ## License
 
