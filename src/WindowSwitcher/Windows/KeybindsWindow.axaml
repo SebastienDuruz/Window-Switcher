@@ -28,7 +28,6 @@
                 CornerRadius="6"
                 BorderThickness="1"
                 BorderBrush="{StaticResource ErrorTextBrush}"
-                Background="#14FF6347"
                 IsVisible="{Binding ShowGlobalKeyboardSetupBanner}">
             <StackPanel Spacing="6">
                 <TextBlock Text="{Binding GlobalKeyboardSetupTitle}"
