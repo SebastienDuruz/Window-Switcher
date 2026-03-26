@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using WindowSwitcher.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Commands;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
@@ -66,6 +67,9 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<IWindowKeybindTargetCatalogService, WindowKeybindTargetCatalogService>();
         services.AddSingleton<IWindowKeybindActivator, WindowKeybindActivator>();
         services.AddSingleton<IGlobalWindowKeybindRuntimeService, GlobalWindowKeybindRuntimeService>();
+        services.AddSingleton<ISentrySdkAdapter, SentrySdkAdapter>();
+        services.AddSingleton<ITelemetrySettingsProvider, ConfigFileTelemetrySettingsProvider>();
+        services.AddSingleton<IAppTelemetry, SentryAppTelemetry>();
 
         services.AddSingleton<SystemInfoService>();
         return services;
