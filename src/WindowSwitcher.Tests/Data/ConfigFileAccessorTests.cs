@@ -25,6 +25,7 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.WindowKeybindTargets);
             Assert.True(sut.Config.EnableSentry);
             Assert.Equal(new ConfigFile().SentryDsn, sut.Config.SentryDsn);
+            Assert.True(Guid.TryParse(sut.Config.TelemetryUserId, out _));
         }
         finally
         {
@@ -90,6 +91,7 @@ public sealed class ConfigFileAccessorTests
             Assert.Empty(config.BlacklistPrefixes);
             Assert.True(config.EnableSentry);
             Assert.Equal(string.Empty, config.SentryDsn);
+            Assert.True(Guid.TryParse(config.TelemetryUserId, out _));
 
             WindowConfig persistedConfig = Assert.Single(
                 config.FloatingWindowsConfig.Where(entry => entry is not null).Select(entry => entry!)
@@ -102,6 +104,27 @@ public sealed class ConfigFileAccessorTests
             WindowKeybindShortcut shortcut = Assert.Single(keybindTarget.Shortcuts);
             Assert.True(shortcut.Combination.Ctrl);
             Assert.Equal(KeybindPrimaryKey.A, shortcut.Combination.Key);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void ResetUserSettings_RegeneratesTelemetryUserId()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+            string originalId = sut.Config.TelemetryUserId;
+
+            sut.ResetUserSettings();
+
+            string regeneratedId = sut.Config.TelemetryUserId;
+            Assert.NotEqual(originalId, regeneratedId);
+            Assert.True(Guid.TryParse(regeneratedId, out _));
         }
         finally
         {

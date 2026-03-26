@@ -13,17 +13,18 @@ namespace WindowSwitcher.Diagnostics;
 
 internal interface ITelemetrySettingsProvider
 {
-    (bool EnableSentry, string SentryDsn) GetSettings();
+    (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings();
 }
 
 internal sealed class ConfigFileTelemetrySettingsProvider : ITelemetrySettingsProvider
 {
-    public (bool EnableSentry, string SentryDsn) GetSettings()
+    public (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings()
     {
         return ConfigFileAccessor.GetInstance().ReadConfig(config =>
             (
                 config.EnableSentry,
-                SentryAppTelemetry.ResolveSentryDsn(config.SentryDsn)
+                SentryAppTelemetry.ResolveSentryDsn(config.SentryDsn),
+                SentryAppTelemetry.ResolveTelemetryUserId(config.TelemetryUserId)
             )
         );
     }
@@ -37,6 +38,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     private readonly ITelemetrySettingsProvider _telemetrySettingsProvider;
     private readonly object _syncRoot = new();
     private IDisposable? _sdkHandle;
+    private string _telemetryUserId = string.Empty;
     private bool _appStartedRecorded;
 
     public SentryAppTelemetry(
@@ -56,7 +58,8 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         if (IsInitialized())
             return;
 
-        (bool enableSentry, string sentryDsn) = _telemetrySettingsProvider.GetSettings();
+        (bool enableSentry, string sentryDsn, string telemetryUserId) =
+            _telemetrySettingsProvider.GetSettings();
         if (!enableSentry)
             return;
 
@@ -72,9 +75,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 }
 
                 _sdkHandle = handle;
+                _telemetryUserId = telemetryUserId;
             }
 
-            ConfigureBaseScope();
+            ConfigureBaseScope(telemetryUserId);
         }
         catch (Exception ex)
         {
@@ -85,6 +89,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     public async Task RecordAppStartedAsync(string previewMode)
     {
         string normalizedPreviewMode = NormalizePreviewMode(previewMode);
+        string telemetryUserId;
 
         lock (_syncRoot)
         {
@@ -92,6 +97,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 return;
 
             _appStartedRecorded = true;
+            telemetryUserId = _telemetryUserId;
         }
 
         if (!IsInitialized())
@@ -102,7 +108,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             _sentrySdk.EmitCounter(
                 AppStartedMetricName,
                 1,
-                CreateAppStartedMetricAttributes(normalizedPreviewMode)
+                CreateAppStartedMetricAttributes(normalizedPreviewMode, telemetryUserId)
             );
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
@@ -139,6 +145,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         {
             handle = _sdkHandle;
             _sdkHandle = null;
+            _telemetryUserId = string.Empty;
         }
 
         if (handle is null)
@@ -192,6 +199,14 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         return new ConfigFile().SentryDsn;
     }
 
+    internal static string ResolveTelemetryUserId(string? configuredTelemetryUserId)
+    {
+        if (Guid.TryParse(configuredTelemetryUserId, out Guid parsed))
+            return parsed.ToString("D");
+
+        return new ConfigFile().TelemetryUserId;
+    }
+
     internal static string NormalizePreviewMode(string? previewMode)
     {
         if (string.IsNullOrWhiteSpace(previewMode))
@@ -235,9 +250,12 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     }
 
     internal static IReadOnlyDictionary<string, string> CreateAppStartedMetricAttributes(
-        string previewMode
+        string previewMode,
+        string telemetryUserId
     )
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(telemetryUserId);
+
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["os"] = GetSentryOperatingSystemTag(),
@@ -245,17 +263,25 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             ["build_channel"] = GetSentryEnvironment(),
             ["app_version"] = GetInformationalVersion(),
             ["preview_mode"] = NormalizePreviewMode(previewMode),
+            ["telemetry_user_id"] = telemetryUserId,
         };
     }
 
-    private void ConfigureBaseScope()
+    private void ConfigureBaseScope(string telemetryUserId)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(telemetryUserId);
+
         _sentrySdk.ConfigureScope(scope =>
         {
+            scope.User = new SentryUser
+            {
+                Id = telemetryUserId,
+            };
             scope.SetTag("os", GetSentryOperatingSystemTag());
             scope.SetTag("session_type", GetSentrySessionTypeTag());
             scope.SetTag("app_version", GetInformationalVersion());
             scope.SetTag("build_channel", GetSentryEnvironment());
+            scope.SetTag("telemetry_user_id", telemetryUserId);
         });
     }
 
