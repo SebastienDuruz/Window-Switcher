@@ -91,6 +91,35 @@ public sealed class WindowKeybindActivatorTests
     }
 
     [Fact]
+    public void TryActivateTarget_FocusActiveClient_RaisesLastActivatedWindow()
+    {
+        WindowConfig editor = CreateWindow("w-1", "Editor", "code");
+        WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
+        var accessor = new FakeWinAccessor(editor, terminal);
+        var sut = new WindowKeybindActivator(accessor, SelectAll);
+
+        _ = sut.TryActivateTarget(WindowTargetKeyFactory.Create(terminal));
+
+        bool activated = sut.TryActivateTarget(KeybindBuiltInTargets.FocusActiveClientTargetId);
+
+        Assert.True(activated);
+        Assert.Equal(new[] { "w-2", "w-2" }, accessor.RaisedWindowIds);
+    }
+
+    [Fact]
+    public void TryActivateTarget_FocusActiveClient_ReturnsFalseWhenNoActiveClient()
+    {
+        WindowConfig editor = CreateWindow("w-1", "Editor", "code");
+        var accessor = new FakeWinAccessor(editor);
+        var sut = new WindowKeybindActivator(accessor, SelectAll);
+
+        bool activated = sut.TryActivateTarget(KeybindBuiltInTargets.FocusActiveClientTargetId);
+
+        Assert.False(activated);
+        Assert.Empty(accessor.RaisedWindowIds);
+    }
+
+    [Fact]
     public void TryActivateTarget_NextClient_UsesLastActivatedWindowAsAnchor()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");

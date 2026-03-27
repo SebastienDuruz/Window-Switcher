@@ -56,6 +56,10 @@ public sealed class WindowKeybindTargetCatalogServiceTests
             Assert.Contains(snapshot.ActionTargets, target =>
                 target.TargetId == KeybindBuiltInTargets.PreviousClientTargetId
             );
+            Assert.Contains(snapshot.ActionTargets, target =>
+                target.TargetId == KeybindBuiltInTargets.FocusActiveClientTargetId
+                && target.DisplayName == KeybindBuiltInTargets.FocusActiveClientDisplayName
+            );
             Assert.Contains(snapshot.ClientTargets, target =>
                 target.TargetId == WindowTargetKeyFactory.Create("proc", "Editor")
                 && target.DisplayName == "Editor (proc)"

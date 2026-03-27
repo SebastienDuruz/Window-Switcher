@@ -16,6 +16,11 @@ public static class KeybindBuiltInTargets
     public const string PreviousClientTargetId = "action:previous-client";
 
     /// <summary>
+    /// Target id for focusing the currently active client.
+    /// </summary>
+    public const string FocusActiveClientTargetId = "action:focus-active-client";
+
+    /// <summary>
     /// Display label for next selected client action.
     /// </summary>
     public const string NextClientDisplayName = "Next client";
@@ -26,6 +31,11 @@ public static class KeybindBuiltInTargets
     public const string PreviousClientDisplayName = "Previous client";
 
     /// <summary>
+    /// Display label for focus active client action.
+    /// </summary>
+    public const string FocusActiveClientDisplayName = "Focus active client";
+
+    /// <summary>
     /// Returns whether a target id is one of the built-in action targets.
     /// </summary>
     public static bool IsBuiltInTarget(string? targetId)
@@ -34,6 +44,8 @@ public static class KeybindBuiltInTargets
             return false;
 
         string normalized = targetId.Trim().ToLowerInvariant();
-        return normalized == NextClientTargetId || normalized == PreviousClientTargetId;
+        return normalized == NextClientTargetId
+            || normalized == PreviousClientTargetId
+            || normalized == FocusActiveClientTargetId;
     }
 }
