@@ -14,7 +14,7 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 - Display floating previews for selected windows
 - Bring the original window to foreground by clicking a preview
-- Trigger a specific client, or cycle to the next/previous selected client, with global keybinds
+- Trigger a specific client, cycle to the next/previous selected client, or re-focus the active client with global keybinds
 - Optionally focus windows on mouse hover
 - Filter displayed windows with whitelist prefixes
 - Exclude windows with blacklist entries
@@ -56,7 +56,7 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 2. Open `Settings > Filters`, then use the `Prefixes` tab to add whitelist entries.
 3. In the same `Filters` window, use the `Blacklist` tab to exclude titles you do not want to see.
 4. Floating previews are created for matching windows.
-5. Open `Settings > Keybinds` and assign shortcuts to `Next client`, `Previous client`, or a specific client target.
+5. Open `Settings > Keybinds` and assign shortcuts to `Next client`, `Previous client`, `Focus active client`, or a specific client target.
 6. Click a preview to focus the original window, or enable `Focus on hover`.
 7. Right-click a preview (or list item) to blacklist, temp-blacklist, or rename a window.
 
@@ -246,7 +246,9 @@ Wayland PipeWire packages (examples):
 ### Global keybinds
 
 - Open `Settings > Keybinds` to assign shortcuts to built-in actions or to a specific client window.
+- Built-in actions are `Next client`, `Previous client`, and `Focus active client`.
 - `Next client` and `Previous client` cycle through the currently selected client set, meaning windows that match the whitelist and are not excluded by the blacklist.
+- `Focus active client` brings the currently active client (as tracked by the app) to foreground and focuses it.
 - Client targets are populated from currently detected windows, and previously saved targets remain available even when that window is not running yet.
 - Duplicate shortcuts on the same target and conflicts across different targets are rejected by the UI.
 - On Linux, keybind capture is optional but requires input-device permissions; without them, the app still runs but global shortcuts are unavailable.
