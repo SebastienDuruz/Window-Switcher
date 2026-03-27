@@ -66,6 +66,15 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         )
             return TryActivateRelativeClient(step: -1);
 
+        if (
+            string.Equals(
+                normalizedTargetId,
+                KeybindBuiltInTargets.FocusActiveClientTargetId,
+                StringComparison.Ordinal
+            )
+        )
+            return TryFocusActiveClient();
+
         IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
 
         WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
@@ -131,6 +140,34 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
 
         _accessor.RaiseWindow(target.WindowId);
         WindowActivated?.Invoke(this, target.WindowId);
+        return true;
+    }
+
+    private bool TryFocusActiveClient()
+    {
+        string activeWindowId;
+        lock (_syncRoot)
+        {
+            activeWindowId = _lastActivatedClientId;
+        }
+
+        if (string.IsNullOrWhiteSpace(activeWindowId))
+            return false;
+
+        IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
+        WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
+            string.Equals(window.WindowId, activeWindowId, StringComparison.Ordinal)
+        );
+        if (matchingWindow is null)
+            return false;
+
+        _accessor.RaiseWindow(matchingWindow.WindowId);
+        lock (_syncRoot)
+        {
+            _lastActivatedClientId = matchingWindow.WindowId;
+        }
+
+        WindowActivated?.Invoke(this, matchingWindow.WindowId);
         return true;
     }
 

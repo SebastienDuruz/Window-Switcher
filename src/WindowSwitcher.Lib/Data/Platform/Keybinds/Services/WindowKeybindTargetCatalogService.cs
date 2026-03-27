@@ -65,6 +65,11 @@ public sealed class WindowKeybindTargetCatalogService : IWindowKeybindTargetCata
                 KeybindBuiltInTargets.PreviousClientDisplayName,
                 isBuiltIn: true
             ),
+            [KeybindBuiltInTargets.FocusActiveClientTargetId] = new KeybindTargetDescriptor(
+                KeybindBuiltInTargets.FocusActiveClientTargetId,
+                KeybindBuiltInTargets.FocusActiveClientDisplayName,
+                isBuiltIn: true
+            ),
         };
 
         foreach (WindowKeybindTargetConfig target in persistedTargets)
