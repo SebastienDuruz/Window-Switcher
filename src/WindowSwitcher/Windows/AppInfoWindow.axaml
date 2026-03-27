@@ -12,35 +12,46 @@
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="10"
-          ColumnDefinitions="Auto,*"
+          ColumnDefinitions="Auto,*,Auto"
           RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
           ColumnSpacing="10"
-          RowSpacing="2">
-        <TextBlock Grid.Row="1" Grid.Column="0" Text="Version:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AppVersion}"/>
+          RowSpacing="4">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Version:" FontWeight="Normal"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AppVersion}" VerticalAlignment="Center"/>
+        <Button Grid.Row="0"
+                Grid.Column="2"
+                Content="Update"
+                Height="25"
+                FontSize="10"
+                Command="{Binding UpdateNowCommand}"
+                IsVisible="{Binding CanUpdateNow}"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Updates:" FontWeight="Normal"/>
+        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding UpdateStatus}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="2" Grid.Column="0" Text="UI backend:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding UiBackend}"/>
+        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding UiBackend}"/>
 
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Preview mode:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding PreviewMode}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="4" Grid.Column="0" Text="OS:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding OsDescription}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding OsDescription}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="5" Grid.Column="0" Text=".NET:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding FrameworkDescription}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding FrameworkDescription}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="6" Grid.Column="0" Text="Arch:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding ProcessArchitecture}"/>
+        <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ProcessArchitecture}"/>
 
         <TextBlock Grid.Row="7" Grid.Column="0" Text="Config:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding ConfigPath}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding ConfigPath}" TextWrapping="Wrap"/>
 
         <TextBlock Grid.Row="8" Grid.Column="0" Text="Deps:" FontWeight="Normal"/>
-        <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding LinuxDependenciesStatus}" TextWrapping="Wrap"/>
+        <TextBlock Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding LinuxDependenciesStatus}" TextWrapping="Wrap"/>
 
-        <StackPanel Grid.Row="9" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0" Spacing="8">
+        <StackPanel Grid.Row="9" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0" Spacing="8">
+            <Button Content="Check updates" Command="{Binding CheckForUpdatesCommand}"/>
             <Button Content="Close" Click="CloseClick"/>
         </StackPanel>
     </Grid>

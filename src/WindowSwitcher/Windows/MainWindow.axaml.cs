@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -42,6 +43,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private TextBlock? _missingDependenciesTextBlock;
     private bool _suppressWindowStateHandling;
     private bool _isHiddenToTray;
+    private readonly CancellationTokenSource _updateNotificationCts = new();
 
     public MainWindow()
     {
@@ -68,11 +70,15 @@ public partial class MainWindow : Window, IFloatingWindowHost
         );
         SettingsWindow = new SettingsWindow(ApplySettings);
         KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
-        AppInfoWindow = new AppInfoWindow { Title = $"About {StaticData.AppName}" };
+        AppInfoWindow = new AppInfoWindow(RequestApplicationShutdown)
+        {
+            Title = $"About {StaticData.AppName}",
+        };
         RenameWindow = new RenameWindow();
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
         _floatingWindowRegistry.Initialize(ViewModel.WindowsConfigs);
+        _ = NotifyUpdateAvailabilityOnStartupAsync(_updateNotificationCts.Token);
         if (OperatingSystem.IsLinux())
         {
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
@@ -89,6 +95,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         StaticData.AppClosing = true;
+        if (!_updateNotificationCts.IsCancellationRequested)
+            _updateNotificationCts.Cancel();
         if (OperatingSystem.IsLinux())
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         PropertyChanged -= OnWindowPropertyChanged;
@@ -102,6 +110,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _missingDependenciesDialog?.Close();
         _floatingWindowRegistry.CloseAll();
         PreviewFrameProvider.Dispose();
+        _updateNotificationCts.Dispose();
         ConfigFileAccessor.GetInstance().WriteUserSettings();
         ViewModel.Dispose();
         base.OnClosing(e);
@@ -193,6 +202,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private void OpenAppInfoWindowClick(object? sender, RoutedEventArgs e)
     {
         AppInfoWindow.Refresh();
+        _ = AppInfoWindow.CheckForUpdatesAsync(force: false, showUpToDateMessage: false);
         if (AppInfoWindow.IsVisible)
         {
             AppInfoWindow.Activate();
@@ -424,5 +434,50 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void ApplySettings()
     {
         _floatingWindowRegistry.ApplySettings();
+    }
+
+    private void RequestApplicationShutdown()
+    {
+        if (StaticData.AppClosing)
+            return;
+
+        Close();
+    }
+
+    private async Task NotifyUpdateAvailabilityOnStartupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+            bool isUpdateAvailable = await AppInfoWindow.CheckForUpdatesAsync(
+                force: true,
+                showUpToDateMessage: false,
+                cancellationToken
+            );
+            if (!isUpdateAvailable || StaticData.AppClosing)
+                return;
+
+            if (AppInfoWindow.IsVisible)
+            {
+                AppInfoWindow.Activate();
+                return;
+            }
+
+            if (IsVisible)
+            {
+                AppInfoWindow.Show(this);
+                return;
+            }
+
+            AppInfoWindow.Show();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown path.
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning($"[Updates] Startup update check failed: {ex.Message}");
+        }
     }
 }
