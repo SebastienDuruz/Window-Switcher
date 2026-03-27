@@ -1,5 +1,11 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using WindowSwitcher.Hosting;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Services;
@@ -12,11 +18,22 @@ public partial class AppInfoWindow : Window
     private AppInfoViewModel ViewModel { get; }
 
     public AppInfoWindow()
+        : this(RequestApplicationShutdownFromLifetime) { }
+
+    public AppInfoWindow(Action requestApplicationShutdown)
     {
+        ArgumentNullException.ThrowIfNull(requestApplicationShutdown);
+
         InitializeComponent();
         IPlatformAppInfoProvider appInfoProvider =
             AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>();
-        ViewModel = new AppInfoViewModel(appInfoProvider);
+        IAppUpdateService appUpdateService =
+            AppServiceProvider.GetRequiredService<IAppUpdateService>();
+        ViewModel = new AppInfoViewModel(
+            appInfoProvider,
+            appUpdateService,
+            requestApplicationShutdown
+        );
         DataContext = ViewModel;
         Closing += OnClosing;
     }
@@ -24,6 +41,15 @@ public partial class AppInfoWindow : Window
     public void Refresh()
     {
         ViewModel.Refresh();
+    }
+
+    public Task<bool> CheckForUpdatesAsync(
+        bool force,
+        bool showUpToDateMessage,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return ViewModel.CheckForUpdatesAsync(force, showUpToDateMessage, cancellationToken);
     }
 
     private void CloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -34,5 +60,11 @@ public partial class AppInfoWindow : Window
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         _windowLifecycle.HandleClosing(this, e);
+    }
+
+    private static void RequestApplicationShutdownFromLifetime()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            desktop.Shutdown();
     }
 }

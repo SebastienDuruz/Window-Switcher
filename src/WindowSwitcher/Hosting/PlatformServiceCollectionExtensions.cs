@@ -1,6 +1,9 @@
 using System;
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using WindowSwitcher.Diagnostics;
+using WindowSwitcher.Lib.Data.Updates;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Commands;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
@@ -61,6 +64,8 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<IGlobalKeyboardListener>(serviceProvider =>
             serviceProvider.GetRequiredService<IGlobalKeyboardListenerFactory>().Create()
         );
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
         services.AddSingleton<IGlobalKeyboardStartupStatusService, GlobalKeyboardStartupStatusService>();
         services.AddSingleton<IGlobalKeyboardService, GlobalKeyboardService>();
         services.AddSingleton<IWindowKeybindManager, WindowKeybindManager>();
