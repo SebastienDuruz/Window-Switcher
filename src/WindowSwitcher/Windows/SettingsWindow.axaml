@@ -22,9 +22,6 @@
                                   IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
                         <CheckBox Content="Focus on hover"
                                   IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
-                        <CheckBox Content="Window decorations"
-                                  IsVisible="{Binding ShowWindowDecorationSetting}"
-                                  IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
                         <CheckBox Content="Enable previews"
                                   IsChecked="{Binding EnablePreviews, Mode=TwoWay}" />
                         <CheckBox Content="Start minimized"

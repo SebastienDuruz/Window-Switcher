@@ -4,7 +4,6 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Lib.Data;
-using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Models;
 using WindowSwitcher.Theming;
 
@@ -13,23 +12,18 @@ namespace WindowSwitcher.ViewModels;
 public class SettingsViewModel : ObservableObject
 {
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
-    private readonly ISettingsPlatformPolicy _settingsPlatformPolicy;
     private readonly Action _applyAction;
     private bool _pendingEnablePreviews;
     public IRelayCommand ApplyCommand { get; }
 
-    public SettingsViewModel(Action applyAction, ISettingsPlatformPolicy settingsPlatformPolicy)
+    public SettingsViewModel(Action applyAction)
     {
         ArgumentNullException.ThrowIfNull(applyAction);
-        ArgumentNullException.ThrowIfNull(settingsPlatformPolicy);
 
         _applyAction = applyAction;
-        _settingsPlatformPolicy = settingsPlatformPolicy;
         _pendingEnablePreviews = _configAccessor.ReadConfig(config => config.EnablePreviews);
         ApplyCommand = new RelayCommand(Apply);
     }
-
-    public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
 
     public bool EnablePreviews
     {
@@ -100,18 +94,6 @@ public class SettingsViewModel : ObservableObject
                 value,
                 config => config.FocusOnHover,
                 (config, currentValue) => config.FocusOnHover = currentValue
-            );
-    }
-
-    public bool ShowWindowDecorations
-    {
-        get => ReadSetting(config => config.ShowWindowDecorations);
-        set =>
-            UpdateSetting(
-                nameof(ShowWindowDecorations),
-                value,
-                config => config.ShowWindowDecorations,
-                (config, currentValue) => config.ShowWindowDecorations = currentValue
             );
     }
 

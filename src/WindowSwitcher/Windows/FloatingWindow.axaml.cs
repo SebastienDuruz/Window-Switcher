@@ -18,6 +18,16 @@ namespace WindowSwitcher.Windows;
 
 public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
+    private const double ResizeGripThickness = 8d;
+    private static readonly Cursor DefaultCursor = new(StandardCursorType.Arrow);
+    private static readonly Cursor TopSideCursor = new(StandardCursorType.TopSide);
+    private static readonly Cursor BottomSideCursor = new(StandardCursorType.BottomSide);
+    private static readonly Cursor LeftSideCursor = new(StandardCursorType.LeftSide);
+    private static readonly Cursor RightSideCursor = new(StandardCursorType.RightSide);
+    private static readonly Cursor TopLeftCornerCursor = new(StandardCursorType.TopLeftCorner);
+    private static readonly Cursor TopRightCornerCursor = new(StandardCursorType.TopRightCorner);
+    private static readonly Cursor BottomLeftCornerCursor = new(StandardCursorType.BottomLeftCorner);
+    private static readonly Cursor BottomRightCornerCursor = new(StandardCursorType.BottomRightCorner);
     private volatile bool _isPointerInside;
     private bool _closeRequestedByHost;
     private readonly IFloatingWindowHost _floatingWindowHost;
@@ -119,8 +129,90 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private void CanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         _floatingWindowHost.SetActivePreview(this);
-        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows))
+
+        bool moveWindows = ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows);
+
+        if (TryBeginResizeDrag(e))
+            return;
+
+        if (moveWindows)
             BeginMoveDrag(e);
+    }
+
+    private bool TryBeginResizeDrag(PointerPressedEventArgs e)
+    {
+        if (!CanResize)
+            return false;
+
+        PointerPoint pointerPoint = e.GetCurrentPoint(this);
+        if (!pointerPoint.Properties.IsLeftButtonPressed)
+            return false;
+
+        WindowEdge? resizeEdge = ResolveResizeEdge(pointerPoint.Position);
+        if (!resizeEdge.HasValue)
+            return false;
+
+        BeginResizeDrag(resizeEdge.Value, e);
+        return true;
+    }
+
+    private WindowEdge? ResolveResizeEdge(Point pointerPosition)
+    {
+        if (Width <= 0 || Height <= 0)
+            return null;
+
+        bool isNearLeft = pointerPosition.X <= ResizeGripThickness;
+        bool isNearRight = pointerPosition.X >= Width - ResizeGripThickness;
+        bool isNearTop = pointerPosition.Y <= ResizeGripThickness;
+        bool isNearBottom = pointerPosition.Y >= Height - ResizeGripThickness;
+
+        if (isNearTop && isNearLeft)
+            return WindowEdge.NorthWest;
+        if (isNearTop && isNearRight)
+            return WindowEdge.NorthEast;
+        if (isNearBottom && isNearLeft)
+            return WindowEdge.SouthWest;
+        if (isNearBottom && isNearRight)
+            return WindowEdge.SouthEast;
+        if (isNearTop)
+            return WindowEdge.North;
+        if (isNearBottom)
+            return WindowEdge.South;
+        if (isNearLeft)
+            return WindowEdge.West;
+        if (isNearRight)
+            return WindowEdge.East;
+
+        return null;
+    }
+
+    private void UpdateResizeCursor(PointerEventArgs e)
+    {
+        if (!CanResize)
+        {
+            WindowCanvas.Cursor = DefaultCursor;
+            return;
+        }
+
+        PointerPoint pointerPoint = e.GetCurrentPoint(this);
+        WindowEdge? edge = ResolveResizeEdge(pointerPoint.Position);
+        WindowCanvas.Cursor = ResolveCursor(edge);
+    }
+
+    private static Cursor ResolveCursor(WindowEdge? edge)
+    {
+        return edge switch
+        {
+            WindowEdge.North => TopSideCursor,
+            WindowEdge.South => BottomSideCursor,
+            WindowEdge.West => LeftSideCursor,
+            WindowEdge.East => RightSideCursor,
+            WindowEdge.NorthWest => TopLeftCornerCursor,
+            WindowEdge.NorthEast => TopRightCornerCursor,
+            WindowEdge.SouthWest => BottomLeftCornerCursor,
+            WindowEdge.SouthEast => BottomRightCornerCursor,
+            _ => DefaultCursor,
+        };
     }
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
@@ -131,6 +223,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
     {
+        UpdateResizeCursor(e);
+
         if (_isPointerInside)
             return;
         _isPointerInside = true;
@@ -154,6 +248,12 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private void CanvasPointerExited(object? sender, PointerEventArgs e)
     {
         _isPointerInside = false;
+        WindowCanvas.Cursor = DefaultCursor;
+    }
+
+    private void CanvasPointerMoved(object? sender, PointerEventArgs e)
+    {
+        UpdateResizeCursor(e);
     }
 
     private void FloatingWindowResized(object? sender, WindowResizedEventArgs e)
@@ -224,7 +324,6 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
                 config.UseFixedWindowSize,
                 config.WindowWidth,
                 config.WindowHeight,
-                config.ShowWindowDecorations,
                 config.PreviewHighlightColor,
             });
 
@@ -241,9 +340,10 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             Height = WindowConfig.WindowHeight;
         }
 
-        SystemDecorations = configSnapshot.ShowWindowDecorations
-            ? SystemDecorations.Full
-            : SystemDecorations.BorderOnly;
+        if (!CanResize)
+            WindowCanvas.Cursor = DefaultCursor;
+
+        SystemDecorations = SystemDecorations.BorderOnly;
 
         if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
         {

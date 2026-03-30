@@ -37,7 +37,6 @@ public static class PlatformServiceCollectionExtensions
                 IFloatingWindowHandleConfigurator,
                 WindowsFloatingWindowHandleConfigurator
             >();
-            services.AddSingleton<ISettingsPlatformPolicy, WindowsSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, WindowsPlatformAppInfoProvider>();
         }
         else if (OperatingSystem.IsLinux())
@@ -50,7 +49,6 @@ public static class PlatformServiceCollectionExtensions
                 IFloatingWindowHandleConfigurator,
                 NoOpFloatingWindowHandleConfigurator
             >();
-            services.AddSingleton<ISettingsPlatformPolicy, LinuxSettingsPlatformPolicy>();
             services.AddSingleton<IPlatformAppInfoProvider, LinuxPlatformAppInfoProvider>();
         }
         else
