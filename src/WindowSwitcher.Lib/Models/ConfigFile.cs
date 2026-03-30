@@ -17,9 +17,7 @@ public class ConfigFile
     public int WindowWidth { get; set; } = 300;
     public int WindowHeight { get; set; } = 200;
     public string PreviewHighlightColor { get; set; } = "#E3008C";
-
-    public bool DisablePreviews { get; set; } = false;
-    public bool ActivateWindowsPreview { get; set; } = true;
+    public bool EnablePreviews { get; set; } = true;
 
     // Prefix / Blacklist
     public List<string> WhitelistPrefixes { get; set; } = new List<string>();

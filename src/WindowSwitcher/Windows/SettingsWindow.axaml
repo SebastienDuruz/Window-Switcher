@@ -25,8 +25,8 @@
                         <CheckBox Content="Window decorations"
                                   IsVisible="{Binding ShowWindowDecorationSetting}"
                                   IsChecked="{Binding ShowWindowDecorations, Mode=TwoWay}" />
-                        <CheckBox Content="Disable previews"
-                                  IsChecked="{Binding DisablePreviews, Mode=TwoWay}" />
+                        <CheckBox Content="Enable previews"
+                                  IsChecked="{Binding EnablePreviews, Mode=TwoWay}" />
                         <CheckBox Content="Start minimized"
                                   IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
                 </StackPanel>
