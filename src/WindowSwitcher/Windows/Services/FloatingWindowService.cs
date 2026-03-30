@@ -460,7 +460,7 @@ internal sealed class FloatingWindowService
     {
         return ConfigFileAccessor
             .GetInstance()
-            .ReadConfig(config => !config.DisablePreviews && config.ActivateWindowsPreview);
+            .ReadConfig(config => config.EnablePreviews);
     }
 
     private async Task UpdateScreenshotForCurrentOperationAsync(

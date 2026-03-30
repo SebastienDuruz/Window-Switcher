@@ -15,7 +15,7 @@ public class SettingsViewModel : ObservableObject
     private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
     private readonly ISettingsPlatformPolicy _settingsPlatformPolicy;
     private readonly Action _applyAction;
-    private bool _pendingDisablePreviews;
+    private bool _pendingEnablePreviews;
     public IRelayCommand ApplyCommand { get; }
 
     public SettingsViewModel(Action applyAction, ISettingsPlatformPolicy settingsPlatformPolicy)
@@ -25,32 +25,32 @@ public class SettingsViewModel : ObservableObject
 
         _applyAction = applyAction;
         _settingsPlatformPolicy = settingsPlatformPolicy;
-        _pendingDisablePreviews = _configAccessor.ReadConfig(config => config.DisablePreviews);
+        _pendingEnablePreviews = _configAccessor.ReadConfig(config => config.EnablePreviews);
         ApplyCommand = new RelayCommand(Apply);
     }
 
     public bool ShowWindowDecorationSetting => _settingsPlatformPolicy.ShowWindowDecorationSetting;
 
-    public bool DisablePreviews
+    public bool EnablePreviews
     {
-        get => _pendingDisablePreviews;
+        get => _pendingEnablePreviews;
         set
         {
-            if (_pendingDisablePreviews == value)
+            if (_pendingEnablePreviews == value)
                 return;
-            _pendingDisablePreviews = value;
+            _pendingEnablePreviews = value;
             OnPropertyChanged();
         }
     }
 
     public void ResetPendingValues()
     {
-        bool configuredValue = _configAccessor.ReadConfig(config => config.DisablePreviews);
-        if (_pendingDisablePreviews == configuredValue)
+        bool configuredValue = _configAccessor.ReadConfig(config => config.EnablePreviews);
+        if (_pendingEnablePreviews == configuredValue)
             return;
 
-        _pendingDisablePreviews = configuredValue;
-        OnPropertyChanged(nameof(DisablePreviews));
+        _pendingEnablePreviews = configuredValue;
+        OnPropertyChanged(nameof(EnablePreviews));
     }
 
     public bool StartMinimized
@@ -204,7 +204,7 @@ public class SettingsViewModel : ObservableObject
 
     private void Apply()
     {
-        _configAccessor.UpdateConfig(config => config.DisablePreviews = _pendingDisablePreviews);
+        _configAccessor.UpdateConfig(config => config.EnablePreviews = _pendingEnablePreviews);
         _applyAction();
     }
 
