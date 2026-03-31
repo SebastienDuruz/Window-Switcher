@@ -138,72 +138,69 @@ Download the latest release [here](https://github.com/SebastienDuruz/Window-Swit
 
 From the repo root:
 
-- Build: `dotnet build Window-Switcher.sln`
+- Build: `dotnet build Window-Switcher.slnx`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
-Build resources used by the packaging scripts now live under:
+Build resources used by packaging now live under:
 
-- `./scripts/assets/installer/`
-- `./scripts/assets/packaging/linux/`
+- `./build/assets/installer/`
+- `./build/assets/packaging/linux/`
 
 Generated build outputs now live under:
 
-- `./scripts/artifacts/`
+- `./build/artifacts/`
 
-## Build Windows installer (scripted)
+## Build Artifacts With Nuke
 
-Prerequisite: install NSIS (so `makensis` is available).
-
-From the repo root:
-
-`pwsh ./scripts/build-installer.ps1`
-
-The NSIS definition used by these scripts is stored in `./scripts/assets/installer/WindowSwitcher.nsi`.
-
-The script reads the version from `./Directory.Build.props` by default. Use `-Version` only to override it for a specific build.
-
-(Works in Windows PowerShell too: `powershell ./scripts/build-installer.ps1`.)
-
-From Linux/macOS, you can also use:
-
-`./scripts/build-installer.sh`
-
-## Build Linux AppImage (scripted)
+Nuke is now the only build/deploy entrypoint for installer/AppImage packaging.
 
 From the repo root:
 
-`./scripts/build-appimage.sh`
+- Linux/macOS shell: `./build/build.sh --target <TargetName>`
+- Windows cmd: `./build/build.cmd --target <TargetName>`
+- Windows PowerShell: `./build/build.cmd --target <TargetName>`
 
-The AppImage packaging resources used by this script are stored in `./scripts/assets/packaging/linux/`.
+From `./build/` you can also run:
 
-The script reads the version from `./Directory.Build.props` by default. Use `-v` only to override it for a specific build.
+- Linux/macOS shell: `./build.sh --target <TargetName>`
+- Windows cmd: `build.cmd --target <TargetName>`
+- Windows PowerShell: `./build.cmd --target <TargetName>`
 
-Output: `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+Available targets:
 
-## Build all artifacts from Linux
+- `Restore`
+- `Compile`
+- `Installer` (Windows host only)
+- `AppImage` (Linux host only)
+- `Artifacts` (builds the artifact for the current host OS)
 
-From the repo root:
+Examples:
 
-`./scripts/build-artifacts.sh`
+- Windows installer (on Windows): `./build/build.cmd --target Installer`
+- Linux AppImage (on Linux): `./build/build.sh --target AppImage`
 
-By default, this produces both:
+Outputs:
 
-- `./scripts/artifacts/installer/WindowSwitcher-setup-<version>-win-x64.exe`
-- `./scripts/artifacts/appimage/WindowSwitcher-<version>-linux-x64.AppImage`
+- `./build/artifacts/installer/WindowSwitcher-setup-<version>-<win-runtime>.exe`
+- `./build/artifacts/appimage/WindowSwitcher-<version>-<linux-runtime>.AppImage`
 
-You can also target a single artifact from the wrapper:
+Versioning:
 
-- `./scripts/build-artifacts.sh --skip-installer` builds only the Linux AppImage
-- `./scripts/build-artifacts.sh --skip-appimage` builds only the Windows installer
+- Version is read from `./Directory.Build.props` (`WindowSwitcherVersion`) by default.
+- Override for one build with `--version <x.y.z>`.
 
-Prerequisites on Linux:
+Important:
+
+- Cross-OS packaging is intentionally disabled.
+- `appimagetool` is auto-downloaded to `./build/artifacts/tools/` when missing.
+
+Prerequisites:
 
 - `.NET SDK`
-- `NSIS` (`makensis`) when building the Windows installer
-- `appimagetool` in `PATH`, or let the AppImage script download it automatically
+- `NSIS` (`makensis`) for `Installer`
 
 ### Linux dependencies
 
