@@ -36,9 +36,20 @@
                             Content="Add"
                             Click="AddWhitelistClick" />
                 </Grid>
-                <ListBox Name="WhitelistListBox"
-                         Grid.Row="1"
-                         SelectionChanged="WhitelistListBoxSelectionChanged" />
+                <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0 8 0 0" Spacing="0">
+                    <ListBox Name="WhitelistListBox"
+                             Grid.Row="1"
+                             SelectionChanged="WhitelistListBoxSelectionChanged">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Height" Value="22" />
+                                <Setter Property="FontSize" Value="14" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="8, 2" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </StackPanel>
             </Grid>
         </TabItem>
         <TabItem Header="Blacklist">
@@ -56,9 +67,20 @@
                             Content="Add"
                             Click="AddBlacklistClick" />
                 </Grid>
-                <ListBox Name="BlacklistListBox"
-                         Grid.Row="1"
-                         SelectionChanged="BlacklistListBoxSelectionChanged" />
+                <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0 8 0 0" Spacing="0">
+                    <ListBox Name="BlacklistListBox"
+                             Grid.Row="1"
+                             SelectionChanged="BlacklistListBoxSelectionChanged">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Height" Value="22" />
+                                <Setter Property="FontSize" Value="14" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="8, 2" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </StackPanel>
             </Grid>
         </TabItem>
     </TabControl>

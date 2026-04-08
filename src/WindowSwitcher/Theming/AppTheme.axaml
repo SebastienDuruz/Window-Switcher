@@ -1,12 +1,17 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#1F2326" />
         <SolidColorBrush x:Key="SettingsSectionBorderBrush" Color="#3A3A3A" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="Gray" />
         <SolidColorBrush x:Key="ErrorTextBrush" Color="Tomato" />
         <SolidColorBrush x:Key="FloatingWindowBackgroundBrush" Color="Black" />
         <SolidColorBrush x:Key="FloatingWindowLabelBrush" Color="Fuchsia" />
     </Styles.Resources>
+    
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+    </Style>
 
     <Style Selector="TextBlock.window-section-title">
         <Setter Property="FontSize" Value="15" />
