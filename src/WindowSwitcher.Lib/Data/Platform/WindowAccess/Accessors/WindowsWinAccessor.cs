@@ -145,10 +145,9 @@ public class WindowsWinAccessor : WinAccessorBase
         if (windowHandle == IntPtr.Zero)
             return;
 
-        _ = User32Functions.ShowWindow(
-            windowHandle,
-            User32Functions.IsIconic(windowHandle) ? SwRestore : SwShow
-        );
+        bool isMinimized = User32Functions.IsIconic(windowHandle);
+        if (isMinimized)
+            _ = User32Functions.ShowWindow(windowHandle, SwRestore);
 
         IntPtr foregroundWindowHandle = User32Functions.GetForegroundWindow();
         uint currentThreadId = Kernel32Functions.GetCurrentThreadId();
@@ -186,9 +185,9 @@ public class WindowsWinAccessor : WinAccessorBase
             }
 
             _ = User32Functions.BringWindowToTop(windowHandle);
-            _ = User32Functions.SetActiveWindow(windowHandle);
             _ = User32Functions.SetForegroundWindow(windowHandle);
-            _ = User32Functions.ShowWindow(windowHandle, SwRestore);
+            if (!isMinimized)
+                _ = User32Functions.ShowWindow(windowHandle, SwShow);
         }
         finally
         {
