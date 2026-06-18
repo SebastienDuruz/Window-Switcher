@@ -138,6 +138,45 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         }
     }
 
+    public void CaptureHandledException(
+        Exception exception,
+        string source,
+        IReadOnlyDictionary<string, string>? tags = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+
+        if (!IsInitialized())
+            return;
+
+        try
+        {
+            _sentrySdk.CaptureException(exception, scope =>
+            {
+                scope.SetTag("capture_source", NormalizeTagValue(source));
+                scope.SetTag("handled", "true");
+
+                if (tags is null)
+                    return;
+
+                foreach (KeyValuePair<string, string> tag in tags)
+                {
+                    if (string.IsNullOrWhiteSpace(tag.Key) || string.IsNullOrWhiteSpace(tag.Value))
+                        continue;
+
+                    scope.SetTag(NormalizeTagKey(tag.Key), NormalizeTagValue(tag.Value));
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                $"[Sentry] Failed to capture handled exception cleanly: {ex.Message}"
+            );
+        }
+    }
+
     public async Task ShutdownAsync()
     {
         IDisposable? handle;
@@ -387,6 +426,12 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     }
 
     private static string NormalizeTagValue(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        return value.Trim().ToLowerInvariant().Replace(' ', '_');
+    }
+
+    private static string NormalizeTagKey(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
         return value.Trim().ToLowerInvariant().Replace(' ', '_');

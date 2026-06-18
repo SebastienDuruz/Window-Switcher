@@ -1,15 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Controls;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using WindowSwitcher.Lib.Data;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
+using WindowSwitcher.ViewModels.Abstractions;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -17,9 +15,10 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 {
     private const int WindowListRefreshIntervalMs = 250;
     private readonly CancellationTokenSource _cts = new();
-
-    [ObservableProperty]
-    private ObservableCollection<ListBoxItem> _windowsListBoxItems = new();
+    private readonly IWindowSnapshotProvider _windowSnapshotProvider;
+    private readonly IWindowFilterSettingsProvider _windowFilterSettingsProvider;
+    private readonly IViewModelDispatcher _dispatcher;
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
@@ -27,12 +26,20 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private WindowConfig? _selectedWindow;
 
-    private WinAccessorBase WinAccessorBase { get; }
     public HashSet<string> TempWindowIdsBlacklist { get; } = new(StringComparer.Ordinal);
 
-    public WindowListViewModel(WinAccessorBase winAccessorBase)
+    public WindowListViewModel(
+        IWindowSnapshotProvider windowSnapshotProvider,
+        IWindowFilterSettingsProvider windowFilterSettingsProvider,
+        IViewModelDispatcher dispatcher)
     {
-        WinAccessorBase = winAccessorBase;
+        ArgumentNullException.ThrowIfNull(windowSnapshotProvider);
+        ArgumentNullException.ThrowIfNull(windowFilterSettingsProvider);
+        ArgumentNullException.ThrowIfNull(dispatcher);
+
+        _windowSnapshotProvider = windowSnapshotProvider;
+        _windowFilterSettingsProvider = windowFilterSettingsProvider;
+        _dispatcher = dispatcher;
         _ = Task.Run(() => RunPeriodicTask(_cts.Token));
     }
 
@@ -62,9 +69,9 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         _cts.Dispose();
     }
 
-    public void FetchWindowsWithFilters()
+    public async Task FetchWindowsWithFiltersAsync(CancellationToken cancellationToken = default)
     {
-        ApplyWindowsWithFilters(WinAccessorBase.GetWindows());
+        await FetchAndApplyWindowsAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public bool TrySelectWindowById(string windowId)
@@ -84,16 +91,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
     {
-        var configAccessor = ConfigFileAccessor.GetInstance();
-        var configSnapshot = configAccessor.ReadConfig(config => new
-        {
-            BlacklistPrefixes = config.BlacklistPrefixes.ToHashSet(
-                StringComparer.OrdinalIgnoreCase
-            ),
-            WhitelistPrefixes = config
-                .WhitelistPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix))
-                .ToArray(),
-        });
+        WindowFilterSettings filterSettings = _windowFilterSettingsProvider.GetSettings();
 
         var fetchedIds = new HashSet<string>(StringComparer.Ordinal);
         var existingById = WindowsConfigs.ToDictionary(
@@ -107,9 +105,9 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
             fetchedIds.Add(fetchedWindow.WindowId);
 
             bool isOnBlacklist =
-                configSnapshot.BlacklistPrefixes.Contains(fetchedWindow.WindowTitle)
+                filterSettings.BlacklistPrefixes.Contains(fetchedWindow.WindowTitle)
                 || TempWindowIdsBlacklist.Contains(fetchedWindow.WindowId);
-            bool isOnWhiteList = configSnapshot.WhitelistPrefixes.Any(prefix =>
+            bool isOnWhiteList = filterSettings.WhitelistPrefixes.Any(prefix =>
                 fetchedWindow.WindowTitle.Contains(prefix, StringComparison.OrdinalIgnoreCase)
             );
             bool isOnWindowsList = existingById.TryGetValue(
@@ -165,19 +163,33 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     {
         try
         {
-            ObservableCollection<WindowConfig> fetchedWindows = WinAccessorBase.GetWindows();
-            await Dispatcher.UIThread.InvokeAsync(
-                () => ApplyWindowsWithFilters(fetchedWindows),
-                DispatcherPriority.Background
-            );
+            await FetchAndApplyWindowsAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Shutdown path.
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Ignore transient refresh failures and continue periodic polling.
+            Trace.TraceWarning(
+                $"[WindowList] Failed to refresh window list; polling will continue. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+    }
+
+    private async Task FetchAndApplyWindowsAsync(CancellationToken cancellationToken)
+    {
+        await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            IReadOnlyCollection<WindowConfig> fetchedWindows = await _windowSnapshotProvider
+                .GetWindowsAsync(cancellationToken)
+                .ConfigureAwait(false);
+            await _dispatcher.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
+        }
+        finally
+        {
+            _refreshGate.Release();
         }
     }
 }

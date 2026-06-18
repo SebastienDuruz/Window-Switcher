@@ -13,10 +13,36 @@ public sealed class PwDumpWrapper() : CommandBase("pw-dump"), IPwDumpWrapper
         return string.Empty;
     }
 
+    public async Task<string> ExecuteAsync(
+        string args,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (LinuxDependencies.IsPwDumpAvailable)
+            return await ExecuteWithArgumentsAsync(args, timeoutMs: 2_500, cancellationToken)
+                .ConfigureAwait(false);
+
+        LinuxDependencies.ReportMissingOnce("pw-dump");
+        return string.Empty;
+    }
+
     public string Execute(int timeoutMs)
     {
         if (LinuxDependencies.IsPwDumpAvailable)
             return ExecuteWithArgumentList([], timeoutMs);
+        LinuxDependencies.ReportMissingOnce("pw-dump");
+        return string.Empty;
+    }
+
+    public async Task<string> ExecuteAsync(
+        int timeoutMs,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (LinuxDependencies.IsPwDumpAvailable)
+            return await ExecuteWithArgumentListAsync([], timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+
         LinuxDependencies.ReportMissingOnce("pw-dump");
         return string.Empty;
     }

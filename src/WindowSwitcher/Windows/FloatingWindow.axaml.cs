@@ -33,27 +33,32 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
+    private readonly IFloatingWindowSettingsService _floatingWindowSettingsService;
     private readonly FloatingWindowService _service;
     public WindowConfig WindowConfig { get; private set; }
 
-    public FloatingWindow(
+    internal FloatingWindow(
         WindowConfig windowConfig,
         WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
-        IFloatingWindowHost floatingWindowHost
+        IFloatingWindowHost floatingWindowHost,
+        IFloatingWindowSettingsService floatingWindowSettingsService
     )
     {
         ArgumentNullException.ThrowIfNull(windowConfig);
         ArgumentNullException.ThrowIfNull(winAccessorBase);
         ArgumentNullException.ThrowIfNull(previewFrameProvider);
         ArgumentNullException.ThrowIfNull(floatingWindowHost);
+        ArgumentNullException.ThrowIfNull(floatingWindowSettingsService);
 
         InitializeComponent();
 
         WindowConfig = windowConfig;
         _winAccessorBase = winAccessorBase;
         _floatingWindowHost = floatingWindowHost;
+        _floatingWindowSettingsService = floatingWindowSettingsService;
         _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
+        var nativeThumbnailRenderer = AppServiceProvider.GetRequiredService<INativeThumbnailRenderer>();
         var floatingWindowHandleConfigurator = AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
@@ -63,6 +68,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             WindowConfig,
             previewFrameProvider,
             _floatingPreviewPolicy,
+            nativeThumbnailRenderer,
             WindowScreenshot,
             PreviewBorder
         );
@@ -83,9 +89,9 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void SetInitialWindowSettings()
     {
-        WindowConfig? settingsConfig = ConfigFileAccessor
-            .GetInstance()
-            .GetFloatingWindowConfig(WindowConfig);
+        WindowConfig? settingsConfig = _floatingWindowSettingsService.GetPersistedConfig(
+            WindowConfig
+        );
         if (settingsConfig != null)
         {
             WindowConfig = settingsConfig;
@@ -130,7 +136,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         _floatingWindowHost.SetActivePreview(this);
 
-        bool moveWindows = ConfigFileAccessor.GetInstance().ReadConfig(config => config.MoveWindows);
+        bool moveWindows = _floatingWindowSettingsService.GetBehaviorSettings().MoveWindows;
 
         if (TryBeginResizeDrag(e))
             return;
@@ -217,8 +223,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void CanvasPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
-        _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
+        _ = RaiseWindowAndNotifyActivationAsync();
     }
 
     private void CanvasPointerEntered(object? sender, PointerEventArgs e)
@@ -229,7 +234,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             return;
         _isPointerInside = true;
 
-        if (!ConfigFileAccessor.GetInstance().ReadConfig(config => config.FocusOnHover))
+        if (!_floatingWindowSettingsService.GetBehaviorSettings().FocusOnHover)
             return;
 
         PointerPoint point = e.GetCurrentPoint(this);
@@ -241,8 +246,20 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             return;
 
         _floatingWindowHost.SetActivePreview(this);
-        _winAccessorBase.RaiseWindow(WindowConfig.WindowId);
-        _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
+        _ = RaiseWindowAndNotifyActivationAsync();
+    }
+
+    private async Task RaiseWindowAndNotifyActivationAsync()
+    {
+        try
+        {
+            await _winAccessorBase.RaiseWindowAsync(WindowConfig.WindowId);
+            _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
+        }
+        catch (Exception)
+        {
+            // Best-effort activation path.
+        }
     }
 
     private void CanvasPointerExited(object? sender, PointerEventArgs e)
@@ -272,7 +289,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void FloatingWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().SaveFloatingWindowSettings(WindowConfig);
+        _floatingWindowSettingsService.Save(WindowConfig);
         _floatingWindowHost.ClearActivePreview(this);
         bool allowClose = StaticData.AppClosing || _closeRequestedByHost;
         e.Cancel = !allowClose;
@@ -316,16 +333,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     private void ApplySettingsCore(bool refreshPreviewPipeline)
     {
-        var configSnapshot = ConfigFileAccessor
-            .GetInstance()
-            .ReadConfig(config => new
-            {
-                config.ResizeWindows,
-                config.UseFixedWindowSize,
-                config.WindowWidth,
-                config.WindowHeight,
-                config.PreviewHighlightColor,
-            });
+        FloatingWindowAppearanceSettings configSnapshot =
+            _floatingWindowSettingsService.GetAppearanceSettings();
 
         CanResize = configSnapshot.ResizeWindows;
         if (configSnapshot.UseFixedWindowSize)

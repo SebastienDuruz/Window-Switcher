@@ -14,6 +14,17 @@ public sealed class SentryAppTelemetryTests
     private const string ValidDsn = "https://examplePublicKey@o0.ingest.sentry.io/0";
     private const string ValidTelemetryUserId = "e084ab00-8f33-4ad4-955a-bbc615590c6e";
     private static readonly string DefaultDsn = new ConfigFile().SentryDsn;
+    private static string ExpectedAppVersion =>
+        SentryAppTelemetry.GetSentryRelease()["window-switcher@".Length..];
+    private static string ExpectedOperatingSystem =>
+        OperatingSystem.IsLinux()
+            ? "linux"
+            : OperatingSystem.IsWindows()
+                ? "windows"
+                : OperatingSystem.IsMacOS()
+                    ? "macos"
+                    : "unknown";
+
     public static TheoryData<string?, string> ResolveSentryDsnCases =>
         new()
         {
@@ -66,7 +77,7 @@ public sealed class SentryAppTelemetryTests
     {
         string release = SentryAppTelemetry.GetSentryRelease();
 
-        Assert.Equal("window-switcher@0.9.0", release);
+        Assert.Equal($"window-switcher@{ExpectedAppVersion}", release);
     }
 
     [Fact]
@@ -164,12 +175,12 @@ public sealed class SentryAppTelemetryTests
         Assert.Equal(1, sentrySdk.InitCallCount);
         Assert.NotNull(sentrySdk.LastOptions);
         Assert.Equal(ValidDsn, sentrySdk.LastOptions!.Dsn);
-        Assert.Equal("window-switcher@0.9.0", sentrySdk.LastOptions.Release);
+        Assert.Equal(SentryAppTelemetry.GetSentryRelease(), sentrySdk.LastOptions.Release);
         Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.LastOptions.Environment);
         Assert.False(sentrySdk.LastOptions.SendDefaultPii);
         Assert.True(sentrySdk.ScopeTags.ContainsKey("os"));
         Assert.True(sentrySdk.ScopeTags.ContainsKey("session_type"));
-        Assert.Equal("0.9.0", sentrySdk.ScopeTags["app_version"]);
+        Assert.Equal(ExpectedAppVersion, sentrySdk.ScopeTags["app_version"]);
         Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.ScopeTags["build_channel"]);
         Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeTags["telemetry_user_id"]);
         Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeUserId);
@@ -216,8 +227,8 @@ public sealed class SentryAppTelemetryTests
         Assert.Equal(SentryAppTelemetry.AppStartedMetricName, metric.Name);
         Assert.Equal(1d, metric.Value);
         Assert.Equal("pipewire", metric.Attributes!["preview_mode"]);
-        Assert.Equal("linux", metric.Attributes["os"]);
-        Assert.Equal("0.9.0", metric.Attributes["app_version"]);
+        Assert.Equal(ExpectedOperatingSystem, metric.Attributes["os"]);
+        Assert.Equal(ExpectedAppVersion, metric.Attributes["app_version"]);
         Assert.Equal(ValidTelemetryUserId, metric.Attributes["telemetry_user_id"]);
         Assert.Equal(1, sentrySdk.FlushCallCount);
     }
@@ -243,9 +254,9 @@ public sealed class SentryAppTelemetryTests
             ValidTelemetryUserId
         );
 
-        Assert.Equal("linux", attributes["os"]);
+        Assert.Equal(ExpectedOperatingSystem, attributes["os"]);
         Assert.Equal("pipewire", attributes["preview_mode"]);
-        Assert.Equal("0.9.0", attributes["app_version"]);
+        Assert.Equal(ExpectedAppVersion, attributes["app_version"]);
         Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), attributes["build_channel"]);
         Assert.Equal(ValidTelemetryUserId, attributes["telemetry_user_id"]);
         Assert.True(attributes.ContainsKey("session_type"));
@@ -261,6 +272,29 @@ public sealed class SentryAppTelemetryTests
 
         CapturedExceptionRecord capturedException = Assert.Single(sentrySdk.CapturedExceptions);
         Assert.Equal("dispatcher_unhandled", capturedException.Tags["capture_source"]);
+    }
+
+    [Fact]
+    public void CaptureHandledException_SetsHandledTags()
+    {
+        var sentrySdk = new FakeSentrySdkAdapter();
+        var sut = CreateInitializedSut(sentrySdk);
+
+        sut.CaptureHandledException(
+            new InvalidOperationException("boom"),
+            "config_load_failure",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["reason"] = "invalid_json",
+                ["defaults_restored"] = "true",
+            }
+        );
+
+        CapturedExceptionRecord capturedException = Assert.Single(sentrySdk.CapturedExceptions);
+        Assert.Equal("config_load_failure", capturedException.Tags["capture_source"]);
+        Assert.Equal("true", capturedException.Tags["handled"]);
+        Assert.Equal("invalid_json", capturedException.Tags["reason"]);
+        Assert.Equal("true", capturedException.Tags["defaults_restored"]);
     }
 
     [Fact]

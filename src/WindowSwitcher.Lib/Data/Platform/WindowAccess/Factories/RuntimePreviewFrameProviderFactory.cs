@@ -4,6 +4,7 @@ using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 
@@ -25,7 +26,7 @@ public sealed class RuntimePreviewFrameProviderFactory(
         ArgumentNullException.ThrowIfNull(accessorBase);
 
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
+            return new NoOpPreviewFrameProvider();
 
         if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies))
             return new ScreenshotPreviewFrameProvider(accessorBase);

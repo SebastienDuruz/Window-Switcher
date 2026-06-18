@@ -1,11 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using WindowSwitcher.Lib.Data;
-using WindowSwitcher.Lib.Data.Platform.Interop;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -27,6 +27,7 @@ internal sealed class FloatingWindowService
     private readonly IPreviewFrameProvider _previewFrameProvider;
     private readonly IStreamingPreviewFrameProvider? _streamingPreviewFrameProvider;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
+    private readonly INativeThumbnailRenderer _nativeThumbnailRenderer;
     private readonly Image _windowScreenshot;
     private readonly Border _previewBorder;
     private readonly CancellationTokenSource _cts = new();
@@ -35,7 +36,7 @@ internal sealed class FloatingWindowService
     private CancellationTokenSource? _previewOperationCancellation = new();
     private Bitmap? _currentScreenshot;
     private Bitmap? _previousScreenshot;
-    private IntPtr _thumbnailHandle = IntPtr.Zero;
+    private nint _thumbnailHandle;
     private volatile bool _isClosing;
     private bool _previewCaptureSuspendedWhileDisabled;
     private bool _isPreviewSurfaceCleared = true;
@@ -47,12 +48,14 @@ internal sealed class FloatingWindowService
     private int _streamFrameDrainScheduled;
     private CancellationTokenSource? _resizePreviewRefreshCancellation;
     private bool _resizePreviewRefreshPending;
+    private long _lastPreviewLoopFailureLogTicks;
 
     public FloatingWindowService(
         Window ownerWindow,
         WindowConfig windowConfig,
         IPreviewFrameProvider previewFrameProvider,
         IFloatingPreviewPolicy floatingPreviewPolicy,
+        INativeThumbnailRenderer nativeThumbnailRenderer,
         Image windowScreenshot,
         Border previewBorder
     )
@@ -61,6 +64,7 @@ internal sealed class FloatingWindowService
         ArgumentNullException.ThrowIfNull(windowConfig);
         ArgumentNullException.ThrowIfNull(previewFrameProvider);
         ArgumentNullException.ThrowIfNull(floatingPreviewPolicy);
+        ArgumentNullException.ThrowIfNull(nativeThumbnailRenderer);
         ArgumentNullException.ThrowIfNull(windowScreenshot);
         ArgumentNullException.ThrowIfNull(previewBorder);
 
@@ -69,6 +73,7 @@ internal sealed class FloatingWindowService
         _previewFrameProvider = previewFrameProvider;
         _streamingPreviewFrameProvider = previewFrameProvider as IStreamingPreviewFrameProvider;
         _floatingPreviewPolicy = floatingPreviewPolicy;
+        _nativeThumbnailRenderer = nativeThumbnailRenderer;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
         _previewCaptureSuspendedWhileDisabled = !IsPreviewCaptureEnabled();
@@ -332,8 +337,9 @@ internal sealed class FloatingWindowService
             {
                 // Preview settings changed while an operation was running.
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                LogPreviewLoopFailure("screenshot_polling", ex);
                 await Task.Delay(500, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -389,11 +395,36 @@ internal sealed class FloatingWindowService
             {
                 // Preview settings changed while an operation was running.
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                LogPreviewLoopFailure("continuous_stream", ex);
                 await Task.Delay(500, cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    private void LogPreviewLoopFailure(string mode, Exception exception)
+    {
+        long nowTicks = DateTimeOffset.UtcNow.Ticks;
+        long previousTicks = Interlocked.Read(ref _lastPreviewLoopFailureLogTicks);
+        if (
+            previousTicks != 0
+            && nowTicks - previousTicks < TimeSpan.FromSeconds(30).Ticks
+        )
+            return;
+
+        if (
+            Interlocked.CompareExchange(
+                ref _lastPreviewLoopFailureLogTicks,
+                nowTicks,
+                previousTicks
+            ) != previousTicks
+        )
+            return;
+
+        Trace.TraceWarning(
+            $"[Preview] Preview loop failed; retrying. Mode={mode}; ExceptionType={exception.GetType().FullName}"
+        );
     }
 
     private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
@@ -709,10 +740,10 @@ internal sealed class FloatingWindowService
 
     private void RegisterWindowThumbnail()
     {
-        if (_thumbnailHandle != IntPtr.Zero)
+        if (_thumbnailHandle != 0)
         {
-            DwmFunctions.DwmUnregisterThumbnail(_thumbnailHandle);
-            _thumbnailHandle = IntPtr.Zero;
+            _nativeThumbnailRenderer.Unregister(_thumbnailHandle);
+            _thumbnailHandle = 0;
         }
 
         IPlatformHandle? platformHandle = _ownerWindow.TryGetPlatformHandle();
@@ -721,46 +752,35 @@ internal sealed class FloatingWindowService
         if (!long.TryParse(_windowConfig.WindowId, out long srcHandleLong))
             return;
 
-        IntPtr windowHandle = platformHandle.Handle;
-        IntPtr srcHandle = new(srcHandleLong);
-        int res = DwmFunctions.DwmRegisterThumbnail(windowHandle, srcHandle, out IntPtr thumbnail);
-        if (res != 0)
-            return;
-
-        _thumbnailHandle = thumbnail;
-
-        DwmFunctions.DwmQueryThumbnailSourceSize(thumbnail, out DwmFunctions.PSIZE _);
         double scale = _ownerWindow.Screens.Primary?.Scaling ?? 1;
         int inset = (int)Math.Round(PreviewBorderThickness * scale);
-        DwmFunctions.Rect dest = new()
+        var destinationBounds = new NativeThumbnailBounds(
+            Left: inset,
+            Top: (int)(TitleReservedHeight * scale) + inset,
+            Right: (int)(_windowConfig.WindowWidth * scale) - inset,
+            Bottom: (int)(_windowConfig.WindowHeight * scale) - inset
+        );
+
+        if (
+            _nativeThumbnailRenderer.TryRegister(
+                platformHandle.Handle,
+                new IntPtr(srcHandleLong),
+                destinationBounds,
+                out nint thumbnailHandle
+            )
+        )
         {
-            Left = inset,
-            Top = (int)(TitleReservedHeight * scale) + inset,
-            Right = (int)(_windowConfig.WindowWidth * scale) - inset,
-            Bottom = (int)(_windowConfig.WindowHeight * scale) - inset,
-        };
-
-        DwmFunctions.DWM_THUMBNAIL_PROPERTIES props = new();
-        props.dwFlags =
-            DwmFunctions.DWM_TNP_SOURCECLIENTAREAONLY
-            | DwmFunctions.DWM_TNP_VISIBLE
-            | DwmFunctions.DWM_TNP_OPACITY
-            | DwmFunctions.DWM_TNP_RECTDESTINATION;
-        props.fSourceClientAreaOnly = false;
-        props.fVisible = true;
-        props.opacity = 255;
-        props.rcDestination = dest;
-
-        DwmFunctions.DwmUpdateThumbnailProperties(thumbnail, ref props);
+            _thumbnailHandle = thumbnailHandle;
+        }
     }
 
     private void UnregisterWindowThumbnail()
     {
-        if (_thumbnailHandle == IntPtr.Zero)
+        if (_thumbnailHandle == 0)
             return;
 
-        DwmFunctions.DwmUnregisterThumbnail(_thumbnailHandle);
-        _thumbnailHandle = IntPtr.Zero;
+        _nativeThumbnailRenderer.Unregister(_thumbnailHandle);
+        _thumbnailHandle = 0;
     }
 
     private double RoundToPixel(double value)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Theming;
+using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher;
@@ -31,6 +33,7 @@ public partial class App : Application
         AppServiceProvider.Initialize();
         AppTelemetry = AppServiceProvider.GetRequiredService<IAppTelemetry>();
         AppTelemetry.Initialize();
+        CaptureConfigurationLoadFailureIfNeeded();
         Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnCurrentDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnTaskSchedulerUnobservedTaskException;
@@ -39,6 +42,29 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+    }
+
+    private void CaptureConfigurationLoadFailureIfNeeded()
+    {
+        ConfigFileAccessor.ConfigLoadFailure? failure = ConfigFileAccessor
+            .GetInstance()
+            .ConsumeLastReadFailure();
+        if (failure is null)
+            return;
+
+        var exception = new InvalidOperationException(
+            "User settings could not be loaded and defaults were restored."
+        );
+        AppTelemetry.CaptureHandledException(
+            exception,
+            "config_load_failure",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["reason"] = failure.Reason,
+                ["exception_type"] = failure.ExceptionType,
+                ["defaults_restored"] = failure.DefaultsRestored ? "true" : "false",
+            }
+        );
     }
 
     public override void OnFrameworkInitializationCompleted()

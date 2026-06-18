@@ -8,8 +8,6 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
@@ -35,12 +33,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private KeybindsWindow KeybindsWindow { get; }
     private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
-    private IFloatingPreviewWindow? _activePreviewWindow;
     private WindowListViewModel ViewModel { get; }
-    private readonly IWindowKeybindActivator _windowKeybindActivator;
-    private readonly HashSet<string> _missingDependencies = new(StringComparer.OrdinalIgnoreCase);
-    private Window? _missingDependenciesDialog;
-    private TextBlock? _missingDependenciesTextBlock;
+    private readonly FloatingPreviewCoordinator _previewCoordinator;
+    private readonly WindowBlacklistCoordinator _blacklistCoordinator;
+    private readonly MissingDependencyNotificationService _missingDependencyNotificationService;
+    private readonly StartupUpdateNotificationService _startupUpdateNotificationService;
+    private readonly IMainWindowConfigurationService _configurationService;
     private bool _suppressWindowStateHandling;
     private bool _isHiddenToTray;
     private readonly CancellationTokenSource _updateNotificationCts = new();
@@ -50,23 +48,31 @@ public partial class MainWindow : Window, IFloatingWindowHost
         InitializeComponent();
 
         PropertyChanged += OnWindowPropertyChanged;
-        _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
-        _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
-        _floatingWindowRegistry = new FloatingWindowRegistry(WinAccessorBase, PreviewFrameProvider, this);
+        IFloatingWindowSettingsService floatingWindowSettingsService =
+            AppServiceProvider.GetRequiredService<IFloatingWindowSettingsService>();
+        _configurationService =
+            AppServiceProvider.GetRequiredService<IMainWindowConfigurationService>();
+        _floatingWindowRegistry = new FloatingWindowRegistry(
+            WinAccessorBase,
+            PreviewFrameProvider,
+            this,
+            floatingWindowSettingsService
+        );
 
-        ViewModel = new WindowListViewModel(WinAccessorBase);
+        var dispatcher = new AvaloniaViewModelDispatcher();
+        ViewModel = new WindowListViewModel(
+            new WindowAccessorWindowSnapshotProvider(WinAccessorBase),
+            new ConfigFileWindowFilterSettingsProvider(),
+            dispatcher
+        );
         DataContext = ViewModel;
         Title = StaticData.AppName;
 
         FiltersWindow = new FiltersWindow(
-            ConfigFileAccessor
-                .GetInstance()
-                .ReadConfig(config => config.WhitelistPrefixes.ToList()),
-            ConfigFileAccessor
-                .GetInstance()
-                .ReadConfig(config => config.BlacklistPrefixes.ToList())
+            _configurationService.GetWhitelistPrefixes().ToList(),
+            _configurationService.GetBlacklistPrefixes().ToList()
         );
         SettingsWindow = new SettingsWindow(ApplySettings);
         KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
@@ -75,17 +81,33 @@ public partial class MainWindow : Window, IFloatingWindowHost
             Title = $"About {StaticData.AppName}",
         };
         RenameWindow = new RenameWindow();
+        _previewCoordinator = new FloatingPreviewCoordinator(
+            AppServiceProvider.GetRequiredService<IWindowKeybindActivator>(),
+            dispatcher,
+            SetActivePreviewByWindowId
+        );
+        _blacklistCoordinator = new WindowBlacklistCoordinator(
+            FiltersWindow,
+            ViewModel.TempWindowIdsBlacklist
+        );
+        _missingDependencyNotificationService = new MissingDependencyNotificationService(this);
+        _startupUpdateNotificationService = new StartupUpdateNotificationService(
+            this,
+            AppInfoWindow
+        );
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
         _floatingWindowRegistry.Initialize(ViewModel.WindowsConfigs);
-        _ = NotifyUpdateAvailabilityOnStartupAsync(_updateNotificationCts.Token);
+        _ = _startupUpdateNotificationService.NotifyUpdateAvailabilityOnStartupAsync(
+            _updateNotificationCts.Token
+        );
         if (OperatingSystem.IsLinux())
         {
             LinuxDependencies.DependencyMissing += OnDependencyMissing;
             ShowPreviouslyReportedDependencies();
         }
 
-        if (ConfigFileAccessor.GetInstance().ReadConfig(config => config.StartMinimized))
+        if (_configurationService.ShouldStartMinimized())
             Dispatcher.UIThread.Post(
                 HideToTray,
                 DispatcherPriority.Background
@@ -100,18 +122,18 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (OperatingSystem.IsLinux())
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
         PropertyChanged -= OnWindowPropertyChanged;
-        _windowKeybindActivator.WindowActivated -= OnWindowKeybindActivated;
+        _previewCoordinator.Dispose();
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
         FiltersWindow.Close();
         SettingsWindow.Close();
         KeybindsWindow.Close();
         AppInfoWindow.Close();
         RenameWindow.Close();
-        _missingDependenciesDialog?.Close();
+        _missingDependencyNotificationService.Dispose();
         _floatingWindowRegistry.CloseAll();
         PreviewFrameProvider.Dispose();
         _updateNotificationCts.Dispose();
-        ConfigFileAccessor.GetInstance().WriteUserSettings();
+        _configurationService.PersistUserSettings();
         ViewModel.Dispose();
         base.OnClosing(e);
     }
@@ -174,12 +196,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     private void ClearFloatingWindowSettings(object? sender, RoutedEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().ResetFloatingWindowSettings();
+        _configurationService.ResetFloatingWindowSettings();
     }
 
     private void ResetUserSettings(object? sender, RoutedEventArgs e)
     {
-        ConfigFileAccessor.GetInstance().ResetUserSettings();
+        _configurationService.ResetUserSettings();
     }
 
     private void OpenFiltersWindowClick(object? sender, RoutedEventArgs e)
@@ -220,34 +242,17 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public void AddToBlacklist(string windowTitle)
     {
-        windowTitle = windowTitle.ToLowerInvariant();
-        if (FiltersWindow.HasBlacklistPrefixStartingWith(windowTitle))
-            return;
-
-        _ = FiltersWindow.TryAddBlacklistPrefix(windowTitle);
+        _blacklistCoordinator.AddToBlacklist(windowTitle);
     }
 
     public void AddToTempBlacklist(string windowId)
     {
-        ViewModel.TempWindowIdsBlacklist.Add(windowId);
+        _blacklistCoordinator.AddToTemporaryBlacklist(windowId);
     }
 
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
-        if (_activePreviewWindow == floatingWindow)
-            return;
-
-        _activePreviewWindow?.SetPreviewHighlight(false);
-        _activePreviewWindow = floatingWindow;
-        _activePreviewWindow.SetPreviewHighlight(true);
-    }
-
-    private void OnWindowKeybindActivated(object? sender, string windowId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return;
-
-        Dispatcher.UIThread.Post(() => SetActivePreviewByWindowId(windowId));
+        _previewCoordinator.SetActivePreview(floatingWindow);
     }
 
     private void SetActivePreviewByWindowId(string windowId)
@@ -260,19 +265,12 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     public void ClearActivePreview(IFloatingPreviewWindow floatingWindow)
     {
-        if (_activePreviewWindow != floatingWindow)
-            return;
-
-        _activePreviewWindow.SetPreviewHighlight(false);
-        _activePreviewWindow = null;
+        _previewCoordinator.ClearActivePreview(floatingWindow);
     }
 
     public void NotifyPreviewWindowActivated(string windowId)
     {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return;
-
-        _windowKeybindActivator.NotifyWindowActivated(windowId);
+        _previewCoordinator.NotifyPreviewWindowActivated(windowId);
     }
 
     public async Task RenameWindowTitleAsync(string windowId)
@@ -291,7 +289,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
             return;
 
         string renamedTitle = RenameWindow.NewWindowTitle;
-        WinAccessorBase.RenameWindowTitle(windowId, renamedTitle);
+        await WinAccessorBase.RenameWindowTitleAsync(windowId, renamedTitle);
 
         windowConfig.WindowTitle = renamedTitle;
 
@@ -305,7 +303,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (reportedMissing.Count == 0)
             return;
 
-        Dispatcher.UIThread.Post(() => RegisterMissingDependencies(reportedMissing));
+        Dispatcher.UIThread.Post(() =>
+            _missingDependencyNotificationService.RegisterMissingDependencies(reportedMissing)
+        );
     }
 
     private void OnDependencyMissing(string dependency)
@@ -315,100 +315,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (string.IsNullOrWhiteSpace(dependency))
             return;
 
-        Dispatcher.UIThread.Post(() => RegisterMissingDependency(dependency));
-    }
-
-    private void RegisterMissingDependencies(IEnumerable<string> dependencies)
-    {
-        ArgumentNullException.ThrowIfNull(dependencies);
-
-        bool hasChanges = false;
-        foreach (string dependency in dependencies)
-        {
-            if (string.IsNullOrWhiteSpace(dependency))
-                continue;
-
-            hasChanges |= _missingDependencies.Add(dependency);
-        }
-
-        if (!hasChanges)
-            return;
-
-        ShowOrUpdateDependencyMissingDialog();
-    }
-
-    private void RegisterMissingDependency(string dependency)
-    {
-        if (StaticData.AppClosing)
-            return;
-        if (!_missingDependencies.Add(dependency))
-            return;
-
-        ShowOrUpdateDependencyMissingDialog();
-    }
-
-    private void ShowOrUpdateDependencyMissingDialog()
-    {
-        if (_missingDependencies.Count == 0)
-            return;
-
-        if (_missingDependenciesDialog is null || _missingDependenciesTextBlock is null)
-            _missingDependenciesDialog = CreateDependencyMissingDialog();
-
-        Window dialog =
-            _missingDependenciesDialog
-            ?? throw new InvalidOperationException("The dependency dialog was not created.");
-        TextBlock textBlock =
-            _missingDependenciesTextBlock
-            ?? throw new InvalidOperationException("The dependency dialog content was not created.");
-
-        dialog.Title = DependencyNotificationDialogContent.CreateTitle(_missingDependencies.Count);
-        textBlock.Text = DependencyNotificationDialogContent.CreateMessage(_missingDependencies);
-
-        if (dialog.IsVisible)
-            return;
-
-        if (IsVisible)
-            _ = dialog.ShowDialog(this);
-        else
-            dialog.Show();
-    }
-
-    private Window CreateDependencyMissingDialog()
-    {
-        var okButton = new Button
-        {
-            Content = "OK",
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-
-        var panel = new StackPanel { Margin = new Thickness(12), Spacing = 10 };
-        _missingDependenciesTextBlock = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        panel.Children.Add(_missingDependenciesTextBlock);
-        panel.Children.Add(okButton);
-
-        var dialog = new Window
-        {
-            CanResize = false,
-            SizeToContent = SizeToContent.WidthAndHeight,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = panel,
-        };
-
-        okButton.Click += (_, _) => dialog.Close();
-        dialog.Closed += OnMissingDependenciesDialogClosed;
-        return dialog;
-    }
-
-    private void OnMissingDependenciesDialogClosed(object? sender, EventArgs e)
-    {
-        Window? dialog = _missingDependenciesDialog;
-        if (dialog is null || !ReferenceEquals(sender, dialog))
-            return;
-
-        dialog.Closed -= OnMissingDependenciesDialogClosed;
-        _missingDependenciesDialog = null;
-        _missingDependenciesTextBlock = null;
+        Dispatcher.UIThread.Post(() =>
+            _missingDependencyNotificationService.RegisterMissingDependency(dependency)
+        );
     }
 
     private void WindowsConfigsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -444,40 +353,4 @@ public partial class MainWindow : Window, IFloatingWindowHost
         Close();
     }
 
-    private async Task NotifyUpdateAvailabilityOnStartupAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-            bool isUpdateAvailable = await AppInfoWindow.CheckForUpdatesAsync(
-                force: true,
-                showUpToDateMessage: false,
-                cancellationToken
-            );
-            if (!isUpdateAvailable || StaticData.AppClosing)
-                return;
-
-            if (AppInfoWindow.IsVisible)
-            {
-                AppInfoWindow.Activate();
-                return;
-            }
-
-            if (IsVisible)
-            {
-                AppInfoWindow.Show(this);
-                return;
-            }
-
-            AppInfoWindow.Show();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Shutdown path.
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"[Updates] Startup update check failed: {ex.Message}");
-        }
-    }
 }

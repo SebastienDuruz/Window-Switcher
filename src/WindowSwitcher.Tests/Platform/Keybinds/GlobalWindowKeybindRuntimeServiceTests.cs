@@ -219,6 +219,14 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
             return true;
         }
 
+        public Task<bool> TryActivateTargetAsync(
+            string targetId,
+            CancellationToken cancellationToken = default
+        )
+        {
+            return Task.FromResult(TryActivateTarget(targetId));
+        }
+
         public void NotifyWindowActivated(string windowId) { }
     }
 }

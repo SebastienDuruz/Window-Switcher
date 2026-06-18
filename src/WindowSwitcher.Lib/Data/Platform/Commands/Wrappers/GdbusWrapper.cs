@@ -13,10 +13,37 @@ public sealed class GdbusWrapper() : CommandBase("gdbus"), IGdbusWrapper
         return string.Empty;
     }
 
+    public async Task<string> ExecuteAsync(
+        string args,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (LinuxDependencies.IsGdbusAvailable)
+            return await ExecuteWithArgumentsAsync(args, timeoutMs: 2_500, cancellationToken)
+                .ConfigureAwait(false);
+
+        LinuxDependencies.ReportMissingOnce("gdbus");
+        return string.Empty;
+    }
+
     public string Execute(IReadOnlyList<string> args, int timeoutMs)
     {
         if (LinuxDependencies.IsGdbusAvailable)
             return ExecuteWithArgumentList(args, timeoutMs);
+        LinuxDependencies.ReportMissingOnce("gdbus");
+        return string.Empty;
+    }
+
+    public async Task<string> ExecuteAsync(
+        IReadOnlyList<string> args,
+        int timeoutMs,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (LinuxDependencies.IsGdbusAvailable)
+            return await ExecuteWithArgumentListAsync(args, timeoutMs, cancellationToken)
+                .ConfigureAwait(false);
+
         LinuxDependencies.ReportMissingOnce("gdbus");
         return string.Empty;
     }
