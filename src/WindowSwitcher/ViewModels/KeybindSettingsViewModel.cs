@@ -2,16 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using Avalonia.Input;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Models;
-using WindowSwitcher.Windows.Services;
-using WindowSwitcher.Windows.Keybinds;
+using WindowSwitcher.ViewModels.Abstractions;
 
 namespace WindowSwitcher.ViewModels;
 
@@ -20,6 +17,7 @@ public partial class KeybindSettingsViewModel : ObservableObject
     private readonly IWindowKeybindManager _keybindManager;
     private readonly IWindowKeybindTargetCatalogService _targetCatalogService;
     private readonly IGlobalKeyboardStartupStatusService _globalKeyboardStartupStatusService;
+    private readonly IViewModelDispatcher _dispatcher;
     private readonly Func<IReadOnlyCollection<WindowConfig>> _selectedClientsProvider;
     private readonly RelayCommand _beginCaptureCommand;
     private readonly RelayCommand _confirmCaptureCommand;
@@ -101,17 +99,20 @@ public partial class KeybindSettingsViewModel : ObservableObject
         IWindowKeybindManager keybindManager,
         IWindowKeybindTargetCatalogService targetCatalogService,
         IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
+        IViewModelDispatcher dispatcher,
         Func<IReadOnlyCollection<WindowConfig>> selectedClientsProvider
     )
     {
         ArgumentNullException.ThrowIfNull(keybindManager);
         ArgumentNullException.ThrowIfNull(targetCatalogService);
         ArgumentNullException.ThrowIfNull(globalKeyboardStartupStatusService);
+        ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(selectedClientsProvider);
 
         _keybindManager = keybindManager;
         _targetCatalogService = targetCatalogService;
         _globalKeyboardStartupStatusService = globalKeyboardStartupStatusService;
+        _dispatcher = dispatcher;
         _selectedClientsProvider = selectedClientsProvider;
 
         RefreshTargetsCommand = new RelayCommand(RefreshTargets);
@@ -132,13 +133,13 @@ public partial class KeybindSettingsViewModel : ObservableObject
     private void OnGlobalKeyboardStartupStatusChanged(object? sender, EventArgs e)
     {
         GlobalKeyboardStartupStatus status = _globalKeyboardStartupStatusService.Current;
-        if (Dispatcher.UIThread.CheckAccess())
+        if (_dispatcher.CheckAccess())
         {
             ApplyGlobalKeyboardStartupStatus(status);
             return;
         }
 
-        Dispatcher.UIThread.Post(() => ApplyGlobalKeyboardStartupStatus(status));
+        _dispatcher.Post(() => ApplyGlobalKeyboardStartupStatus(status));
     }
 
     public void RefreshTargets()
@@ -155,34 +156,23 @@ public partial class KeybindSettingsViewModel : ObservableObject
         SelectTargetById(previousTargetId);
     }
 
-    public bool TryCaptureKey(
-        Key key,
-        PhysicalKey physicalKey,
-        string? keySymbol,
-        KeyModifiers modifiers)
+    public bool TryCaptureKey(KeybindCaptureResult captureResult)
     {
+        ArgumentNullException.ThrowIfNull(captureResult);
+
         if (!IsCapturing)
             return false;
 
-        if (
-            !AvaloniaKeybindCaptureMapper.TryCreate(
-                key,
-                physicalKey,
-                keySymbol,
-                modifiers,
-                out KeyCombination combination,
-                out string message
-            )
-        )
+        if (!captureResult.Succeeded || captureResult.Combination is null)
         {
             _capturedCombination = null;
-            CapturePreview = message;
-            StatusMessage = message;
+            CapturePreview = captureResult.Message;
+            StatusMessage = captureResult.Message;
             UpdateCommandStates();
             return true;
         }
 
-        _capturedCombination = KeyCombinationParser.Normalize(combination);
+        _capturedCombination = KeyCombinationParser.Normalize(captureResult.Combination);
         CapturePreview = KeyCombinationParser.ToCanonicalString(_capturedCombination);
         StatusMessage = string.Empty;
         UpdateCommandStates();

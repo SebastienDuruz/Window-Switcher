@@ -1,11 +1,23 @@
 using Avalonia.Input;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
+using WindowSwitcher.ViewModels;
 
 namespace WindowSwitcher.Windows.Keybinds;
 
 internal static class AvaloniaKeybindCaptureMapper
 {
+    public static KeybindCaptureResult Create(
+        Key key,
+        PhysicalKey physicalKey,
+        string? keySymbol,
+        KeyModifiers modifiers)
+    {
+        return TryCreate(key, physicalKey, keySymbol, modifiers, out KeyCombination combination, out string message)
+            ? KeybindCaptureResult.Success(combination)
+            : KeybindCaptureResult.Failure(message);
+    }
+
     public static bool TryCreate(
         Key key,
         PhysicalKey physicalKey,

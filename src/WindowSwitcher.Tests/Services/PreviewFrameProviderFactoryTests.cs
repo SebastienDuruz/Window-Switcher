@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 using WindowSwitcher.Lib.Models;
 using Xunit;
@@ -11,6 +12,16 @@ namespace WindowSwitcher.Tests.Services;
 
 public sealed class PreviewFrameProviderFactoryTests
 {
+    [Fact]
+    public void WindowsFactory_ReturnsNoOpProvider()
+    {
+        var factory = new WindowsPreviewFrameProviderFactory();
+
+        var provider = factory.Create(new FakeWinAccessor());
+
+        Assert.IsType<NoOpPreviewFrameProvider>(provider);
+    }
+
     [Fact]
     public void LinuxFactory_ReturnsScreenshotProvider_WhenPipeWireDependenciesAreMissing()
     {
@@ -41,10 +52,15 @@ public sealed class PreviewFrameProviderFactoryTests
         var factory = new RuntimePreviewFrameProviderFactory(dependencies);
         var provider = factory.Create(new FakeWinAccessor());
 
-        Assert.IsType<ScreenshotPreviewFrameProvider>(provider);
-
         if (OperatingSystem.IsLinux())
+        {
+            Assert.IsType<ScreenshotPreviewFrameProvider>(provider);
             Assert.Contains("gst-launch-1.0", dependencies.ReportedMissing);
+        }
+        else
+        {
+            Assert.IsType<NoOpPreviewFrameProvider>(provider);
+        }
     }
 
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry

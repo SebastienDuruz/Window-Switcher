@@ -24,6 +24,47 @@ internal abstract class LinuxWinAccessorBase : WinAccessorBase
         int currentPid = Process.GetCurrentProcess().Id;
 
         string wmctrlOutput = WmctrlWrapper.Execute(["-l", "-p"], timeoutMs: 2_000);
+        return ParseWmctrlWindows(wmctrlOutput, currentPid);
+    }
+
+    public override async Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!LinuxDependencies.IsWmctrlAvailable)
+        {
+            LinuxDependencies.ReportMissingOnce("wmctrl");
+            return Array.Empty<WindowConfig>();
+        }
+
+        int currentPid = Process.GetCurrentProcess().Id;
+
+        string wmctrlOutput = await WmctrlWrapper
+            .ExecuteAsync(["-l", "-p"], timeoutMs: 2_000, cancellationToken)
+            .ConfigureAwait(false);
+        return ParseWmctrlWindows(wmctrlOutput, currentPid);
+    }
+
+    public override void RaiseWindow(string windowId)
+    {
+        WmctrlWrapper.Execute(["-i", "-a", windowId], timeoutMs: 2_000);
+    }
+
+    public override async Task RaiseWindowAsync(
+        string windowId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await WmctrlWrapper
+            .ExecuteAsync(["-i", "-a", windowId], timeoutMs: 2_000, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static ObservableCollection<WindowConfig> ParseWmctrlWindows(
+        string wmctrlOutput,
+        int currentPid
+    )
+    {
         if (string.IsNullOrWhiteSpace(wmctrlOutput))
             return new ObservableCollection<WindowConfig>();
 
@@ -60,11 +101,6 @@ internal abstract class LinuxWinAccessorBase : WinAccessorBase
         }
 
         return windows;
-    }
-
-    public override void RaiseWindow(string windowId)
-    {
-        WmctrlWrapper.Execute(["-i", "-a", windowId], timeoutMs: 2_000);
     }
 
     public override Bitmap? TakeScreenshot(string windowId)
@@ -118,6 +154,21 @@ internal abstract class LinuxWinAccessorBase : WinAccessorBase
     public override void RenameWindowTitle(string windowId, string windowTitle)
     {
         WmctrlWrapper.Execute(["-i", "-r", windowId, "-T", windowTitle], timeoutMs: 2_000);
+    }
+
+    public override async Task RenameWindowTitleAsync(
+        string windowId,
+        string windowTitle,
+        CancellationToken cancellationToken = default
+    )
+    {
+        await WmctrlWrapper
+            .ExecuteAsync(
+                ["-i", "-r", windowId, "-T", windowTitle],
+                timeoutMs: 2_000,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     private static bool TryParseWmctrlLine(

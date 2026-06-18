@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Drawing.Imaging;
 using System.Runtime.Versioning;
 using System.Text;
 using WindowSwitcher.Lib.Data.Platform.Interop;
@@ -17,15 +16,9 @@ public class WindowsWinAccessor : WinAccessorBase
     private const int SwRestore = 9;
     private const int SwShow = 5;
 
-    private static readonly ImageCodecInfo? JpegCodec = ImageCodecInfo
-        .GetImageDecoders()
-        .FirstOrDefault(codec => codec.FormatID == ImageFormat.Jpeg.Guid);
-
-    private ObservableCollection<WindowConfig> Windows { get; set; } = new();
-
     public override ObservableCollection<WindowConfig> GetWindows()
     {
-        Windows.Clear();
+        var windows = new ObservableCollection<WindowConfig>();
         int currentProcessId = Process.GetCurrentProcess().Id;
         var processNameByPid = new Dictionary<uint, string>();
 
@@ -48,7 +41,7 @@ public class WindowsWinAccessor : WinAccessorBase
                         return true;
 
                     string processName = ResolveProcessName(processId, processNameByPid);
-                    Windows.Add(
+                    windows.Add(
                         new WindowConfig
                         {
                             WindowTitle = windowTitle,
@@ -67,7 +60,21 @@ public class WindowsWinAccessor : WinAccessorBase
             IntPtr.Zero
         );
 
-        return Windows;
+        return windows;
+    }
+
+    public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        return Task.Run<IReadOnlyCollection<WindowConfig>>(
+            () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return GetWindows();
+            },
+            cancellationToken
+        );
     }
 
     private static bool IsEligibleTopLevelWindow(IntPtr windowHandle)
@@ -132,12 +139,59 @@ public class WindowsWinAccessor : WinAccessorBase
             IntPtr windowHandle = IntPtr.Parse(windowId);
             BringWindowToFront(windowHandle);
         }
-        catch (Exception) { }
+        catch (FormatException ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Cannot raise window because its id is not a valid handle. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+        catch (OverflowException ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Cannot raise window because its id is outside the valid handle range. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Failed to raise window. ExceptionType={ex.GetType().FullName}"
+            );
+        }
     }
-    
+
+    public override Task RaiseWindowAsync(
+        string windowId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return Task.Run(
+            () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                RaiseWindow(windowId);
+            },
+            cancellationToken
+        );
+    }
+
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        throw new NotImplementedException();
+        return null;
+    }
+
+    public override Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request)
+    {
+        return null;
+    }
+
+    public override Task<Bitmap?> TakeScreenshotAsync(
+        string windowId,
+        ScreenshotRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<Bitmap?>(null);
     }
 
     private static void BringWindowToFront(IntPtr windowHandle)
@@ -209,6 +263,39 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
         }
-        catch (Exception) { }
+        catch (FormatException ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Cannot rename window because its id is not a valid handle. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+        catch (OverflowException ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Cannot rename window because its id is outside the valid handle range. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceWarning(
+                $"[WindowAccess] Failed to rename window. ExceptionType={ex.GetType().FullName}"
+            );
+        }
+    }
+
+    public override Task RenameWindowTitleAsync(
+        string windowId,
+        string windowTitle,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return Task.Run(
+            () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                RenameWindowTitle(windowId, windowTitle);
+            },
+            cancellationToken
+        );
     }
 }

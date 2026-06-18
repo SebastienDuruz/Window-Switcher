@@ -14,6 +14,7 @@ using WindowSwitcher.Lib.Data.Platform.Policies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Hosting;
@@ -33,6 +34,7 @@ public static class PlatformServiceCollectionExtensions
             PreviewFactory.Current = new WindowsPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, WindowsCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, WindowsFloatingPreviewPolicy>();
+            services.AddSingleton<INativeThumbnailRenderer, WindowsDwmNativeThumbnailRenderer>();
             services.AddSingleton<
                 IFloatingWindowHandleConfigurator,
                 WindowsFloatingWindowHandleConfigurator
@@ -45,6 +47,7 @@ public static class PlatformServiceCollectionExtensions
             PreviewFactory.Current = new LinuxPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, LinuxCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, LinuxFloatingPreviewPolicy>();
+            services.AddSingleton<INativeThumbnailRenderer, NoOpNativeThumbnailRenderer>();
             services.AddSingleton<
                 IFloatingWindowHandleConfigurator,
                 NoOpFloatingWindowHandleConfigurator
@@ -73,6 +76,14 @@ public static class PlatformServiceCollectionExtensions
         services.AddSingleton<ISentrySdkAdapter, SentrySdkAdapter>();
         services.AddSingleton<ITelemetrySettingsProvider, ConfigFileTelemetrySettingsProvider>();
         services.AddSingleton<IAppTelemetry, SentryAppTelemetry>();
+        services.AddSingleton<
+            IFloatingWindowSettingsService,
+            ConfigFileFloatingWindowSettingsService
+        >();
+        services.AddSingleton<
+            IMainWindowConfigurationService,
+            ConfigFileMainWindowConfigurationService
+        >();
 
         services.AddSingleton<SystemInfoService>();
         return services;

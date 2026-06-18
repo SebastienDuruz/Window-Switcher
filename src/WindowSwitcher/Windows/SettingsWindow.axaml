@@ -3,6 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:colorPicker="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.ColorPicker"
+        xmlns:converters="clr-namespace:WindowSwitcher.Windows.Converters"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
@@ -13,6 +14,9 @@
         SystemDecorations="Full"
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
+        <Window.Resources>
+                <converters:ColorStringValueConverter x:Key="ColorStringValueConverter" />
+        </Window.Resources>
         <StackPanel Margin="10"
                     MinWidth="200"
                     Spacing="8"
@@ -74,10 +78,10 @@
                                 <TextBlock Grid.Column="0"
                                            VerticalAlignment="Center"
                                            Text="Highlight color" />
-                                <colorPicker:ColorPicker Grid.Column="1"
-                                                         Width="60"
-                                                         Color="{Binding PreviewHighlightColor, Mode=TwoWay}"
-                                                         IsAlphaVisible="False" />
+                                 <colorPicker:ColorPicker Grid.Column="1"
+                                                          Width="60"
+                                                          Color="{Binding PreviewHighlightColor, Mode=TwoWay, Converter={StaticResource ColorStringValueConverter}}"
+                                                          IsAlphaVisible="False" />
                         </Grid>
                 </StackPanel>
                 <Border Padding="10 0 0 0"

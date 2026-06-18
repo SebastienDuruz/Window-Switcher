@@ -279,14 +279,7 @@ public sealed class GlobalWindowKeybindRuntimeService
             bool hadBufferedModifiers = _bufferedModifiers.Count > 0;
             ClearBufferedStateUnsafe();
 
-            try
-            {
-                _ = _activator.TryActivateTarget(targetId);
-            }
-            catch (Exception ex)
-            {
-                GlobalKeyboardTrace.Warning($"Runtime keybind activation failed: {ex.Message}");
-            }
+            _ = ActivateTargetAsync(targetId);
 
             return KeyboardFilterDecision.Consume(
                 discardBufferedEvents: hadBufferedModifiers,
@@ -311,6 +304,18 @@ public sealed class GlobalWindowKeybindRuntimeService
         }
 
         return KeyboardFilterDecision.Forward();
+    }
+
+    private async Task ActivateTargetAsync(string targetId)
+    {
+        try
+        {
+            _ = await _activator.TryActivateTargetAsync(targetId).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            GlobalKeyboardTrace.Warning($"Runtime keybind activation failed: {ex.Message}");
+        }
     }
 
     private KeyCombination BuildCombination(KeybindPrimaryKey primaryKey)

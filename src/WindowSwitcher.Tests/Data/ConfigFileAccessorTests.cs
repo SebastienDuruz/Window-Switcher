@@ -112,6 +112,51 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
+    public void ReadUserSettings_RecordsLoadFailure_WhenJsonIsInvalid()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(dataFolder, "config.json"), "{ invalid json");
+
+            var sut = CreateAccessor(dataFolder);
+
+            ConfigFileAccessor.ConfigLoadFailure? failure = sut.ConsumeLastReadFailure();
+            Assert.NotNull(failure);
+            Assert.Equal("invalid_json", failure.Reason);
+            Assert.Equal(typeof(Newtonsoft.Json.JsonReaderException).FullName, failure.ExceptionType);
+            Assert.True(failure.DefaultsRestored);
+            Assert.Null(sut.ConsumeLastReadFailure());
+            Assert.NotNull(sut.Config.WhitelistPrefixes);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void Config_ReturnsDetachedSnapshot()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+
+            ConfigFile snapshot = sut.Config;
+            snapshot.WindowWidth = 999;
+            snapshot.WhitelistPrefixes.Add("leaked");
+
+            Assert.NotEqual(999, sut.Config.WindowWidth);
+            Assert.DoesNotContain("leaked", sut.Config.WhitelistPrefixes);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
     public void ResetUserSettings_RegeneratesTelemetryUserId()
     {
         string dataFolder = CreateTempDataFolder();
@@ -267,6 +312,45 @@ public sealed class ConfigFileAccessorTests
 
             string json = File.ReadAllText(sut.GetFilePath());
             Assert.Contains("\"WindowWidth\": 777", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void UpdateConfig_PersistsUpdatedValuesImmediately()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+
+            sut.UpdateConfig(config => config.WindowWidth = 888);
+
+            string json = File.ReadAllText(sut.GetFilePath());
+            Assert.Contains("\"WindowWidth\": 888", json, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateConfigAsync_PersistsUpdatedValuesImmediately()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+
+            await sut.UpdateConfigAsync(config => config.WindowHeight = 444);
+
+            string json = File.ReadAllText(sut.GetFilePath());
+            Assert.Contains("\"WindowHeight\": 444", json, StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFiles(dataFolder, "*.tmp"));
         }
         finally
         {

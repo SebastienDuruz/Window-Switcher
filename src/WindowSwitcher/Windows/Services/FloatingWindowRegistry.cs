@@ -14,21 +14,25 @@ internal sealed class FloatingWindowRegistry
     private readonly WinAccessorBase _winAccessorBase;
     private readonly IPreviewFrameProvider _previewFrameProvider;
     private readonly IFloatingWindowHost _floatingWindowHost;
+    private readonly IFloatingWindowSettingsService _floatingWindowSettingsService;
     private readonly Dictionary<string, FloatingWindow> _windows = new(StringComparer.Ordinal);
 
     public FloatingWindowRegistry(
         WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
-        IFloatingWindowHost floatingWindowHost
+        IFloatingWindowHost floatingWindowHost,
+        IFloatingWindowSettingsService floatingWindowSettingsService
     )
     {
         ArgumentNullException.ThrowIfNull(winAccessorBase);
         ArgumentNullException.ThrowIfNull(previewFrameProvider);
         ArgumentNullException.ThrowIfNull(floatingWindowHost);
+        ArgumentNullException.ThrowIfNull(floatingWindowSettingsService);
 
         _winAccessorBase = winAccessorBase;
         _previewFrameProvider = previewFrameProvider;
         _floatingWindowHost = floatingWindowHost;
+        _floatingWindowSettingsService = floatingWindowSettingsService;
     }
 
     public void Initialize(IEnumerable<WindowConfig> windows)
@@ -107,7 +111,8 @@ internal sealed class FloatingWindowRegistry
             window,
             _winAccessorBase,
             _previewFrameProvider,
-            _floatingWindowHost
+            _floatingWindowHost,
+            _floatingWindowSettingsService
         );
     }
 

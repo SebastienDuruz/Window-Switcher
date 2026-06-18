@@ -1,27 +1,33 @@
 using System;
 using System.Collections.Generic;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Models;
-using WindowSwitcher.Theming;
+using WindowSwitcher.ViewModels.Abstractions;
 
 namespace WindowSwitcher.ViewModels;
 
 public class SettingsViewModel : ObservableObject
 {
-    private readonly ConfigFileAccessor _configAccessor = ConfigFileAccessor.GetInstance();
+    private readonly ISettingsRepository _settingsRepository;
     private readonly Action _applyAction;
+    private readonly Action<string> _applyPreviewHighlightColorAction;
     private bool _pendingEnablePreviews;
     public IRelayCommand ApplyCommand { get; }
 
-    public SettingsViewModel(Action applyAction)
+    public SettingsViewModel(
+        ISettingsRepository settingsRepository,
+        Action applyAction,
+        Action<string> applyPreviewHighlightColorAction)
     {
+        ArgumentNullException.ThrowIfNull(settingsRepository);
         ArgumentNullException.ThrowIfNull(applyAction);
+        ArgumentNullException.ThrowIfNull(applyPreviewHighlightColorAction);
 
+        _settingsRepository = settingsRepository;
         _applyAction = applyAction;
-        _pendingEnablePreviews = _configAccessor.ReadConfig(config => config.EnablePreviews);
+        _applyPreviewHighlightColorAction = applyPreviewHighlightColorAction;
+        _pendingEnablePreviews = _settingsRepository.Read(config => config.EnablePreviews);
         ApplyCommand = new RelayCommand(Apply);
     }
 
@@ -39,7 +45,7 @@ public class SettingsViewModel : ObservableObject
 
     public void ResetPendingValues()
     {
-        bool configuredValue = _configAccessor.ReadConfig(config => config.EnablePreviews);
+        bool configuredValue = _settingsRepository.Read(config => config.EnablePreviews);
         if (_pendingEnablePreviews == configuredValue)
             return;
 
@@ -137,23 +143,19 @@ public class SettingsViewModel : ObservableObject
             );
     }
 
-    public Color PreviewHighlightColor
+    public string PreviewHighlightColor
     {
         get
         {
-            string value = _configAccessor.ReadConfig(config => config.PreviewHighlightColor);
-            if (Color.TryParse(value, out Color color))
-                return color;
-
-            // Defensive fallback for corrupted config values.
-            return Colors.Magenta;
+            string value = _settingsRepository.Read(config => config.PreviewHighlightColor);
+            return string.IsNullOrWhiteSpace(value) ? "#E3008C" : value;
         }
         set
         {
-            string configValue = ToConfigColorString(value);
+            string configValue = string.IsNullOrWhiteSpace(value) ? "#E3008C" : value.Trim();
 
             bool updated = false;
-            _configAccessor.UpdateConfig(config =>
+            _settingsRepository.Update(config =>
             {
                 if (
                     string.Equals(
@@ -168,31 +170,21 @@ public class SettingsViewModel : ObservableObject
             });
             if (updated)
             {
-                AccentColorApplier.Apply(value);
+                _applyPreviewHighlightColorAction(configValue);
                 OnPropertyChanged();
             }
         }
     }
 
-    private static string ToConfigColorString(Color color)
-    {
-        // Keep a stable, human-friendly format in the config file.
-        // - #RRGGBB when fully opaque
-        // - #AARRGGBB when transparent
-        return color.A == 0xFF
-            ? $"#{color.R:X2}{color.G:X2}{color.B:X2}"
-            : $"#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
-    }
-
     private void Apply()
     {
-        _configAccessor.UpdateConfig(config => config.EnablePreviews = _pendingEnablePreviews);
+        _settingsRepository.Update(config => config.EnablePreviews = _pendingEnablePreviews);
         _applyAction();
     }
 
     private T ReadSetting<T>(Func<ConfigFile, T> selector)
     {
-        return _configAccessor.ReadConfig(selector);
+        return _settingsRepository.Read(selector);
     }
 
     private bool UpdateSetting<T>(
@@ -203,7 +195,7 @@ public class SettingsViewModel : ObservableObject
     )
     {
         bool updated = false;
-        _configAccessor.UpdateConfig(config =>
+        _settingsRepository.Update(config =>
         {
             if (EqualityComparer<T>.Default.Equals(selector(config), newValue))
                 return;

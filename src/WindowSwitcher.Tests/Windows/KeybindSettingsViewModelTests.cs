@@ -2,7 +2,9 @@ using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Models;
+using WindowSwitcher.Tests;
 using WindowSwitcher.ViewModels;
+using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 using Xunit;
 
@@ -20,6 +22,7 @@ public sealed class KeybindSettingsViewModelTests
             new FakeWindowKeybindManager(),
             new FakeWindowKeybindTargetCatalogService(),
             statusService,
+            new ImmediateViewModelDispatcher(),
             () => Array.Empty<WindowConfig>()
         );
 
@@ -41,6 +44,7 @@ public sealed class KeybindSettingsViewModelTests
             new FakeWindowKeybindManager(),
             new FakeWindowKeybindTargetCatalogService(),
             statusService,
+            new ImmediateViewModelDispatcher(),
             () => Array.Empty<WindowConfig>()
         );
 
@@ -50,8 +54,54 @@ public sealed class KeybindSettingsViewModelTests
         Assert.Equal(string.Empty, sut.GlobalKeyboardSetupCommand);
     }
 
+    [Fact]
+    public void TryCaptureKey_UsesUiIndependentCaptureResult()
+    {
+        var keybindManager = new FakeWindowKeybindManager();
+        var sut = new KeybindSettingsViewModel(
+            keybindManager,
+            new FakeWindowKeybindTargetCatalogService(
+                new KeybindTargetCatalogSnapshot(
+                    [
+                        new KeybindTargetDescriptor(
+                            "show-next",
+                            "Show next",
+                            isBuiltIn: true
+                        ),
+                    ],
+                    []
+                )
+            ),
+            new GlobalKeyboardStartupStatusService(),
+            new ImmediateViewModelDispatcher(),
+            () => Array.Empty<WindowConfig>()
+        );
+        sut.SelectedTarget = sut.ActionTargets.Single();
+        sut.BeginCaptureCommand.Execute(null);
+
+        bool handled = sut.TryCaptureKey(
+            KeybindCaptureResult.Success(
+                new KeyCombination
+                {
+                    Ctrl = true,
+                    Key = KeybindPrimaryKey.A,
+                }
+            )
+        );
+        sut.ConfirmCaptureCommand.Execute(null);
+
+        Assert.True(handled);
+        Assert.Equal("show-next", keybindManager.LastAddedTargetId);
+        Assert.NotNull(keybindManager.LastAddedCombination);
+        Assert.True(keybindManager.LastAddedCombination!.Ctrl);
+        Assert.Equal(KeybindPrimaryKey.A, keybindManager.LastAddedCombination.Key);
+    }
+
     private sealed class FakeWindowKeybindManager : IWindowKeybindManager
     {
+        public string? LastAddedTargetId { get; private set; }
+        public KeyCombination? LastAddedCombination { get; private set; }
+
         public event EventHandler? BindingsChanged
         {
             add { }
@@ -76,6 +126,8 @@ public sealed class KeybindSettingsViewModelTests
             KeyCombination combination
         )
         {
+            LastAddedTargetId = targetId;
+            LastAddedCombination = combination.Clone();
             return KeybindShortcutAddResult.Added();
         }
 
@@ -91,11 +143,13 @@ public sealed class KeybindSettingsViewModelTests
         }
     }
 
-    private sealed class FakeWindowKeybindTargetCatalogService : IWindowKeybindTargetCatalogService
+    private sealed class FakeWindowKeybindTargetCatalogService(
+        KeybindTargetCatalogSnapshot? snapshot = null)
+        : IWindowKeybindTargetCatalogService
     {
         public KeybindTargetCatalogSnapshot GetTargets(IReadOnlyCollection<WindowConfig> runtimeWindows)
         {
-            return new KeybindTargetCatalogSnapshot([], []);
+            return snapshot ?? new KeybindTargetCatalogSnapshot([], []);
         }
     }
 }

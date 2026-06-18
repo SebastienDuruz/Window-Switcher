@@ -98,6 +98,70 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
     }
 
     /// <inheritdoc />
+    public async Task<bool> TryActivateTargetAsync(
+        string targetId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (string.IsNullOrWhiteSpace(targetId))
+            return false;
+
+        string normalizedTargetId = targetId.Trim().ToLowerInvariant();
+        if (
+            string.Equals(
+                normalizedTargetId,
+                KeybindBuiltInTargets.NextClientTargetId,
+                StringComparison.Ordinal
+            )
+        )
+            return await TryActivateRelativeClientAsync(step: 1, cancellationToken)
+                .ConfigureAwait(false);
+
+        if (
+            string.Equals(
+                normalizedTargetId,
+                KeybindBuiltInTargets.PreviousClientTargetId,
+                StringComparison.Ordinal
+            )
+        )
+            return await TryActivateRelativeClientAsync(step: -1, cancellationToken)
+                .ConfigureAwait(false);
+
+        if (
+            string.Equals(
+                normalizedTargetId,
+                KeybindBuiltInTargets.FocusActiveClientTargetId,
+                StringComparison.Ordinal
+            )
+        )
+            return await TryFocusActiveClientAsync(cancellationToken).ConfigureAwait(false);
+
+        IReadOnlyCollection<WindowConfig> windows = await _accessor
+            .GetWindowsAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
+            string.Equals(
+                WindowTargetKeyFactory.Create(window),
+                normalizedTargetId,
+                StringComparison.Ordinal
+            )
+        );
+        if (matchingWindow is null)
+            return false;
+
+        await _accessor.RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
+            .ConfigureAwait(false);
+        lock (_syncRoot)
+        {
+            _lastActivatedClientId = matchingWindow.WindowId;
+        }
+
+        WindowActivated?.Invoke(this, matchingWindow.WindowId);
+        return true;
+    }
+
+    /// <inheritdoc />
     public void NotifyWindowActivated(string windowId)
     {
         if (string.IsNullOrWhiteSpace(windowId))
@@ -143,6 +207,45 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         return true;
     }
 
+    private async Task<bool> TryActivateRelativeClientAsync(
+        int step,
+        CancellationToken cancellationToken
+    )
+    {
+        if (step is not (1 or -1))
+            throw new ArgumentOutOfRangeException(nameof(step));
+
+        IReadOnlyCollection<WindowConfig> windows = await _accessor
+            .GetWindowsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        IReadOnlyList<WindowConfig> candidates = _cycleCandidatesResolver(windows);
+        if (candidates.Count == 0)
+            return false;
+
+        WindowConfig target;
+        lock (_syncRoot)
+        {
+            IReadOnlyList<WindowConfig> orderedCandidates = StabilizeCycleOrder(candidates);
+            int currentIndex = FindIndexByWindowId(orderedCandidates, _lastActivatedClientId);
+
+            int nextIndex;
+            if (currentIndex < 0)
+                nextIndex = step > 0 ? 0 : orderedCandidates.Count - 1;
+            else
+                nextIndex =
+                    step > 0
+                        ? (currentIndex + 1) % orderedCandidates.Count
+                        : (currentIndex - 1 + orderedCandidates.Count) % orderedCandidates.Count;
+
+            target = orderedCandidates[nextIndex];
+            _lastActivatedClientId = target.WindowId;
+        }
+
+        await _accessor.RaiseWindowAsync(target.WindowId, cancellationToken).ConfigureAwait(false);
+        WindowActivated?.Invoke(this, target.WindowId);
+        return true;
+    }
+
     private bool TryFocusActiveClient()
     {
         string activeWindowId;
@@ -162,6 +265,37 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
             return false;
 
         _accessor.RaiseWindow(matchingWindow.WindowId);
+        lock (_syncRoot)
+        {
+            _lastActivatedClientId = matchingWindow.WindowId;
+        }
+
+        WindowActivated?.Invoke(this, matchingWindow.WindowId);
+        return true;
+    }
+
+    private async Task<bool> TryFocusActiveClientAsync(CancellationToken cancellationToken)
+    {
+        string activeWindowId;
+        lock (_syncRoot)
+        {
+            activeWindowId = _lastActivatedClientId;
+        }
+
+        if (string.IsNullOrWhiteSpace(activeWindowId))
+            return false;
+
+        IReadOnlyCollection<WindowConfig> windows = await _accessor
+            .GetWindowsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
+            string.Equals(window.WindowId, activeWindowId, StringComparison.Ordinal)
+        );
+        if (matchingWindow is null)
+            return false;
+
+        await _accessor.RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
+            .ConfigureAwait(false);
         lock (_syncRoot)
         {
             _lastActivatedClientId = matchingWindow.WindowId;

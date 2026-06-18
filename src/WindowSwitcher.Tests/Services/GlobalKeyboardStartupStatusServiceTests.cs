@@ -1,4 +1,5 @@
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
+using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 using Xunit;
 

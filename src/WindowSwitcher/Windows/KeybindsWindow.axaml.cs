@@ -6,6 +6,8 @@ using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Models;
 using WindowSwitcher.ViewModels;
+using WindowSwitcher.ViewModels.Abstractions;
+using WindowSwitcher.Windows.Keybinds;
 using WindowSwitcher.Windows.Services;
 
 namespace WindowSwitcher.Windows;
@@ -35,6 +37,7 @@ public partial class KeybindsWindow : Window
             keybindManager,
             targetCatalogService,
             globalKeyboardStartupStatusService,
+            new AvaloniaViewModelDispatcher(),
             selectedClientsProvider
         );
         DataContext = _viewModel;
@@ -50,7 +53,13 @@ public partial class KeybindsWindow : Window
 
     private void WindowKeyDown(object? sender, KeyEventArgs e)
     {
-        bool handled = _viewModel.TryCaptureKey(e.Key, e.PhysicalKey, e.KeySymbol, e.KeyModifiers);
+        KeybindCaptureResult captureResult = AvaloniaKeybindCaptureMapper.Create(
+            e.Key,
+            e.PhysicalKey,
+            e.KeySymbol,
+            e.KeyModifiers
+        );
+        bool handled = _viewModel.TryCaptureKey(captureResult);
         if (handled)
             e.Handled = true;
     }

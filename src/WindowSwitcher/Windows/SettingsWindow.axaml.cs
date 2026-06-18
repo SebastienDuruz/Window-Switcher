@@ -1,5 +1,7 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Media;
+using WindowSwitcher.Theming;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Services;
 
@@ -13,7 +15,11 @@ public partial class SettingsWindow : Window
     public SettingsWindow(Action applyAction)
     {
         InitializeComponent();
-        _viewModel = new SettingsViewModel(applyAction);
+        _viewModel = new SettingsViewModel(
+            new ConfigFileSettingsRepository(),
+            applyAction,
+            ApplyPreviewHighlightColor
+        );
         DataContext = _viewModel;
         Closing += OnClosing;
     }
@@ -27,5 +33,11 @@ public partial class SettingsWindow : Window
     {
         _viewModel.ResetPendingValues();
         _windowLifecycle.HandleClosing(this, e, hideWhenCanceled: true, hideWhenAllowed: true);
+    }
+
+    private static void ApplyPreviewHighlightColor(string colorValue)
+    {
+        if (Color.TryParse(colorValue, out Color color))
+            AccentColorApplier.Apply(color);
     }
 }
