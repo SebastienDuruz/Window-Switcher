@@ -17,7 +17,7 @@
         x:DataType="viewModels:WindowListViewModel">
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
-            <MenuItem Header="_Settings" Padding="4">
+            <MenuItem Header="_Config" Padding="4">
                 <MenuItem Header="_Filters" Click="OpenFiltersWindowClick" />
                 <MenuItem Header="_Keybinds" Click="OpenKeybindsWindowClick" />
                 <MenuItem Header="_Settings" Click="OpenSettingsWindowClick" />
