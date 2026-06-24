@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 using WindowSwitcher.Lib.Models;
 using Xunit;
 
@@ -61,6 +64,45 @@ public sealed class PreviewFrameProviderFactoryTests
         {
             Assert.IsType<NoOpPreviewFrameProvider>(provider);
         }
+    }
+
+    [Fact]
+    public void LinuxFactory_ReturnsX11Provider_WhenAccessorIsX11AndNativeCaptureIsSupported()
+    {
+        var dependencies = new FakeLinuxDependencyRegistry
+        {
+            IsGstLaunchAvailable = false,
+            IsGstPipeWireSrcAvailable = false,
+            IsPwDumpAvailable = false,
+        };
+
+        var factory = new LinuxPreviewFrameProviderFactory(
+            dependencies,
+            supportsX11PreviewCapture: () => true
+        );
+        var provider = factory.Create(new X11WinAccessor());
+
+        Assert.IsType<X11PreviewFrameProvider>(provider);
+        Assert.Empty(dependencies.ReportedMissing);
+    }
+
+    [Fact]
+    public void LinuxFactory_ReturnsPipeWireProvider_WhenX11CaptureIsUnavailable()
+    {
+        var dependencies = new FakeLinuxDependencyRegistry
+        {
+            IsGstLaunchAvailable = true,
+            IsGstPipeWireSrcAvailable = true,
+            IsPwDumpAvailable = true,
+        };
+
+        var factory = new LinuxPreviewFrameProviderFactory(
+            dependencies,
+            supportsX11PreviewCapture: () => false
+        );
+        var provider = factory.Create(new X11WinAccessor());
+
+        Assert.IsType<PipeWireFrameProvider>(provider);
     }
 
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry
