@@ -5,8 +5,7 @@ using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 
@@ -19,6 +18,17 @@ public sealed class RuntimePreviewFrameProviderFactory(
 {
     private readonly ILinuxDependencyRegistry _linuxDependencies =
         linuxDependencies ?? LinuxDependencies.Instance;
+    private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProviderSupport;
+
+    internal RuntimePreviewFrameProviderFactory(
+        ILinuxDependencyRegistry? linuxDependencies,
+        Func<bool> supportsX11PreviewCapture
+    )
+        : this(linuxDependencies)
+    {
+        ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
+        _supportsX11PreviewCapture = supportsX11PreviewCapture;
+    }
 
     /// <inheritdoc />
     public IPreviewFrameProvider Create(WinAccessorBase accessorBase)
@@ -28,9 +38,14 @@ public sealed class RuntimePreviewFrameProviderFactory(
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             return new NoOpPreviewFrameProvider();
 
-        if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
+        return new LinuxPreviewFrameProviderFactory(
+            _linuxDependencies,
+            _supportsX11PreviewCapture
+        ).Create(accessorBase);
+    }
 
-        return new PipeWireFrameProvider(accessorBase);
+    private static bool X11PreviewFrameProviderSupport()
+    {
+        return X11PreviewFrameProvider.IsSupported();
     }
 }
