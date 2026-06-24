@@ -241,8 +241,14 @@ sealed class Build : NukeBuild
         }
 
         var discovered = FindExecutableOnPath("makensis");
-        True(!string.IsNullOrWhiteSpace(discovered), "Missing dependency: 'makensis'. Install NSIS or pass --makensis-path.");
-        return discovered!;
+        if (!string.IsNullOrWhiteSpace(discovered))
+            return discovered;
+
+        var nuGetTool = FindNuGetPackageTool("NSIS", "makensis.exe", AppProjectPath);
+        True(
+            !string.IsNullOrWhiteSpace(nuGetTool),
+            "Missing dependency: 'makensis'. Restore the NSIS NuGet package, install NSIS, or pass --makensis-path.");
+        return nuGetTool!;
     }
 
     /// <summary>
@@ -416,6 +422,79 @@ sealed class Build : NukeBuild
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds an executable from a restored NuGet package in the global package cache.
+    /// </summary>
+    static string? FindNuGetPackageTool(string packageId, string executableName, AbsolutePath projectPath)
+    {
+        var packageVersion = ReadPackageReferenceVersion(projectPath, packageId);
+        foreach (var packageRoot in GetNuGetPackageRoots())
+        {
+            var packageDirectory = Path.Combine(packageRoot, packageId.ToLowerInvariant());
+            if (!Directory.Exists(packageDirectory))
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(packageVersion))
+            {
+                var exactCandidate = Path.Combine(packageDirectory, packageVersion, "tools", executableName);
+                if (File.Exists(exactCandidate))
+                    return exactCandidate;
+            }
+
+            var latestCandidate = Directory
+                .EnumerateDirectories(packageDirectory)
+                .OrderByDescending(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .Select(versionDirectory => Path.Combine(versionDirectory, "tools", executableName))
+                .FirstOrDefault(File.Exists);
+
+            if (!string.IsNullOrWhiteSpace(latestCandidate))
+                return latestCandidate;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads a package reference version from a project file.
+    /// </summary>
+    static string? ReadPackageReferenceVersion(AbsolutePath projectPath, string packageId)
+    {
+        if (!File.Exists(projectPath))
+            return null;
+
+        var xmlDocument = XDocument.Load(projectPath);
+        return xmlDocument
+            .Descendants("PackageReference")
+            .FirstOrDefault(reference =>
+                string.Equals(
+                    reference.Attribute("Include")?.Value,
+                    packageId,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            ?.Attribute("Version")
+            ?.Value
+            ?.Trim();
+    }
+
+    /// <summary>
+    /// Returns NuGet global package cache roots, including common environment overrides.
+    /// </summary>
+    static IEnumerable<string> GetNuGetPackageRoots()
+    {
+        var configuredRoot = Environment.GetEnvironmentVariable("NUGET_PACKAGES");
+        if (!string.IsNullOrWhiteSpace(configuredRoot))
+            yield return configuredRoot;
+
+        var userProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        if (!string.IsNullOrWhiteSpace(userProfile))
+            yield return Path.Combine(userProfile, ".nuget", "packages");
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrWhiteSpace(home))
+            yield return Path.Combine(home, ".nuget", "packages");
     }
 
     /// <summary>

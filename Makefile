@@ -4,6 +4,12 @@ TEST_PROJECT := src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj
 BUILD_SCRIPT := ./build/build.sh
 BUILD_CMD := ./build/build.cmd
 
+ifeq ($(OS),Windows_NT)
+NUKE := $(BUILD_CMD)
+else
+NUKE := $(BUILD_SCRIPT)
+endif
+
 .PHONY: help restore build run test test-no-build clean format format-check artifacts installer appimage
 
 help:
@@ -18,8 +24,8 @@ help:
 	@echo "  make format        Format source with CSharpier"
 	@echo "  make format-check  Check source formatting with CSharpier"
 	@echo "  make artifacts     Build host-specific release artifacts with Nuke"
-	@echo "  make installer     Build the Windows installer with Nuke"
-	@echo "  make appimage      Build the Linux AppImage with Nuke"
+	@echo "  make installer     Build the Windows installer with Nuke (Windows only)"
+	@echo "  make appimage      Build the Linux AppImage with Nuke (Linux only)"
 
 restore:
 	dotnet restore $(SOLUTION)
@@ -49,14 +55,21 @@ format-check:
 	dotnet csharpier . --check
 
 artifacts:
-	@if command -v sh >/dev/null 2>&1; then \
-		$(BUILD_SCRIPT) --target Artifacts; \
-	else \
-		$(BUILD_CMD) --target Artifacts; \
-	fi
+	$(NUKE) --target Artifacts
 
 installer:
+ifeq ($(OS),Windows_NT)
 	$(BUILD_CMD) --target Installer
+else
+	@echo "The Windows installer can only be built on Windows."
+	@echo "On Linux, use 'make appimage' or 'make artifacts' to build the AppImage."
+	@exit 2
+endif
 
 appimage:
+ifeq ($(OS),Windows_NT)
+	@echo "The Linux AppImage can only be built on Linux."
+	@exit 2
+else
 	$(BUILD_SCRIPT) --target AppImage
+endif

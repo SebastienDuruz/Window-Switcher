@@ -21,15 +21,15 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 - Temporarily hide a window for the current session (temp blacklist)
 - Rename a window title directly from the UI
 - Persist floating window size/position per window
-- Tune preview behavior, sizing, decorations, and highlight color from Settings
-- Open the app data folder and inspect runtime/OS/dependency status from the About window
+- Tune preview behavior, movement, sizing, startup mode, and highlight color from Settings
+- Open the app data folder, inspect runtime/OS/dependency status, and check for updates from the About window
 
 ## Main areas
 
 - `Filters`: manage whitelist prefixes and blacklist entries.
 - `Keybinds`: assign global shortcuts to built-in actions or specific client targets.
-- `Settings`: control preview behavior, movement, sizing, decorations, startup mode, and highlight color.
-- `Help > About`: inspect runtime information, preview mode, config path, and Linux dependency status.
+- `Settings`: control preview behavior, movement, sizing, startup mode, and highlight color.
+- `Help > About`: inspect runtime information, preview mode, config path, Linux dependency status, and updates.
 - `File > Open data folder`: open the persisted application data directory directly.
 
 ## Compatibility
@@ -171,8 +171,8 @@ If `make` is not available on your system, use the underlying commands directly:
 | `make format` | Format the repository with CSharpier. |
 | `make format-check` | Check formatting without rewriting files. |
 | `make artifacts` | Build host-specific release artifacts through Nuke. |
-| `make installer` | Build the Windows installer through Nuke. |
-| `make appimage` | Build the Linux AppImage through Nuke. |
+| `make installer` | Build the Windows installer through Nuke (Windows host only). |
+| `make appimage` | Build the Linux AppImage through Nuke (Linux host only). |
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
@@ -232,7 +232,7 @@ Important:
 Prerequisites:
 
 - `.NET SDK`
-- `NSIS` (`makensis`) for `Installer`
+- `NSIS` (`makensis`) for `Installer`; the restored `NSIS` NuGet package is used automatically when available, otherwise install NSIS or pass `--makensis-path`
 
 ### Linux dependencies
 
@@ -284,21 +284,21 @@ Wayland PipeWire packages (examples):
 
 ### Settings available in-app
 
-- `Disable previews`
+- `Enable previews`
 - `Resize windows`
 - `Move windows`
 - `Focus on hover`
 - `Start minimized`
-- `Window decorations` (Linux policy)
 - `Fixed size` + `Width/Height`
 - `Highlight color`
-- `Apply` is mainly needed when toggling `Disable previews`; other values are persisted as they change
+- `Apply` is mainly needed when toggling `Enable previews`; other values are persisted as they change
 
 ### In-app diagnostics
 
 `Help > About` shows:
 
 - App version
+- Update status and update action when a newer release is available
 - OS / .NET runtime / architecture
 - UI backend
 - Config file path

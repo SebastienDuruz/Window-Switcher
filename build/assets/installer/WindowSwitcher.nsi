@@ -28,7 +28,6 @@ OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\\WindowSwitcher"
 InstallDirRegKey HKCU "Software\\${APP_PUBLISHER}\\${APP_NAME}" "InstallDir"
 RequestExecutionLevel user
-Unicode True
 
 Name "${APP_NAME} ${APP_VERSION}"
 
