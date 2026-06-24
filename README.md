@@ -138,9 +138,41 @@ Download the latest release [here](https://github.com/SebastienDuruz/Window-Swit
 
 From the repo root:
 
+- Restore: `make restore`
+- Build: `make build`
+- Run: `make run`
+- Test: `make test`
+- Test without rebuilding: `make test-no-build`
+- Clean: `make clean`
+- Format: `make format`
+- Check formatting: `make format-check`
+
+If `make` is not available on your system, use the underlying commands directly:
+
+- Restore packages: `dotnet restore Window-Switcher.slnx`
+- Restore local tools: `dotnet tool restore`
 - Build: `dotnet build Window-Switcher.slnx`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
+- Format: `dotnet csharpier .`
+- Check formatting: `dotnet csharpier . --check`
+
+### Make commands
+
+| Command | Description |
+| --- | --- |
+| `make help` | Show available commands. |
+| `make restore` | Restore NuGet packages and local .NET tools. |
+| `make build` | Build `Window-Switcher.slnx`. |
+| `make run` | Run the Avalonia desktop app. |
+| `make test` | Run the test project. |
+| `make test-no-build` | Run tests without rebuilding first. |
+| `make clean` | Clean solution build outputs. |
+| `make format` | Format the repository with CSharpier. |
+| `make format-check` | Check formatting without rewriting files. |
+| `make artifacts` | Build host-specific release artifacts through Nuke. |
+| `make installer` | Build the Windows installer through Nuke. |
+| `make appimage` | Build the Linux AppImage through Nuke. |
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
