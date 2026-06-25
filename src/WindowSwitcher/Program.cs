@@ -39,6 +39,8 @@ static class Program
                 {
                     RenderingMode =
                     [
+                        X11RenderingMode.Egl,
+                        X11RenderingMode.Glx,
                         X11RenderingMode.Software,
                     ],
                 }
