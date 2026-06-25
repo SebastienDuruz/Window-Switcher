@@ -22,25 +22,23 @@ public sealed class LinuxDependencyRegistryTests
     }
 
     [Fact]
-    public void IsGstPipeWireSrcAvailable_ReturnsFalse_WhenGstLaunchIsMissing()
+    public void IsGstPipeWireSrcAvailable_UsesGstInspectDirectly()
     {
         var which = new TrackingCommandWrapper(_ => string.Empty);
-        var gstInspect = new TrackingCommandWrapper(_ => "should not be called");
+        var gstInspect = new TrackingCommandWrapper(_ => "Factory Details: pipewiresrc");
         var sut = new LinuxDependencyRegistry(which, gstInspect);
 
         bool available = sut.IsGstPipeWireSrcAvailable;
 
-        Assert.False(available);
-        Assert.Equal(1, which.CountCallsFor("gst-launch-1.0"));
-        Assert.Empty(gstInspect.Calls);
+        Assert.True(available);
+        Assert.Equal(0, which.CountCallsFor("gst-launch-1.0"));
+        Assert.Single(gstInspect.Calls);
     }
 
     [Fact]
     public void IsGstPipeWireSrcAvailable_UsesCachedResult()
     {
-        var which = new TrackingCommandWrapper(arg =>
-            arg == "gst-launch-1.0" ? "/usr/bin/gst-launch-1.0" : string.Empty
-        );
+        var which = new TrackingCommandWrapper(_ => string.Empty);
         var gstInspect = new TrackingCommandWrapper(_ => "Factory Details: pipewiresrc");
         var sut = new LinuxDependencyRegistry(which, gstInspect);
 
@@ -49,7 +47,7 @@ public sealed class LinuxDependencyRegistryTests
 
         Assert.True(first);
         Assert.True(second);
-        Assert.Equal(1, which.CountCallsFor("gst-launch-1.0"));
+        Assert.Equal(0, which.CountCallsFor("gst-launch-1.0"));
         Assert.Single(gstInspect.Calls);
     }
 

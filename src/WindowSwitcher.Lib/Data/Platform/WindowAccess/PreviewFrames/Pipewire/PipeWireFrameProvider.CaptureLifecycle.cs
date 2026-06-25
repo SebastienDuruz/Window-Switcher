@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Avalonia.Media.Imaging;
 using Tmds.DBus;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -186,7 +187,6 @@ public sealed partial class PipeWireFrameProvider
             nodeId,
             _gstLaunch,
             pipeWireRemoteHandle,
-            PipeWireReaderFrameIntervalMs,
             targetWidthPx,
             targetHeightPx
         );
@@ -476,12 +476,12 @@ public sealed partial class PipeWireFrameProvider
         if (capture.IsDisposed)
             return null;
 
-        capture.Stream.EnsureRunning();
-
         int timeoutMs = request.TimeoutMs;
-        Bitmap? frame = await capture
-            .Stream.GetFrameAsync(timeoutMs, cancellationToken)
-            .ConfigureAwait(false);
+        using NativeBgraPreviewFrame? nativeFrame = capture.Stream.PullNativeFrame(
+            timeoutMs,
+            cancellationToken
+        );
+        Bitmap? frame = nativeFrame is null ? null : CreateBitmap(nativeFrame);
         if (frame is not null)
         {
             capture.ConsecutiveFailures = 0;
@@ -514,9 +514,11 @@ public sealed partial class PipeWireFrameProvider
         }
 
         capture.Stream.Restart();
-        frame = await capture
-            .Stream.GetFrameAsync(timeoutMs, cancellationToken)
-            .ConfigureAwait(false);
+        using NativeBgraPreviewFrame? restartedNativeFrame = capture.Stream.PullNativeFrame(
+            timeoutMs,
+            cancellationToken
+        );
+        frame = restartedNativeFrame is null ? null : CreateBitmap(restartedNativeFrame);
         if (frame is not null)
         {
             capture.ConsecutiveFailures = 0;
@@ -527,9 +529,11 @@ public sealed partial class PipeWireFrameProvider
         if (_isWaylandSession && !capture.Stream.HasReceivedFrame())
         {
             int bootstrapTimeoutMs = Math.Max(timeoutMs, 1_200);
-            frame = await capture
-                .Stream.GetFrameAsync(bootstrapTimeoutMs, cancellationToken)
-                .ConfigureAwait(false);
+            using NativeBgraPreviewFrame? bootstrapNativeFrame = capture.Stream.PullNativeFrame(
+                bootstrapTimeoutMs,
+                cancellationToken
+            );
+            frame = bootstrapNativeFrame is null ? null : CreateBitmap(bootstrapNativeFrame);
             if (frame is not null)
             {
                 capture.ConsecutiveFailures = 0;

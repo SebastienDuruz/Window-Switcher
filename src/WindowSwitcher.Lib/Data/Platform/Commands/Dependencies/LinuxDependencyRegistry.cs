@@ -113,9 +113,6 @@ public sealed class LinuxDependencyRegistry(
 
     private bool IsGstPipeWireSrcAvailableCore()
     {
-        if (!IsGstLaunchAvailable)
-            return false;
-
         string output = _gstInspectWrapper.Execute(GstPipeWirePlugin);
         return !string.IsNullOrWhiteSpace(output);
     }

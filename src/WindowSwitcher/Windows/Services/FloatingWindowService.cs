@@ -2,7 +2,9 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using WindowSwitcher.Lib.Data;
@@ -21,11 +23,14 @@ internal sealed class FloatingWindowService
     private const int PreviewRequestTimeoutMs = 1_500;
     private const int StreamPreviewRequestTimeoutMs = 1_500;
     private const int ResizePreviewRefreshDebounceMs = 250;
+    private const double NativeBgraCopyWarningMs = 8;
+    private const double NativeBgraDispatchWarningMs = 16;
 
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
     private readonly IStreamingPreviewFrameProvider? _streamingPreviewFrameProvider;
+    private readonly INativeBgraStreamingPreviewFrameProvider? _nativeBgraStreamingPreviewFrameProvider;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
     private readonly INativeThumbnailRenderer _nativeThumbnailRenderer;
     private readonly Image _windowScreenshot;
@@ -45,10 +50,17 @@ internal sealed class FloatingWindowService
     private readonly Lock _streamFrameSync = new();
     private readonly Lock _resizePreviewRefreshSync = new();
     private Bitmap? _pendingStreamFrame;
+    private NativeBgraPreviewFrame? _pendingNativeBgraStreamFrame;
     private int _streamFrameDrainScheduled;
+    private int _nativeBgraStreamFrameDrainScheduled;
     private CancellationTokenSource? _resizePreviewRefreshCancellation;
     private bool _resizePreviewRefreshPending;
     private long _lastPreviewLoopFailureLogTicks;
+    private long _lastNativeBgraTimingLogTicks;
+    private WriteableBitmap? _streamBitmapA;
+    private WriteableBitmap? _streamBitmapB;
+    private int _nextStreamBitmapIndex;
+    private PixelSize _streamBitmapSize;
 
     public FloatingWindowService(
         Window ownerWindow,
@@ -72,6 +84,8 @@ internal sealed class FloatingWindowService
         _windowConfig = windowConfig;
         _previewFrameProvider = previewFrameProvider;
         _streamingPreviewFrameProvider = previewFrameProvider as IStreamingPreviewFrameProvider;
+        _nativeBgraStreamingPreviewFrameProvider =
+            previewFrameProvider as INativeBgraStreamingPreviewFrameProvider;
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _nativeThumbnailRenderer = nativeThumbnailRenderer;
         _windowScreenshot = windowScreenshot;
@@ -88,7 +102,7 @@ internal sealed class FloatingWindowService
     {
         UpdateLayout();
 
-        if (_streamingPreviewFrameProvider is not null)
+        if (HasStreamingPreviewProvider())
             ScheduleResizePreviewRefresh();
 
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview && IsPreviewCaptureEnabled())
@@ -106,7 +120,7 @@ internal sealed class FloatingWindowService
         if (
             !isSelected
             && IsPreviewCaptureEnabled()
-            && _streamingPreviewFrameProvider is null
+            && !HasStreamingPreviewProvider()
             && _floatingPreviewPolicy.RefreshScreenshotWhenDeselected
         )
         {
@@ -158,6 +172,7 @@ internal sealed class FloatingWindowService
         _cts.Cancel();
         CancelPreviewOperations(recreateTokenSource: false);
         DisposePendingStreamFrame();
+        DisposePendingNativeBgraStreamFrame();
 
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
             UnregisterWindowThumbnail();
@@ -167,6 +182,7 @@ internal sealed class FloatingWindowService
         _previousScreenshot?.Dispose();
         _currentScreenshot = null;
         _previousScreenshot = null;
+        DisposeStreamBitmaps();
         _isPreviewSurfaceCleared = true;
     }
 
@@ -214,10 +230,8 @@ internal sealed class FloatingWindowService
         {
             try
             {
-                await Task.Delay(
-                    ResizePreviewRefreshDebounceMs,
-                    refreshCancellation.Token
-                ).ConfigureAwait(false);
+                await Task.Delay(ResizePreviewRefreshDebounceMs, refreshCancellation.Token)
+                    .ConfigureAwait(false);
 
                 if (TryConsumePendingResizePreviewRefresh(refreshCancellation))
                     CancelPreviewOperations(recreateTokenSource: true);
@@ -302,6 +316,12 @@ internal sealed class FloatingWindowService
 
         await Task.Delay(Random.Shared.Next(0, 400), cancellationToken);
 
+        if (_nativeBgraStreamingPreviewFrameProvider is not null)
+        {
+            await RunContinuousNativeBgraStreamLoopAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_streamingPreviewFrameProvider is not null)
         {
             await RunContinuousStreamLoopAsync(cancellationToken).ConfigureAwait(false);
@@ -309,6 +329,12 @@ internal sealed class FloatingWindowService
         }
 
         await RunScreenshotPollingLoopAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private bool HasStreamingPreviewProvider()
+    {
+        return _nativeBgraStreamingPreviewFrameProvider is not null
+            || _streamingPreviewFrameProvider is not null;
     }
 
     private async Task RunScreenshotPollingLoopAsync(CancellationToken cancellationToken)
@@ -361,7 +387,7 @@ internal sealed class FloatingWindowService
             {
                 if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
-                
+
                 int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
                 int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
                 var request = new ScreenshotRequest(
@@ -403,14 +429,66 @@ internal sealed class FloatingWindowService
         }
     }
 
+    private async Task RunContinuousNativeBgraStreamLoopAsync(CancellationToken cancellationToken)
+    {
+        if (_nativeBgraStreamingPreviewFrameProvider is null)
+            return;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
+                cancellationToken
+            );
+            CancellationToken operationToken = operationCts.Token;
+
+            try
+            {
+                if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
+                    continue;
+
+                int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
+                int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
+                var request = new ScreenshotRequest(
+                    MaxWidthPx: widthPx > 0 ? widthPx : null,
+                    MaxHeightPx: heightPx > 0 ? heightPx : null,
+                    TimeoutMs: StreamPreviewRequestTimeoutMs
+                );
+
+                await foreach (
+                    NativeBgraPreviewFrame frame in _nativeBgraStreamingPreviewFrameProvider
+                        .StreamNativeBgraAsync(_windowConfig.WindowId, request, operationToken)
+                )
+                {
+                    if (!IsPreviewCaptureEnabled())
+                    {
+                        frame.Dispose();
+                        break;
+                    }
+
+                    QueueLatestNativeBgraStreamFrame(frame, operationToken);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Shutdown path.
+            }
+            catch (OperationCanceledException)
+            {
+                // Preview settings changed while an operation was running.
+            }
+            catch (Exception ex)
+            {
+                LogPreviewLoopFailure("continuous_native_bgra_stream", ex);
+                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+            }
+        }
+    }
+
     private void LogPreviewLoopFailure(string mode, Exception exception)
     {
         long nowTicks = DateTimeOffset.UtcNow.Ticks;
         long previousTicks = Interlocked.Read(ref _lastPreviewLoopFailureLogTicks);
-        if (
-            previousTicks != 0
-            && nowTicks - previousTicks < TimeSpan.FromSeconds(30).Ticks
-        )
+        if (previousTicks != 0 && nowTicks - previousTicks < TimeSpan.FromSeconds(30).Ticks)
             return;
 
         if (
@@ -489,9 +567,7 @@ internal sealed class FloatingWindowService
 
     private static bool IsPreviewCaptureEnabled()
     {
-        return ConfigFileAccessor
-            .GetInstance()
-            .ReadConfig(config => config.EnablePreviews);
+        return ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
     }
 
     private async Task UpdateScreenshotForCurrentOperationAsync(
@@ -556,6 +632,7 @@ internal sealed class FloatingWindowService
         }
 
         DisposePendingStreamFrame();
+        DisposePendingNativeBgraStreamFrame();
         if (!_previewCaptureSuspendedWhileDisabled)
         {
             _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
@@ -611,7 +688,11 @@ internal sealed class FloatingWindowService
 
         lock (_streamFrameSync)
         {
-            if (_isClosing || cancellationToken.IsCancellationRequested || !IsPreviewCaptureEnabled())
+            if (
+                _isClosing
+                || cancellationToken.IsCancellationRequested
+                || !IsPreviewCaptureEnabled()
+            )
             {
                 disposeNow = frame;
             }
@@ -629,6 +710,43 @@ internal sealed class FloatingWindowService
 
         if (scheduleDrain)
             _ = ProcessQueuedStreamFramesAsync(cancellationToken);
+    }
+
+    private void QueueLatestNativeBgraStreamFrame(
+        NativeBgraPreviewFrame frame,
+        CancellationToken cancellationToken
+    )
+    {
+        NativeBgraPreviewFrame? disposeNow = null;
+        bool scheduleDrain = false;
+
+        lock (_streamFrameSync)
+        {
+            if (
+                _isClosing
+                || cancellationToken.IsCancellationRequested
+                || !IsPreviewCaptureEnabled()
+            )
+            {
+                disposeNow = frame;
+            }
+            else
+            {
+                disposeNow = _pendingNativeBgraStreamFrame;
+                _pendingNativeBgraStreamFrame = frame;
+                scheduleDrain =
+                    Interlocked.CompareExchange(
+                        ref _nativeBgraStreamFrameDrainScheduled,
+                        1,
+                        0
+                    ) == 0;
+            }
+        }
+
+        disposeNow?.Dispose();
+
+        if (scheduleDrain)
+            _ = ProcessQueuedNativeBgraStreamFramesAsync(cancellationToken);
     }
 
     private async Task ProcessQueuedStreamFramesAsync(CancellationToken cancellationToken)
@@ -681,6 +799,59 @@ internal sealed class FloatingWindowService
         }
     }
 
+    private async Task ProcessQueuedNativeBgraStreamFramesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                NativeBgraPreviewFrame? nextFrame;
+                lock (_streamFrameSync)
+                {
+                    nextFrame = _pendingNativeBgraStreamFrame;
+                    _pendingNativeBgraStreamFrame = null;
+                }
+
+                if (nextFrame is null)
+                    break;
+
+                await ApplyNativeBgraStreamFrameAsync(nextFrame, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown or preview settings changed while processing queued stream frames.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _nativeBgraStreamFrameDrainScheduled, 0);
+
+            bool shouldScheduleDrain = false;
+            if (_isClosing || cancellationToken.IsCancellationRequested)
+            {
+                DisposePendingNativeBgraStreamFrame();
+            }
+            else
+            {
+                bool hasPendingFrame;
+                lock (_streamFrameSync)
+                    hasPendingFrame = _pendingNativeBgraStreamFrame is not null;
+
+                shouldScheduleDrain =
+                    hasPendingFrame
+                    && Interlocked.CompareExchange(
+                        ref _nativeBgraStreamFrameDrainScheduled,
+                        1,
+                        0
+                    ) == 0;
+            }
+
+            if (shouldScheduleDrain)
+                _ = ProcessQueuedNativeBgraStreamFramesAsync(cancellationToken);
+        }
+    }
+
     private async Task ApplyStreamFrameAsync(Bitmap frame, CancellationToken cancellationToken)
     {
         bool lockTaken = false;
@@ -690,7 +861,11 @@ internal sealed class FloatingWindowService
             await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockTaken = true;
 
-            if (_isClosing || cancellationToken.IsCancellationRequested || !IsPreviewCaptureEnabled())
+            if (
+                _isClosing
+                || cancellationToken.IsCancellationRequested
+                || !IsPreviewCaptureEnabled()
+            )
             {
                 frame.Dispose();
                 return;
@@ -698,7 +873,11 @@ internal sealed class FloatingWindowService
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (_isClosing || cancellationToken.IsCancellationRequested || !IsPreviewCaptureEnabled())
+                if (
+                    _isClosing
+                    || cancellationToken.IsCancellationRequested
+                    || !IsPreviewCaptureEnabled()
+                )
                 {
                     frame.Dispose();
                     return;
@@ -726,6 +905,66 @@ internal sealed class FloatingWindowService
         }
     }
 
+    private async Task ApplyNativeBgraStreamFrameAsync(
+        NativeBgraPreviewFrame frame,
+        CancellationToken cancellationToken
+    )
+    {
+        bool lockTaken = false;
+        try
+        {
+            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockTaken = true;
+
+            if (
+                _isClosing
+                || cancellationToken.IsCancellationRequested
+                || !IsPreviewCaptureEnabled()
+            )
+                return;
+
+            long dispatchStartTicks = Stopwatch.GetTimestamp();
+            double copyElapsedMs = 0;
+            bool copied = false;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (
+                    _isClosing
+                    || cancellationToken.IsCancellationRequested
+                    || !IsPreviewCaptureEnabled()
+                )
+                    return;
+
+                WriteableBitmap? bitmap = GetNextStreamBitmap(frame.WidthPx, frame.HeightPx);
+                if (bitmap is null)
+                    return;
+
+                long copyStartTicks = Stopwatch.GetTimestamp();
+                copied = TryCopyNativeBgraFrameToBitmap(frame, bitmap);
+                copyElapsedMs = Stopwatch.GetElapsedTime(copyStartTicks).TotalMilliseconds;
+
+                if (copied)
+                {
+                    _windowScreenshot.Source = bitmap;
+                    _isPreviewSurfaceCleared = false;
+                }
+            });
+
+            if (copied)
+            {
+                double dispatchElapsedMs = Stopwatch.GetElapsedTime(dispatchStartTicks)
+                    .TotalMilliseconds;
+                LogNativeBgraTimingIfSlow(copyElapsedMs, dispatchElapsedMs, frame);
+            }
+        }
+        finally
+        {
+            frame.Dispose();
+            if (lockTaken)
+                _previewUpdateSemaphore.Release();
+        }
+    }
+
     private void DisposePendingStreamFrame()
     {
         Bitmap? pendingFrame;
@@ -736,6 +975,103 @@ internal sealed class FloatingWindowService
         }
 
         pendingFrame?.Dispose();
+    }
+
+    private void DisposePendingNativeBgraStreamFrame()
+    {
+        NativeBgraPreviewFrame? pendingFrame;
+        lock (_streamFrameSync)
+        {
+            pendingFrame = _pendingNativeBgraStreamFrame;
+            _pendingNativeBgraStreamFrame = null;
+        }
+
+        pendingFrame?.Dispose();
+    }
+
+    private WriteableBitmap? GetNextStreamBitmap(int widthPx, int heightPx)
+    {
+        if (widthPx <= 0 || heightPx <= 0)
+            return null;
+
+        var requestedSize = new PixelSize(widthPx, heightPx);
+        if (_streamBitmapSize != requestedSize)
+        {
+            _windowScreenshot.Source = null;
+            DisposeStreamBitmaps();
+            _streamBitmapSize = requestedSize;
+            _streamBitmapA = CreateStreamBitmap(requestedSize);
+            _streamBitmapB = CreateStreamBitmap(requestedSize);
+            _nextStreamBitmapIndex = 0;
+        }
+
+        WriteableBitmap? bitmap = _nextStreamBitmapIndex == 0 ? _streamBitmapA : _streamBitmapB;
+        _nextStreamBitmapIndex = _nextStreamBitmapIndex == 0 ? 1 : 0;
+        return bitmap;
+    }
+
+    private static WriteableBitmap CreateStreamBitmap(PixelSize size)
+    {
+        return new WriteableBitmap(
+            size,
+            new Vector(96, 96),
+            PixelFormat.Bgra8888,
+            AlphaFormat.Opaque
+        );
+    }
+
+    private static bool TryCopyNativeBgraFrameToBitmap(
+        NativeBgraPreviewFrame frame,
+        WriteableBitmap bitmap
+    )
+    {
+        using ILockedFramebuffer framebuffer = bitmap.Lock();
+        if (framebuffer.Address == IntPtr.Zero)
+            return false;
+
+        return frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes);
+    }
+
+    private void LogNativeBgraTimingIfSlow(
+        double copyElapsedMs,
+        double dispatchElapsedMs,
+        NativeBgraPreviewFrame frame
+    )
+    {
+        if (
+            copyElapsedMs < NativeBgraCopyWarningMs
+            && dispatchElapsedMs < NativeBgraDispatchWarningMs
+        )
+        {
+            return;
+        }
+
+        long nowTicks = DateTimeOffset.UtcNow.Ticks;
+        long previousTicks = Interlocked.Read(ref _lastNativeBgraTimingLogTicks);
+        if (previousTicks != 0 && nowTicks - previousTicks < TimeSpan.FromSeconds(5).Ticks)
+            return;
+
+        if (
+            Interlocked.CompareExchange(
+                ref _lastNativeBgraTimingLogTicks,
+                nowTicks,
+                previousTicks
+            ) != previousTicks
+        )
+            return;
+
+        Trace.TraceInformation(
+            $"[Preview] Native BGRA frame timing. CopyMs={copyElapsedMs:F2}; DispatchMs={dispatchElapsedMs:F2}; Width={frame.WidthPx}; Height={frame.HeightPx}; Bytes={frame.Length}"
+        );
+    }
+
+    private void DisposeStreamBitmaps()
+    {
+        _streamBitmapA?.Dispose();
+        _streamBitmapB?.Dispose();
+        _streamBitmapA = null;
+        _streamBitmapB = null;
+        _streamBitmapSize = default;
     }
 
     private void RegisterWindowThumbnail()

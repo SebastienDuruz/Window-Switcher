@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Reflection;
 using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
@@ -176,14 +175,15 @@ public sealed class PipeWireFrameProviderPortalSelectionTests
         object?[] arguments = [windowId, results, null, false];
         string? nodeId = method.Invoke(provider, arguments) as string;
         selectedStreamStableId = arguments[2] as string;
-        shouldPersistSelectedStreamStableId =
-            arguments[3] is bool typedValue && typedValue;
+        shouldPersistSelectedStreamStableId = arguments[3] is bool typedValue && typedValue;
         return nodeId;
     }
 
     private sealed class FakeWinAccessor(params WindowConfig[] windows) : WinAccessorBase
     {
-        private readonly WindowConfig[] _windows = windows.Select(window => window.Clone()).ToArray();
+        private readonly WindowConfig[] _windows = windows
+            .Select(window => window.Clone())
+            .ToArray();
 
         public override ObservableCollection<WindowConfig> GetWindows()
         {
@@ -235,7 +235,7 @@ public sealed class PipeWireFrameProviderPortalSelectionTests
             return string.Empty;
         }
 
-        public Process? StartPipeWireRawBgraStream(
+        public IPipeWireRawBgraStream? StartPipeWireRawBgraStream(
             string nodeId,
             int widthPx,
             int heightPx,

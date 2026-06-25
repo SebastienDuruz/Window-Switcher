@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
@@ -20,7 +19,9 @@ using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
-public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStreamingPreviewFrameProvider
+public sealed partial class PipeWireFrameProvider
+    : IPreviewFrameProvider,
+        INativeBgraStreamingPreviewFrameProvider
 {
     private const int PipeWireReconnectDelayMs = 300;
     private const int PipeWireNodePollIntervalMs = 300;
@@ -29,7 +30,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
     private const int PipeWireNodeCacheTtlMs = 500;
     private const int PipeWireForcedNodeRefreshCooldownMs = 1_000;
     private const int MaxConcurrentWaylandPortalSessionCreations = 1;
-    private const int PipeWireReaderFrameIntervalMs = 33;
+    private const int PipeWireStreamingPullTimeoutMs = 75;
+    private const int PipeWireStreamingMinFrameIntervalMs = 40;
     private const string PortalDesktopDestination = "org.freedesktop.portal.Desktop";
     private const string KdePortalBackendDestination = "org.freedesktop.impl.portal.desktop.kde";
     private const string KdePortalScreenCastInterface = "org.freedesktop.impl.portal.ScreenCast";
@@ -127,7 +129,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         }
     }
 
-    public async IAsyncEnumerable<Bitmap> StreamAsync(
+    /// <inheritdoc />
+    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamNativeBgraAsync(
         string windowId,
         ScreenshotRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -164,37 +167,38 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 continue;
             }
 
-            long latestSequence = 0;
-            while (
-                !cancellationToken.IsCancellationRequested
-                && !capture.IsDisposed
-            )
+            long nextPullAtMs = 0;
+            while (!cancellationToken.IsCancellationRequested && !capture.IsDisposed)
             {
-                capture.Stream.EnsureRunning();
-
-                PipeWireWindowStream.FrameSnapshot? snapshot = await capture
-                    .Stream.WaitForNextFrameAsync(latestSequence, request.TimeoutMs, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (snapshot is not null)
+                long delayMs = nextPullAtMs - Environment.TickCount64;
+                if (delayMs > 0)
                 {
-                    latestSequence = snapshot.Value.Sequence;
-                    Bitmap? bitmap;
                     try
                     {
-                        bitmap = CreateBitmap(snapshot.Value);
+                        await Task.Delay(
+                                delayMs > int.MaxValue ? int.MaxValue : (int)delayMs,
+                                cancellationToken
+                            )
+                            .ConfigureAwait(false);
                     }
-                    finally
+                    catch (OperationCanceledException)
                     {
-                        capture.Stream.ReleaseSnapshot(snapshot.Value);
+                        yield break;
                     }
-                    if (bitmap is not null)
-                    {
-                        capture.ConsecutiveFailures = 0;
-                        capture.ConsecutiveNoFrameTimeouts = 0;
-                        yield return bitmap;
-                        continue;
-                    }
+                }
+
+                NativeBgraPreviewFrame? frame = capture.Stream.PullNativeFrame(
+                    Math.Min(request.TimeoutMs, PipeWireStreamingPullTimeoutMs),
+                    cancellationToken
+                );
+
+                if (frame is not null)
+                {
+                    capture.ConsecutiveFailures = 0;
+                    capture.ConsecutiveNoFrameTimeouts = 0;
+                    yield return frame;
+                    nextPullAtMs = Environment.TickCount64 + PipeWireStreamingMinFrameIntervalMs;
+                    continue;
                 }
 
                 bool keepStreaming = await TryRecoverCaptureAsync(
@@ -291,7 +295,6 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         Dispose();
         await Task.CompletedTask.ConfigureAwait(false);
     }
-
 
     private async Task<PortalCaptureBootstrap?> TryStartWaylandPortalWindowScreencastAsync(
         string windowId,
@@ -411,9 +414,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             }
 
             string? newRestoreToken = ExtractPortalRestoreToken(startResponse.Value.Results);
-            if (string.IsNullOrWhiteSpace(newRestoreToken))
-            {
-            }
+            if (string.IsNullOrWhiteSpace(newRestoreToken)) { }
             else
             {
                 SaveStoredWaylandScreenCastRestoreToken(windowId, newRestoreToken);
@@ -808,8 +809,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         if (streams.Count == 0)
             return null;
 
-        HashSet<string> blockedNodeIds = SnapshotActiveNodeIds()
-            .ToHashSet(StringComparer.Ordinal);
+        HashSet<string> blockedNodeIds = SnapshotActiveNodeIds().ToHashSet(StringComparer.Ordinal);
 
         string? windowTitle = TryGetWindowTitleById(windowId);
         IReadOnlyCollection<string> windowPatterns = BuildWindowMatchPatterns(
@@ -1029,9 +1029,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                         streams.Count == 1
                         && restoreDataMatchesRequestedWindowTitle
                         && !IsLikelyAssignedToAnotherWindow(stream);
-                    if (allowSingleMismatchByRestoreData)
-                    {
-                    }
+                    if (allowSingleMismatchByRestoreData) { }
                     else
                     {
                         ClearStoredArtifactsForCurrentAttempt();
@@ -1040,8 +1038,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 }
 
                 if (windowTitlePatterns.Count > 0 && storedStreamMatchState is MatchState.Unknown)
-                {
-                }
+                { }
 
                 if (IsLikelyAssignedToAnotherWindow(stream))
                 {
@@ -1054,7 +1051,6 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                     shouldPersistSelectedStreamStableId = true;
                 return stream.NodeId;
             }
-
         }
 
         if (windowPatterns.Count > 0)
@@ -1093,13 +1089,14 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 discoveredNodes = nodes;
                 discoveredNodesForceRefreshed = true;
             }
-            HashSet<string>? titleMatchedNodeIds =
-                string.IsNullOrWhiteSpace(normalizedRequestedWindowTitle)
-                    ? null
-                    : streams
-                        .Where(stream => EvaluateWindowTitleMatchState(stream) is MatchState.Match)
-                        .Select(stream => stream.NodeId)
-                        .ToHashSet(StringComparer.Ordinal);
+            HashSet<string>? titleMatchedNodeIds = string.IsNullOrWhiteSpace(
+                normalizedRequestedWindowTitle
+            )
+                ? null
+                : streams
+                    .Where(stream => EvaluateWindowTitleMatchState(stream) is MatchState.Match)
+                    .Select(stream => stream.NodeId)
+                    .ToHashSet(StringComparer.Ordinal);
             var matchingCandidates = new List<NodeCandidate>(capacity: streams.Count);
             for (int index = 0; index < nodes.Count; index++)
             {
@@ -1183,9 +1180,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             return stream.NodeId;
         }
 
-        if (windowTitlePatterns.Count > 0)
-        {
-        }
+        if (windowTitlePatterns.Count > 0) { }
 
         return null;
     }
@@ -1603,7 +1598,6 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             if (connection is null)
                 return null;
 
-
             IKdePortalScreenCast screenCast = connection.CreateProxy<IKdePortalScreenCast>(
                 KdePortalBackendDestination,
                 new ObjectPath("/org/freedesktop/portal/desktop")
@@ -1713,12 +1707,13 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                 .ToHashSet(StringComparer.Ordinal);
 
             string? discoveredNodeId = await WaitForNewPipeWireNodeIdAsync(
-                baselineIds,
-                TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
-                windowId,
-                blockedNodeIds,
-                cancellationToken
-            ).ConfigureAwait(false);
+                    baselineIds,
+                    TimeSpan.FromMilliseconds(PipeWireNodeDiscoveryTimeoutMs),
+                    windowId,
+                    blockedNodeIds,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(discoveredNodeId))
             {
                 PersistUpdatedKdeRestoreArtifacts(
@@ -1793,8 +1788,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                         new Dictionary<string, object>()
                     )
                 )
-            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
-            .ConfigureAwait(false);
+                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
+                .ConfigureAwait(false);
         return createResponseCode == 0;
     }
 
@@ -1813,9 +1808,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             {
                 restoreData = parsedRestoreData;
             }
-            else
-            {
-            }
+            else { }
         }
 
         return new KdeStoredArtifacts(
@@ -1871,8 +1864,8 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                         selectOptions
                     )
                 )
-            .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
-            .ConfigureAwait(false);
+                .WaitAsync(TimeSpan.FromSeconds(45), cancellationToken)
+                .ConfigureAwait(false);
         return selectResponseCode == 0;
     }
 
@@ -1894,17 +1887,15 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
                         new Dictionary<string, object>()
                     )
                 )
-            .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
-            .ConfigureAwait(false);
+                .WaitAsync(TimeSpan.FromMinutes(2), cancellationToken)
+                .ConfigureAwait(false);
         if (startResponseCode != 0)
             return null;
 
         PortalRestoreData? restoreData = ExtractPortalRestoreData(startResults);
 
         string? restoreToken = ExtractPortalRestoreToken(startResults);
-        if (restoreData is null && string.IsNullOrWhiteSpace(restoreToken))
-        {
-        }
+        if (restoreData is null && string.IsNullOrWhiteSpace(restoreToken)) { }
 
         return new KdePortalStartResult(startResults, restoreData, restoreToken);
     }
@@ -2455,63 +2446,30 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             patterns.Add(normalized);
     }
 
-    private static Bitmap? CreateBitmap(PipeWireWindowStream.FrameSnapshot snapshot)
+    private static Bitmap? CreateBitmap(NativeBgraPreviewFrame frame)
     {
-        return CreateBitmapFromBgra(snapshot.Bytes, snapshot.WidthPx, snapshot.HeightPx);
-    }
-
-    private static Bitmap? CreateBitmapFromBgra(byte[] bytes, int widthPx, int heightPx)
-    {
-        if (bytes.Length == 0 || widthPx <= 0 || heightPx <= 0)
-            return null;
-
-        int srcStride;
-        int requiredBytes;
-        try
-        {
-            srcStride = checked(widthPx * 4);
-            requiredBytes = checked(srcStride * heightPx);
-        }
-        catch (OverflowException)
-        {
-            return null;
-        }
-
-        if (bytes.Length < requiredBytes)
+        if (frame.Data == IntPtr.Zero || frame.WidthPx <= 0 || frame.HeightPx <= 0)
             return null;
 
         try
         {
             var bitmap = new WriteableBitmap(
-                new PixelSize(widthPx, heightPx),
+                new PixelSize(frame.WidthPx, frame.HeightPx),
                 new Vector(96, 96),
                 PixelFormat.Bgra8888,
                 AlphaFormat.Opaque
             );
             using ILockedFramebuffer framebuffer = bitmap.Lock();
-            IntPtr destination = framebuffer.Address;
-            if (destination == IntPtr.Zero)
+            if (framebuffer.Address == IntPtr.Zero)
             {
                 bitmap.Dispose();
                 return null;
             }
 
-            int destinationStride = framebuffer.RowBytes;
-            if (destinationStride == srcStride)
+            if (!frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes))
             {
-                Marshal.Copy(bytes, 0, destination, requiredBytes);
-            }
-            else
-            {
-                for (int row = 0; row < heightPx; row++)
-                {
-                    Marshal.Copy(
-                        bytes,
-                        row * srcStride,
-                        IntPtr.Add(destination, row * destinationStride),
-                        srcStride
-                    );
-                }
+                bitmap.Dispose();
+                return null;
             }
 
             return bitmap;
@@ -2612,10 +2570,7 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
             if (hasCache)
             {
                 TimeSpan cacheAge = nowUtc - _nodeCandidatesCachedAtUtc;
-                if (
-                    !forceRefresh
-                    && cacheAge < TimeSpan.FromMilliseconds(PipeWireNodeCacheTtlMs)
-                )
+                if (!forceRefresh && cacheAge < TimeSpan.FromMilliseconds(PipeWireNodeCacheTtlMs))
                     return _cachedNodeCandidates;
 
                 if (
@@ -3089,5 +3044,4 @@ public sealed partial class PipeWireFrameProvider : IPreviewFrameProvider, IStre
         Match = 1,
         Mismatch = 2,
     }
-
 }
