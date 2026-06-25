@@ -1,10 +1,6 @@
-using System.Buffers;
-using System.Diagnostics;
-using Avalonia;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -78,63 +74,12 @@ public sealed partial class PipeWireFrameProvider
         private const int DefaultRawFrameWidthPx = 640;
         private const int DefaultRawFrameHeightPx = 360;
 
-        public enum FrameFormat
-        {
-            Bgra32 = 0,
-        }
-
-        public readonly record struct FrameSnapshot(
-            long Sequence,
-            byte[] Bytes,
-            FrameFormat Format,
-            int WidthPx,
-            int HeightPx,
-            FrameBufferLease? Lease
-        );
-
-        public sealed class FrameBufferLease(ArrayPool<byte> pool, byte[] buffer)
-        {
-            private byte[]? _buffer = buffer;
-            private int _refCount = 1;
-
-            public byte[] Buffer => _buffer ?? Array.Empty<byte>();
-
-            public void AddRef()
-            {
-                _ = Interlocked.Increment(ref _refCount);
-            }
-
-            public void Release()
-            {
-                if (Interlocked.Decrement(ref _refCount) != 0)
-                    return;
-
-                byte[]? released = Interlocked.Exchange(ref _buffer, null);
-                if (released is null)
-                    return;
-
-                pool.Return(released);
-            }
-        }
-
         private readonly string _nodeId;
         private readonly IGstLaunchWrapper _gstLaunch;
         private readonly CloseSafeHandle? _pipeWireRemoteHandle;
-        private readonly int _minFrameIntervalMs;
         private readonly object _syncRoot = new();
-        private readonly SemaphoreSlim _frameReadySignal = new(initialCount: 0, maxCount: 1);
-        private readonly ArrayPool<byte> _framePool = ArrayPool<byte>.Shared;
 
-        private Process? _process;
-        private CancellationTokenSource? _cts;
-        private Task? _readerTask;
-        private byte[]? _latestFrameBytes;
-        private FrameBufferLease? _latestFrameLease;
-        private FrameFormat _latestFrameFormat;
-        private int _latestFrameWidthPx;
-        private int _latestFrameHeightPx;
-        private long _latestFrameSequence;
-        private long _activeGeneration;
+        private IPipeWireRawBgraStream? _stream;
         private bool _hasReceivedFrame;
         private bool _disposed;
         private bool _faulted;
@@ -147,7 +92,6 @@ public sealed partial class PipeWireFrameProvider
             string nodeId,
             IGstLaunchWrapper gstLaunch,
             CloseSafeHandle? pipeWireRemoteHandle,
-            int minFrameIntervalMs,
             int? maxWidthPx,
             int? maxHeightPx
         )
@@ -156,25 +100,10 @@ public sealed partial class PipeWireFrameProvider
             _nodeId = nodeId;
             _gstLaunch = gstLaunch;
             _pipeWireRemoteHandle = pipeWireRemoteHandle;
-            _minFrameIntervalMs = minFrameIntervalMs;
             int? normalizedMaxWidthPx = NormalizeTargetDimension(maxWidthPx);
             int? normalizedMaxHeightPx = NormalizeTargetDimension(maxHeightPx);
             _rawFrameWidthPx = normalizedMaxWidthPx ?? DefaultRawFrameWidthPx;
             _rawFrameHeightPx = normalizedMaxHeightPx ?? DefaultRawFrameHeightPx;
-        }
-
-        public void EnsureRunning()
-        {
-            lock (_syncRoot)
-            {
-                if (_disposed)
-                    return;
-
-                if (_process is not null && !_process.HasExited && !_faulted)
-                    return;
-            }
-
-            Restart();
         }
 
         public bool NeedsRestart()
@@ -184,7 +113,7 @@ public sealed partial class PipeWireFrameProvider
                 if (_disposed)
                     return false;
 
-                return _faulted || _process is null || _process.HasExited;
+                return _faulted || _stream is null || _stream.IsFaulted;
             }
         }
 
@@ -201,7 +130,12 @@ public sealed partial class PipeWireFrameProvider
             lock (_syncRoot)
             {
                 if (_disposed || _restartInProgress)
+                {
+                    if (_restartInProgress)
+                        _restartRequested = true;
                     return;
+                }
+
                 _restartInProgress = true;
             }
 
@@ -221,8 +155,7 @@ public sealed partial class PipeWireFrameProvider
                 rawFrameHeightPx = _rawFrameHeightPx;
             }
 
-            int? remoteFd = GetPipeWireRemoteFd();
-            Process? process = null;
+            IPipeWireRawBgraStream? stream = null;
             if (
                 rawFrameWidthPx > 0
                 && rawFrameHeightPx > 0
@@ -230,16 +163,15 @@ public sealed partial class PipeWireFrameProvider
                 && rawBytes <= MaxFrameBytes
             )
             {
-                process = _gstLaunch.StartPipeWireRawBgraStream(
+                stream = _gstLaunch.StartPipeWireRawBgraStream(
                     _nodeId,
                     rawFrameWidthPx,
                     rawFrameHeightPx,
-                    remoteFd
+                    GetPipeWireRemoteFd()
                 );
             }
 
-            var cts = new CancellationTokenSource();
-            if (process is null)
+            if (stream is null)
             {
                 lock (_syncRoot)
                 {
@@ -247,34 +179,15 @@ public sealed partial class PipeWireFrameProvider
                     _restartInProgress = false;
                 }
 
-                cts.Dispose();
                 return;
             }
 
-            long generation;
             bool restartRequested;
             lock (_syncRoot)
             {
-                _activeGeneration++;
-                generation = _activeGeneration;
                 _faulted = false;
                 _hasReceivedFrame = false;
-                _latestFrameFormat = FrameFormat.Bgra32;
-                _latestFrameWidthPx = rawFrameWidthPx;
-                _latestFrameHeightPx = rawFrameHeightPx;
-                _process = process;
-                _cts = cts;
-                _readerTask = Task.Run(
-                    () =>
-                        ReadRawLoop(
-                            process,
-                            cts.Token,
-                            generation,
-                            rawFrameWidthPx,
-                            rawFrameHeightPx
-                        )
-                );
-                _ = Task.Run(() => DrainErrors(process, cts.Token));
+                _stream = stream;
                 restartRequested = _restartRequested;
                 _restartRequested = false;
                 _restartInProgress = false;
@@ -282,8 +195,6 @@ public sealed partial class PipeWireFrameProvider
 
             if (restartRequested)
                 _ = Task.Run(Restart);
-
-            DrainFrameSignal();
         }
 
         public void UpdateTargetDimensions(int? maxWidthPx, int? maxHeightPx)
@@ -315,7 +226,7 @@ public sealed partial class PipeWireFrameProvider
                     return;
                 }
 
-                shouldRestart = _process is not null || _readerTask is not null || _faulted;
+                shouldRestart = _stream is not null || _faulted;
             }
 
             if (shouldRestart)
@@ -330,145 +241,69 @@ public sealed partial class PipeWireFrameProvider
             Stop();
         }
 
-        public async Task<Bitmap?> GetFrameAsync(int timeoutMs, CancellationToken cancellationToken)
-        {
-            bool hasFiniteTimeout = timeoutMs >= 0;
-            long deadlineMs = hasFiniteTimeout ? Environment.TickCount64 + timeoutMs : 0;
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                FrameSnapshot? snapshot = GetFrameSnapshotAfter(-1);
-                if (snapshot is not null)
-                {
-                    try
-                    {
-                        return CreateBitmap(snapshot.Value);
-                    }
-                    finally
-                    {
-                        ReleaseSnapshot(snapshot.Value);
-                    }
-                }
-
-                if (IsFaulted())
-                    return null;
-
-                try
-                {
-                    if (hasFiniteTimeout)
-                    {
-                        long remainingMs = deadlineMs - Environment.TickCount64;
-                        if (remainingMs <= 0)
-                            return null;
-
-                        bool signaled = await _frameReadySignal
-                            .WaitAsync(
-                                millisecondsTimeout: remainingMs > int.MaxValue
-                                    ? int.MaxValue
-                                    : (int)remainingMs,
-                                cancellationToken
-                            )
-                            .ConfigureAwait(false);
-                        if (!signaled)
-                            return null;
-                    }
-                    else
-                    {
-                        await _frameReadySignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    return null;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return null;
-                }
-            }
-
-            return null;
-        }
-
-        public void ReleaseSnapshot(FrameSnapshot snapshot)
-        {
-            snapshot.Lease?.Release();
-        }
-
-        public async Task<FrameSnapshot?> WaitForNextFrameAsync(
-            long afterSequence,
+        public NativeBgraPreviewFrame? PullNativeFrame(
             int timeoutMs,
             CancellationToken cancellationToken
         )
         {
-            bool hasFiniteTimeout = timeoutMs >= 0;
-            long deadlineMs = hasFiniteTimeout ? Environment.TickCount64 + timeoutMs : 0;
+            EnsureRunning();
 
-            while (!cancellationToken.IsCancellationRequested)
+            IPipeWireRawBgraStream? stream;
+            lock (_syncRoot)
             {
-                FrameSnapshot? snapshot = GetFrameSnapshotAfter(afterSequence);
-                if (snapshot is not null)
-                    return snapshot;
-
-                if (IsFaulted())
+                if (_disposed || _faulted)
                     return null;
 
-                try
-                {
-                    if (hasFiniteTimeout)
-                    {
-                        long remainingMs = deadlineMs - Environment.TickCount64;
-                        if (remainingMs <= 0)
-                            return null;
-
-                        bool signaled = await _frameReadySignal
-                            .WaitAsync(
-                                millisecondsTimeout: remainingMs > int.MaxValue
-                                    ? int.MaxValue
-                                    : (int)remainingMs,
-                                cancellationToken
-                            )
-                            .ConfigureAwait(false);
-                        if (!signaled)
-                            return null;
-                    }
-                    else
-                    {
-                        await _frameReadySignal.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    return null;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return null;
-                }
+                stream = _stream;
             }
 
-            return null;
+            if (stream is null)
+                return null;
+
+            PipeWireRawBgraFrame? rawFrame = stream.PullFrame(timeoutMs, cancellationToken);
+            if (rawFrame is null)
+            {
+                if (stream.IsFaulted)
+                    MarkFaulted();
+                return null;
+            }
+
+            if (
+                rawFrame.Data == IntPtr.Zero
+                || rawFrame.WidthPx <= 0
+                || rawFrame.HeightPx <= 0
+                || rawFrame.Length <= 0
+                || rawFrame.Length > MaxFrameBytes
+            )
+            {
+                rawFrame.Dispose();
+                return null;
+            }
+
+            lock (_syncRoot)
+                _hasReceivedFrame = true;
+
+            return new NativeBgraPreviewFrame(
+                rawFrame.Data,
+                rawFrame.Length,
+                rawFrame.WidthPx,
+                rawFrame.HeightPx,
+                rawFrame.Dispose
+            );
         }
 
-        private FrameSnapshot? GetFrameSnapshotAfter(long afterSequence)
+        private void EnsureRunning()
         {
             lock (_syncRoot)
             {
-                if (_latestFrameBytes is null || _latestFrameSequence <= afterSequence)
-                    return null;
+                if (_disposed)
+                    return;
 
-                FrameBufferLease? lease = _latestFrameLease;
-                lease?.AddRef();
-
-                return new FrameSnapshot(
-                    _latestFrameSequence,
-                    _latestFrameBytes,
-                    _latestFrameFormat,
-                    _latestFrameWidthPx,
-                    _latestFrameHeightPx,
-                    lease
-                );
+                if (_stream is not null && !_stream.IsFaulted && !_faulted)
+                    return;
             }
+
+            Restart();
         }
 
         private static bool TryComputeRawFrameByteCount(
@@ -493,173 +328,24 @@ public sealed partial class PipeWireFrameProvider
             }
         }
 
-        private static bool TryReadExact(Stream stream, byte[] buffer, int length)
-        {
-            int offset = 0;
-            while (offset < length)
-            {
-                int read = stream.Read(buffer, offset, length - offset);
-                if (read <= 0)
-                    return false;
-
-                offset += read;
-            }
-
-            return true;
-        }
-
-        private bool IsFaulted()
+        private void MarkFaulted()
         {
             lock (_syncRoot)
-            {
-                return _faulted;
-            }
-        }
-
-        private async Task DrainErrors(Process process, CancellationToken cancellationToken)
-        {
-            try
-            {
-                string stderr = await process
-                    .StandardError.ReadToEndAsync(cancellationToken)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(stderr))
-                {
-                    string reduced = stderr.Length > 4_000 ? stderr[..4_000] : stderr;
-                }
-            }
-            catch { }
-        }
-
-        private void ReadRawLoop(
-            Process process,
-            CancellationToken cancellationToken,
-            long generation,
-            int frameWidthPx,
-            int frameHeightPx
-        )
-        {
-            try
-            {
-                if (
-                    !TryComputeRawFrameByteCount(
-                        frameWidthPx,
-                        frameHeightPx,
-                        out int frameByteCount
-                    )
-                    || frameByteCount > MaxFrameBytes
-                )
-                {
-                    return;
-                }
-
-                byte[] readBuffer = new byte[frameByteCount];
-                Stream output = process.StandardOutput.BaseStream;
-                long nextAcceptedFrameAtMs = 0;
-
-                while (!cancellationToken.IsCancellationRequested)
-                {
-                    if (!TryReadExact(output, readBuffer, frameByteCount))
-                        break;
-
-                    long now = Environment.TickCount64;
-                    if (_minFrameIntervalMs > 0 && now < nextAcceptedFrameAtMs)
-                        continue;
-
-                    byte[] frame = _framePool.Rent(frameByteCount);
-                    try
-                    {
-                        Buffer.BlockCopy(readBuffer, 0, frame, 0, frameByteCount);
-                        var lease = new FrameBufferLease(_framePool, frame);
-                        FrameBufferLease? previousLease;
-
-                        lock (_syncRoot)
-                        {
-                            previousLease = _latestFrameLease;
-                            _latestFrameLease = lease;
-                            _latestFrameBytes = frame;
-                            _latestFrameFormat = FrameFormat.Bgra32;
-                            _latestFrameWidthPx = frameWidthPx;
-                            _latestFrameHeightPx = frameHeightPx;
-                            _latestFrameSequence++;
-                            _hasReceivedFrame = true;
-                        }
-
-                        previousLease?.Release();
-                    }
-                    catch
-                    {
-                        _framePool.Return(frame);
-                        throw;
-                    }
-
-                    SignalFrameReady();
-
-                    if (_minFrameIntervalMs > 0)
-                        nextAcceptedFrameAtMs = now + _minFrameIntervalMs;
-                }
-            }
-            catch (Exception) { }
-            finally
-            {
-                lock (_syncRoot)
-                {
-                    if (_activeGeneration == generation)
-                        _faulted = true;
-                }
-                SignalFrameReady();
-            }
+                _faulted = true;
         }
 
         private void Stop()
         {
-            Process? process;
-            CancellationTokenSource? cts;
-            FrameBufferLease? latestLease;
-
+            IPipeWireRawBgraStream? stream;
             lock (_syncRoot)
             {
-                _activeGeneration++;
-                process = _process;
-                cts = _cts;
-                latestLease = _latestFrameLease;
-                _process = null;
-                _cts = null;
-                _readerTask = null;
-                _latestFrameBytes = null;
-                _latestFrameLease = null;
-                _latestFrameFormat = FrameFormat.Bgra32;
-                _latestFrameWidthPx = 0;
-                _latestFrameHeightPx = 0;
+                stream = _stream;
+                _stream = null;
                 _hasReceivedFrame = false;
                 _faulted = true;
             }
 
-            latestLease?.Release();
-
-            SignalFrameReady();
-            DrainFrameSignal();
-
-            if (cts is not null)
-            {
-                try
-                {
-                    cts.Cancel();
-                }
-                catch { }
-                cts.Dispose();
-            }
-
-            if (process is not null)
-            {
-                try
-                {
-                    if (!process.HasExited)
-                        process.Kill(entireProcessTree: true);
-                }
-                catch { }
-                process.Dispose();
-            }
+            stream?.Dispose();
         }
 
         public void Dispose()
@@ -670,7 +356,6 @@ public sealed partial class PipeWireFrameProvider
             _disposed = true;
             Stop();
             _pipeWireRemoteHandle?.Dispose();
-            _frameReadySignal.Dispose();
         }
 
         private int? GetPipeWireRemoteFd()
@@ -684,31 +369,6 @@ public sealed partial class PipeWireFrameProvider
 
             long value = _pipeWireRemoteHandle.DangerousGetHandle().ToInt64();
             return value is >= 0 and <= int.MaxValue ? (int)value : null;
-        }
-
-        private void SignalFrameReady()
-        {
-            try
-            {
-                if (_frameReadySignal.CurrentCount == 0)
-                    _frameReadySignal.Release();
-            }
-            catch
-            {
-                // Dispose/shutdown path.
-            }
-        }
-
-        private void DrainFrameSignal()
-        {
-            try
-            {
-                while (_frameReadySignal.Wait(0)) { }
-            }
-            catch
-            {
-                // Dispose/shutdown path.
-            }
         }
     }
 }

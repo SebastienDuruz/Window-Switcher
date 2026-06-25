@@ -49,13 +49,7 @@ static class Program
         else if (OperatingSystem.IsWindows())
         {
             builder = builder.With(
-                new Win32PlatformOptions()
-                {
-                    RenderingMode =
-                    [
-                        Win32RenderingMode.Software,
-                    ],
-                }
+                new Win32PlatformOptions() { RenderingMode = [Win32RenderingMode.Software] }
             );
         }
 

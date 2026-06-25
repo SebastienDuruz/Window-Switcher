@@ -8,13 +8,11 @@ internal static class LinuxPreviewDependencyEvaluator
     {
         ArgumentNullException.ThrowIfNull(linuxDependencies);
 
-        return Ensure(linuxDependencies, "gst-launch-1.0", linuxDependencies.IsGstLaunchAvailable)
-            && Ensure(
+        return Ensure(
                 linuxDependencies,
                 "gstreamer-pipewire",
                 linuxDependencies.IsGstPipeWireSrcAvailable
-            )
-            && Ensure(linuxDependencies, "pw-dump", linuxDependencies.IsPwDumpAvailable);
+            ) && Ensure(linuxDependencies, "pw-dump", linuxDependencies.IsPwDumpAvailable);
     }
 
     private static bool Ensure(

@@ -18,7 +18,6 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
         [
             $"wmctrl: {(LinuxDependencies.IsWmctrlAvailable ? "OK" : "missing")}",
             $"import: {(LinuxDependencies.IsImportAvailable ? "OK" : "missing")}",
-            $"gst-launch-1.0: {(LinuxDependencies.IsGstLaunchAvailable ? "OK" : "missing")}",
             $"gstreamer pipewiresrc: {(LinuxDependencies.IsGstPipeWireSrcAvailable ? "OK" : "missing")}",
             $"gdbus: {(LinuxDependencies.IsGdbusAvailable ? "OK" : "missing")}",
             $"pw-dump: {(LinuxDependencies.IsPwDumpAvailable ? "OK" : "missing")}",
@@ -31,9 +30,7 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
                 : $"{string.Join(Environment.NewLine, statuses)}{Environment.NewLine}Reported missing:{Environment.NewLine}{string.Join(Environment.NewLine, reported)}";
 
         bool pipeWireReady =
-            LinuxDependencies.IsGstLaunchAvailable
-            && LinuxDependencies.IsGstPipeWireSrcAvailable
-            && LinuxDependencies.IsPwDumpAvailable;
+            LinuxDependencies.IsGstPipeWireSrcAvailable && LinuxDependencies.IsPwDumpAvailable;
 
         return new PlatformAppInfoSnapshot(
             OsDescription: RuntimeInformation.OSDescription,

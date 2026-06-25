@@ -30,8 +30,7 @@ public sealed class PreviewFrameProviderFactoryTests
     {
         var dependencies = new FakeLinuxDependencyRegistry
         {
-            IsGstLaunchAvailable = false,
-            IsGstPipeWireSrcAvailable = true,
+            IsGstPipeWireSrcAvailable = false,
             IsPwDumpAvailable = true,
         };
 
@@ -39,7 +38,7 @@ public sealed class PreviewFrameProviderFactoryTests
         var provider = factory.Create(new FakeWinAccessor());
 
         Assert.IsType<ScreenshotPreviewFrameProvider>(provider);
-        Assert.Contains("gst-launch-1.0", dependencies.ReportedMissing);
+        Assert.Contains("gstreamer-pipewire", dependencies.ReportedMissing);
     }
 
     [Fact]
@@ -58,7 +57,7 @@ public sealed class PreviewFrameProviderFactoryTests
         if (OperatingSystem.IsLinux())
         {
             Assert.IsType<ScreenshotPreviewFrameProvider>(provider);
-            Assert.Contains("gst-launch-1.0", dependencies.ReportedMissing);
+            Assert.Contains("gstreamer-pipewire", dependencies.ReportedMissing);
         }
         else
         {
