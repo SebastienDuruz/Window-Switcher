@@ -345,7 +345,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         options.DisableUnobservedTaskExceptionCapture();
         options.DisableAppDomainProcessExitFlush();
         options.DisableSystemDiagnosticsMetricsIntegration();
-        options.Experimental.EnableMetrics = true;
+        options.EnableMetrics = true;
         options.SetBeforeSend(static (sentryEvent, _) => FilterSentryEvent(sentryEvent));
 #if DEBUG
         options.Debug = true;
