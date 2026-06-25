@@ -352,8 +352,6 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         if (!CanResize)
             WindowCanvas.Cursor = DefaultCursor;
 
-        SystemDecorations = SystemDecorations.BorderOnly;
-
         if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
         {
             var highlightBrush = new SolidColorBrush(highlightColor);

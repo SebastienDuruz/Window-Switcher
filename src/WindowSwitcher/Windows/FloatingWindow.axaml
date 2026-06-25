@@ -18,7 +18,7 @@
         PointerReleased="WindowPointerReleased"
         Closing="FloatingWindowClosing"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaChromeHints="NoChrome"
+        WindowDecorations="BorderOnly"
         ExtendClientAreaTitleBarHeightHint="-1"
         x:DataType="windows:MainWindow">
         <Canvas Name="WindowCanvas" Background="{StaticResource FloatingWindowBackgroundBrush}" PointerPressed="CanvasPointerPressed" PointerReleased="CanvasPointerReleased" PointerEntered="CanvasPointerEntered" PointerMoved="CanvasPointerMoved" PointerExited="CanvasPointerExited">

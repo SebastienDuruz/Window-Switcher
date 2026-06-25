@@ -54,14 +54,14 @@ internal sealed class SentrySdkAdapter : ISentrySdkAdapter
 
         if (attributes is null || attributes.Count == 0)
         {
-            SentrySdk.Experimental.Metrics.EmitCounter(name, value);
+            SentrySdk.Metrics.EmitCounter(name, value);
             return;
         }
 
         IEnumerable<KeyValuePair<string, object>> metricAttributes = attributes.Select(entry =>
             new KeyValuePair<string, object>(entry.Key, entry.Value)
         );
-        SentrySdk.Experimental.Metrics.EmitCounter(name, value, metricAttributes);
+        SentrySdk.Metrics.EmitCounter(name, value, metricAttributes);
     }
 
     public Task FlushAsync(TimeSpan timeout)
