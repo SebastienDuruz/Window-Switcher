@@ -29,11 +29,6 @@ public static class LinuxDependencies
     public static bool IsWmctrlAvailable => Registry.IsWmctrlAvailable;
 
     /// <summary>
-    /// Gets whether <c>import</c> is available.
-    /// </summary>
-    public static bool IsImportAvailable => Registry.IsImportAvailable;
-
-    /// <summary>
     /// Gets whether <c>gst-launch-1.0</c> is available.
     /// </summary>
     public static bool IsGstLaunchAvailable => Registry.IsGstLaunchAvailable;

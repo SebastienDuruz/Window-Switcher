@@ -11,11 +11,6 @@ public interface ILinuxDependencyRegistry
     bool IsWmctrlAvailable { get; }
 
     /// <summary>
-    /// Gets whether <c>import</c> is available.
-    /// </summary>
-    bool IsImportAvailable { get; }
-
-    /// <summary>
     /// Gets whether <c>gst-launch-1.0</c> is available.
     /// </summary>
     bool IsGstLaunchAvailable { get; }

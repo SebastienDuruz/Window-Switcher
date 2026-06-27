@@ -11,7 +11,6 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 internal abstract class LinuxWinAccessorBase : WinAccessorBase
 {
     private WmctrlWrapper WmctrlWrapper { get; } = new();
-    private ImportWrapper ImportWrapper { get; } = new();
 
     public override ObservableCollection<WindowConfig> GetWindows()
     {
@@ -105,50 +104,21 @@ internal abstract class LinuxWinAccessorBase : WinAccessorBase
 
     public override Bitmap? TakeScreenshot(string windowId)
     {
-        return TakeScreenshot(windowId, new ScreenshotRequest());
+        return null;
     }
 
     public override Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request)
     {
-        try
-        {
-            using var stream = ImportWrapper.CaptureScreenshotStream(windowId, request);
-            if (stream is null)
-                return null;
-
-            return new Bitmap(stream);
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        return null;
     }
 
-    public override async Task<Bitmap?> TakeScreenshotAsync(
+    public override Task<Bitmap?> TakeScreenshotAsync(
         string windowId,
         ScreenshotRequest request,
         CancellationToken cancellationToken = default
     )
     {
-        try
-        {
-            using var stream = await ImportWrapper
-                .CaptureScreenshotStreamAsync(windowId, request, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (stream is null)
-                return null;
-
-            return new Bitmap(stream);
-        }
-        catch (OperationCanceledException)
-        {
-            return null;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        return Task.FromResult<Bitmap?>(null);
     }
 
     public override void RenameWindowTitle(string windowId, string windowTitle)

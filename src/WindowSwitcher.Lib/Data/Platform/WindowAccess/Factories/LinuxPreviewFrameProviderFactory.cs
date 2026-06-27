@@ -4,8 +4,8 @@ using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Screenshots;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
@@ -36,19 +36,13 @@ public sealed class LinuxPreviewFrameProviderFactory(
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
 
-        if (accessorBase is X11WinAccessor && _supportsX11PreviewCapture())
-            return new X11PreviewFrameProvider(
-                accessorBase,
-                () => CreateFallbackProvider(accessorBase)
-            );
+        if (accessorBase is X11WinAccessor)
+            return _supportsX11PreviewCapture()
+                ? new X11PreviewFrameProvider(accessorBase)
+                : new NoOpPreviewFrameProvider();
 
-        return CreateFallbackProvider(accessorBase);
-    }
-
-    private IPreviewFrameProvider CreateFallbackProvider(WinAccessorBase accessorBase)
-    {
         if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies))
-            return new ScreenshotPreviewFrameProvider(accessorBase);
+            return new NoOpPreviewFrameProvider();
 
         return new PipeWireFrameProvider(accessorBase);
     }

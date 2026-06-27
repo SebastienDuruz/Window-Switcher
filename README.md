@@ -46,8 +46,8 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 ## How it works
 
 - **Windows:** native DWM thumbnail previews are used in floating windows, and global shortcuts use a low-level keyboard hook.
-- **Linux (X11):** screenshots are captured via ImageMagick `import`, and window actions use `wmctrl`.
-- **Linux (Wayland):** PipeWire preview is used when dependencies are available; otherwise it falls back to screenshot mode.
+- **Linux (X11):** previews are captured via XComposite/XDamage, and window actions use `wmctrl`.
+- **Linux (Wayland):** PipeWire preview is used when dependencies are available.
 - **Linux global keybinds:** evdev devices are read and forwarded back through `uinput`, so matching shortcuts can be intercepted without swallowing unrelated typing.
 
 ## Typical workflow
@@ -239,16 +239,15 @@ Prerequisites:
 Make sure your system has:
 
 - [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows)
-- ImageMagick [`import`](https://linux.die.net/man/1/import) (screenshots for live preview)
 - [`gst-launch-1.0`](https://gstreamer.freedesktop.org/) + `pipewiresrc` plugin (PipeWire video stream)
 - [`pw-dump`](https://pipewire.pages.freedesktop.org/pipewire/page_man_pw-dump_1.html) (PipeWire node discovery and matching)
 - [`gdbus`](https://manpages.ubuntu.com/manpages/jammy/man1/gdbus.1.html) (optional, only if portal fallback is enabled)
 
 Install examples (depends on your distro):
 
-- Debian/Ubuntu: `sudo apt install wmctrl imagemagick`
-- Arch: `sudo pacman -S wmctrl imagemagick`
-- Fedora: `sudo dnf install wmctrl ImageMagick`
+- Debian/Ubuntu: `sudo apt install wmctrl`
+- Arch: `sudo pacman -S wmctrl`
+- Fedora: `sudo dnf install wmctrl`
 
 Wayland PipeWire packages (examples):
 
