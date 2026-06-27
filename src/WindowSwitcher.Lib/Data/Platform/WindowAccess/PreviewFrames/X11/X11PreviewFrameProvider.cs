@@ -9,27 +9,15 @@ internal sealed class X11PreviewFrameProvider
     : IPreviewFrameProvider,
         IStreamingPreviewFrameProvider
 {
-    private const int FallbackPollingIntervalMs = 100;
-
-    private readonly Lazy<IPreviewFrameProvider> _fallbackProvider;
     private readonly object _sessionsSync = new();
     private readonly Dictionary<string, X11WindowCaptureSession> _sessions = new(
         StringComparer.Ordinal
     );
     private bool _disposed;
 
-    public X11PreviewFrameProvider(
-        WinAccessorBase accessorBase,
-        Func<IPreviewFrameProvider> fallbackProviderFactory
-    )
+    public X11PreviewFrameProvider(WinAccessorBase accessorBase)
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
-        ArgumentNullException.ThrowIfNull(fallbackProviderFactory);
-
-        _fallbackProvider = new Lazy<IPreviewFrameProvider>(
-            fallbackProviderFactory,
-            LazyThreadSafetyMode.ExecutionAndPublication
-        );
     }
 
     public static bool IsSupported()
@@ -37,26 +25,19 @@ internal sealed class X11PreviewFrameProvider
         return X11WindowCaptureSession.IsSupported();
     }
 
-    public async Task<Bitmap?> RequestAsync(
+    public Task<Bitmap?> RequestAsync(
         string windowId,
         ScreenshotRequest request,
         CancellationToken cancellationToken = default
     )
     {
         if (_disposed || string.IsNullOrWhiteSpace(windowId))
-            return null;
+            return Task.FromResult<Bitmap?>(null);
         if (cancellationToken.IsCancellationRequested)
-            return null;
+            return Task.FromResult<Bitmap?>(null);
 
         X11WindowCaptureSession? session = GetOrCreateSession(windowId);
-        Bitmap? frame = session?.CaptureFrame(request);
-        if (frame is not null)
-            return frame;
-
-        return await _fallbackProvider
-            .Value
-            .RequestAsync(windowId, request, cancellationToken)
-            .ConfigureAwait(false);
+        return Task.FromResult(session?.CaptureFrame(request));
     }
 
     public async IAsyncEnumerable<Bitmap> StreamAsync(
@@ -71,20 +52,7 @@ internal sealed class X11PreviewFrameProvider
 
         X11WindowCaptureSession? session = GetOrCreateSession(windowId);
         if (session is null)
-        {
-            await foreach (
-                Bitmap fallbackFrame in StreamFallbackAsync(
-                    windowId,
-                    request,
-                    cancellationToken
-                )
-            )
-            {
-                yield return fallbackFrame;
-            }
-
             yield break;
-        }
 
         Bitmap? initialFrame = session.CaptureFrame(request);
         if (initialFrame is not null)
@@ -115,17 +83,6 @@ internal sealed class X11PreviewFrameProvider
             }
 
             RemoveSession(windowId);
-            await foreach (
-                Bitmap fallbackFrame in StreamFallbackAsync(
-                    windowId,
-                    request,
-                    cancellationToken
-                )
-            )
-            {
-                yield return fallbackFrame;
-            }
-
             yield break;
         }
     }
@@ -133,15 +90,11 @@ internal sealed class X11PreviewFrameProvider
     public void SuspendWindow(string windowId)
     {
         RemoveSession(windowId);
-        if (_fallbackProvider.IsValueCreated)
-            _fallbackProvider.Value.SuspendWindow(windowId);
     }
 
     public void ForgetWindow(string windowId)
     {
         RemoveSession(windowId);
-        if (_fallbackProvider.IsValueCreated)
-            _fallbackProvider.Value.ForgetWindow(windowId);
     }
 
     public void Dispose()
@@ -151,19 +104,16 @@ internal sealed class X11PreviewFrameProvider
 
         _disposed = true;
         DisposeSessions();
-        if (_fallbackProvider.IsValueCreated)
-            _fallbackProvider.Value.Dispose();
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         if (_disposed)
-            return;
+            return ValueTask.CompletedTask;
 
         _disposed = true;
         DisposeSessions();
-        if (_fallbackProvider.IsValueCreated)
-            await _fallbackProvider.Value.DisposeAsync().ConfigureAwait(false);
+        return ValueTask.CompletedTask;
     }
 
     private X11WindowCaptureSession? GetOrCreateSession(string windowId)
@@ -213,38 +163,6 @@ internal sealed class X11PreviewFrameProvider
 
         foreach (X11WindowCaptureSession session in sessions)
             session.Dispose();
-    }
-
-    private async IAsyncEnumerable<Bitmap> StreamFallbackAsync(
-        string windowId,
-        ScreenshotRequest request,
-        [System.Runtime.CompilerServices.EnumeratorCancellation]
-            CancellationToken cancellationToken
-    )
-    {
-        IPreviewFrameProvider fallbackProvider = _fallbackProvider.Value;
-        if (fallbackProvider is IStreamingPreviewFrameProvider streamingProvider)
-        {
-            await foreach (
-                Bitmap frame in streamingProvider.StreamAsync(windowId, request, cancellationToken)
-            )
-            {
-                yield return frame;
-            }
-
-            yield break;
-        }
-
-        while (!cancellationToken.IsCancellationRequested && !_disposed)
-        {
-            Bitmap? frame = await fallbackProvider
-                .RequestAsync(windowId, request, cancellationToken)
-                .ConfigureAwait(false);
-            if (frame is not null)
-                yield return frame;
-
-            await Task.Delay(FallbackPollingIntervalMs, cancellationToken).ConfigureAwait(false);
-        }
     }
 
 }

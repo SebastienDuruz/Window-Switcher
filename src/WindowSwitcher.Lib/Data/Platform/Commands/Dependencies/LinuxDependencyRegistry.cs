@@ -12,7 +12,6 @@ public sealed class LinuxDependencyRegistry(
 ) : ILinuxDependencyRegistry
 {
     private const string WmctrlBinary = "wmctrl";
-    private const string ImportBinary = "import";
     private const string GstLaunchBinary = "gst-launch-1.0";
     private const string PwDumpBinary = "pw-dump";
     private const string GdbusBinary = "gdbus";
@@ -34,9 +33,6 @@ public sealed class LinuxDependencyRegistry(
 
     /// <inheritdoc />
     public bool IsWmctrlAvailable => CheckBinaryCached(WmctrlBinary);
-
-    /// <inheritdoc />
-    public bool IsImportAvailable => CheckBinaryCached(ImportBinary);
 
     /// <inheritdoc />
     public bool IsGstLaunchAvailable => CheckBinaryCached(GstLaunchBinary);
