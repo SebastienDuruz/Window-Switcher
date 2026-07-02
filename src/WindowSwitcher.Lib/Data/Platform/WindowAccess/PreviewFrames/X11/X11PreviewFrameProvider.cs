@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
@@ -9,6 +10,7 @@ internal sealed class X11PreviewFrameProvider
     : IPreviewFrameProvider,
         IStreamingPreviewFrameProvider
 {
+    private static readonly TimeSpan TargetFrameInterval = TimeSpan.FromMilliseconds(40);
     private readonly object _sessionsSync = new();
     private readonly Dictionary<string, X11WindowCaptureSession> _sessions = new(
         StringComparer.Ordinal
@@ -37,7 +39,14 @@ internal sealed class X11PreviewFrameProvider
             return Task.FromResult<Bitmap?>(null);
 
         X11WindowCaptureSession? session = GetOrCreateSession(windowId);
-        return Task.FromResult(session?.CaptureFrame(request));
+        if (session is null)
+            return Task.FromResult<Bitmap?>(null);
+
+        Bitmap? frame = session.CaptureFrame(request);
+        if (frame is null)
+            RemoveSession(windowId, session);
+
+        return Task.FromResult(frame);
     }
 
     public async IAsyncEnumerable<Bitmap> StreamAsync(
@@ -56,8 +65,16 @@ internal sealed class X11PreviewFrameProvider
 
         Bitmap? initialFrame = session.CaptureFrame(request);
         if (initialFrame is not null)
+        {
             yield return initialFrame;
+        }
+        else
+        {
+            RemoveSession(windowId, session);
+            yield break;
+        }
 
+        long lastFrameTimestamp = Stopwatch.GetTimestamp();
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
             bool hasDamage;
@@ -75,16 +92,39 @@ internal sealed class X11PreviewFrameProvider
             if (!hasDamage)
                 continue;
 
+            try
+            {
+                await DelayUntilNextFrameAsync(lastFrameTimestamp, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                yield break;
+            }
+
             Bitmap? frame = session.CaptureFrame(request);
             if (frame is not null)
             {
                 yield return frame;
+                lastFrameTimestamp = Stopwatch.GetTimestamp();
                 continue;
             }
 
-            RemoveSession(windowId);
+            RemoveSession(windowId, session);
             yield break;
         }
+    }
+
+    private static Task DelayUntilNextFrameAsync(
+        long lastFrameTimestamp,
+        CancellationToken cancellationToken
+    )
+    {
+        TimeSpan elapsed = Stopwatch.GetElapsedTime(lastFrameTimestamp);
+        TimeSpan remaining = TargetFrameInterval - elapsed;
+        return remaining <= TimeSpan.Zero
+            ? Task.CompletedTask
+            : Task.Delay(remaining, cancellationToken);
     }
 
     public void SuspendWindow(string windowId)
@@ -139,14 +179,28 @@ internal sealed class X11PreviewFrameProvider
 
     private void RemoveSession(string windowId)
     {
+        RemoveSession(windowId, expectedSession: null);
+    }
+
+    private void RemoveSession(string windowId, X11WindowCaptureSession? expectedSession)
+    {
         if (string.IsNullOrWhiteSpace(windowId))
             return;
 
         X11WindowCaptureSession? session = null;
         lock (_sessionsSync)
         {
-            if (_sessions.TryGetValue(windowId, out session))
+            if (
+                _sessions.TryGetValue(windowId, out session)
+                && (expectedSession is null || ReferenceEquals(session, expectedSession))
+            )
+            {
                 _sessions.Remove(windowId);
+            }
+            else
+            {
+                session = null;
+            }
         }
 
         session?.Dispose();

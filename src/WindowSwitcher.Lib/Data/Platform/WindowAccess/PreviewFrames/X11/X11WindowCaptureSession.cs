@@ -9,6 +9,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
 {
     private const int DamageEventOffset = 0;
     private const int ShmPermissions = 0x180;
+    private const string DisableShmEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_SHM";
     private static readonly nint XImageDataOffset =
         Marshal.OffsetOf<XImage>(nameof(XImage.Data));
 
@@ -23,6 +24,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
     private IntPtr _shmAddress;
     private int _width;
     private int _height;
+    private int _depth;
     private bool _isRedirected;
     private bool _disposed;
 
@@ -82,12 +84,17 @@ internal sealed class X11WindowCaptureSession : IDisposable
             if (!QueryComposite(display) || !QueryDamage(display, out int damageEventBase))
                 return CloseAndReturnNull(display);
 
-            X11Native.XCompositeRedirectWindow(
-                display,
-                window,
-                X11Native.CompositeRedirectAutomatic
-            );
-            _ = X11Native.XSync(display, discard: 0);
+            bool redirectedByThisClient = false;
+            if (!HasCompositingManager(display))
+            {
+                X11Native.XCompositeRedirectWindow(
+                    display,
+                    window,
+                    X11Native.CompositeRedirectAutomatic
+                );
+                _ = X11Native.XSync(display, discard: 0);
+                redirectedByThisClient = true;
+            }
 
             IntPtr damage = X11Native.XDamageCreate(
                 display,
@@ -105,7 +112,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 damage
             )
             {
-                _isRedirected = true,
+                _isRedirected = redirectedByThisClient,
             };
         }
         catch
@@ -215,6 +222,27 @@ internal sealed class X11WindowCaptureSession : IDisposable
         return X11Native.XDamageQueryVersion(display, ref major, ref minor) != 0;
     }
 
+    private static bool HasCompositingManager(IntPtr display)
+    {
+        try
+        {
+            int screen = X11Native.XDefaultScreen(display);
+            IntPtr atom = X11Native.XInternAtom(
+                display,
+                FormattableString.Invariant($"_NET_WM_CM_S{screen}"),
+                onlyIfExists: 1
+            );
+            if (atom == IntPtr.Zero)
+                return false;
+
+            return X11Native.XGetSelectionOwner(display, atom) != IntPtr.Zero;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static X11WindowCaptureSession? CloseAndReturnNull(IntPtr display)
     {
         _ = X11Native.XCloseDisplay(display);
@@ -262,19 +290,68 @@ internal sealed class X11WindowCaptureSession : IDisposable
             return true;
 
         ReleaseCaptureSurface();
-        _width = attributes.Width;
-        _height = attributes.Height;
 
         _pixmap = X11Native.XCompositeNameWindowPixmap(_display, _window);
         if (_pixmap == IntPtr.Zero)
             return false;
 
-        TryCreateShmImage(attributes);
+        if (!TryReadPixmapGeometry(out int width, out int height, out int depth))
+        {
+            ReleaseCaptureSurface();
+            return false;
+        }
+
+        _width = width;
+        _height = height;
+        _depth = depth;
+
+        TryCreateShmImage(attributes.Visual);
         return true;
     }
 
-    private void TryCreateShmImage(XWindowAttributes attributes)
+    private bool TryReadPixmapGeometry(out int width, out int height, out int depth)
     {
+        width = 0;
+        height = 0;
+        depth = 0;
+
+        if (
+            X11Native.XGetGeometry(
+                _display,
+                _pixmap,
+                out _,
+                out _,
+                out _,
+                out uint pixmapWidth,
+                out uint pixmapHeight,
+                out _,
+                out uint pixmapDepth
+            )
+            == 0
+        )
+            return false;
+
+        if (
+            pixmapWidth == 0
+            || pixmapHeight == 0
+            || pixmapWidth > int.MaxValue
+            || pixmapHeight > int.MaxValue
+        )
+            return false;
+        if (pixmapDepth == 0 || pixmapDepth > int.MaxValue)
+            return false;
+
+        width = (int)pixmapWidth;
+        height = (int)pixmapHeight;
+        depth = (int)pixmapDepth;
+        return true;
+    }
+
+    private void TryCreateShmImage(IntPtr visual)
+    {
+        if (IsShmDisabled())
+            return;
+
         try
         {
             if (X11Native.XShmQueryExtension(_display) == 0)
@@ -283,8 +360,8 @@ internal sealed class X11WindowCaptureSession : IDisposable
             _shmInfo = new XShmSegmentInfo { ShmId = -1 };
             _shmImage = X11Native.XShmCreateImage(
                 _display,
-                attributes.Visual,
-                (uint)Math.Max(0, attributes.Depth),
+                visual,
+                (uint)_depth,
                 X11Native.ZPixmap,
                 IntPtr.Zero,
                 ref _shmInfo,
@@ -302,9 +379,15 @@ internal sealed class X11WindowCaptureSession : IDisposable
             }
 
             int imageBytes = checked(image.BytesPerLine * image.Height);
+            if (imageBytes <= 0)
+            {
+                ReleaseShmImage();
+                return;
+            }
+
             _shmInfo.ShmId = X11Native.shmget(
                 X11Native.IpcPrivate,
-                (UIntPtr)(uint)imageBytes,
+                (UIntPtr)imageBytes,
                 X11Native.IpcCreat | ShmPermissions
             );
             if (_shmInfo.ShmId < 0)
@@ -339,6 +422,13 @@ internal sealed class X11WindowCaptureSession : IDisposable
         {
             ReleaseShmImage();
         }
+    }
+
+    private static bool IsShmDisabled()
+    {
+        string? value = Environment.GetEnvironmentVariable(DisableShmEnvironmentVariable);
+        return string.Equals(value, "1", StringComparison.Ordinal)
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private Bitmap? CaptureShmFrame(ScreenshotRequest request)
@@ -394,14 +484,23 @@ internal sealed class X11WindowCaptureSession : IDisposable
         }
         finally
         {
-            if (image != IntPtr.Zero)
-            {
-                try
-                {
-                    _ = X11Native.XDestroyImage(image);
-                }
-                catch { }
-            }
+            DestroyImage(ref image);
+        }
+    }
+
+    private static void DestroyImage(ref IntPtr image)
+    {
+        if (image == IntPtr.Zero)
+            return;
+
+        try
+        {
+            _ = X11Native.XDestroyImage(image);
+        }
+        catch { }
+        finally
+        {
+            image = IntPtr.Zero;
         }
     }
 
@@ -456,6 +555,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
         _pixmap = IntPtr.Zero;
         _width = 0;
         _height = 0;
+        _depth = 0;
     }
 
     private void ReleaseShmImage()
