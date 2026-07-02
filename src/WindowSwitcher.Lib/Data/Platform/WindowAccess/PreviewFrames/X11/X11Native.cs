@@ -47,6 +47,19 @@ internal static class X11Native
     public static extern int XCloseDisplay(IntPtr display);
 
     [DllImport("libX11.so.6")]
+    public static extern int XDefaultScreen(IntPtr display);
+
+    [DllImport("libX11.so.6", CharSet = CharSet.Ansi)]
+    public static extern IntPtr XInternAtom(
+        IntPtr display,
+        string atomName,
+        int onlyIfExists
+    );
+
+    [DllImport("libX11.so.6")]
+    public static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
+
+    [DllImport("libX11.so.6")]
     public static extern int XSync(IntPtr display, int discard);
 
     [DllImport("libX11.so.6")]
@@ -60,6 +73,19 @@ internal static class X11Native
         IntPtr display,
         IntPtr window,
         out XWindowAttributes attributes
+    );
+
+    [DllImport("libX11.so.6")]
+    public static extern int XGetGeometry(
+        IntPtr display,
+        IntPtr drawable,
+        out IntPtr root,
+        out int x,
+        out int y,
+        out uint width,
+        out uint height,
+        out uint borderWidth,
+        out uint depth
     );
 
     [DllImport("libX11.so.6")]

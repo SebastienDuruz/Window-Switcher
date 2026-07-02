@@ -24,6 +24,8 @@ internal static class X11FrameConverter
 
         if (image.BitsPerPixel is not (16 or 24 or 32))
             return null;
+        if (!TryNormalizeColorMasks(image, out ColorMasks colorMasks))
+            return null;
 
         (int width, int height) = CalculateTargetSize(image.Width, image.Height, request);
         if (width <= 0 || height <= 0)
@@ -47,8 +49,40 @@ internal static class X11FrameConverter
         byte[] destination = new byte[destinationBytes];
         Marshal.Copy(image.Data, source, 0, sourceBytes);
 
-        ConvertToBgra(source, destination, image, width, height, destinationStride);
+        ConvertToBgra(source, destination, image, colorMasks, width, height, destinationStride);
         return CreateBitmapFromBgra(destination, width, height, destinationStride);
+    }
+
+    private static bool TryNormalizeColorMasks(XImage image, out ColorMasks masks)
+    {
+        masks = default;
+        if (image.RedMask != 0 && image.GreenMask != 0 && image.BlueMask != 0)
+        {
+            masks = new ColorMasks(image.RedMask, image.GreenMask, image.BlueMask);
+            return true;
+        }
+
+        if (image.BitsPerPixel is 24 or 32 && image.ByteOrder == X11Native.LsbFirst)
+        {
+            masks = new ColorMasks(
+                Red: 0x00ff0000,
+                Green: 0x0000ff00,
+                Blue: 0x000000ff
+            );
+            return true;
+        }
+
+        if (image.BitsPerPixel is 24 or 32)
+        {
+            masks = new ColorMasks(
+                Red: 0x000000ff,
+                Green: 0x0000ff00,
+                Blue: 0x00ff0000
+            );
+            return true;
+        }
+
+        return false;
     }
 
     private static (int Width, int Height) CalculateTargetSize(
@@ -78,18 +112,19 @@ internal static class X11FrameConverter
         byte[] source,
         byte[] destination,
         XImage image,
+        ColorMasks colorMasks,
         int targetWidth,
         int targetHeight,
         int targetStride
     )
     {
         int bytesPerPixel = image.BitsPerPixel / 8;
-        int redShift = System.Numerics.BitOperations.TrailingZeroCount(image.RedMask);
-        int greenShift = System.Numerics.BitOperations.TrailingZeroCount(image.GreenMask);
-        int blueShift = System.Numerics.BitOperations.TrailingZeroCount(image.BlueMask);
-        ulong redMax = image.RedMask >> redShift;
-        ulong greenMax = image.GreenMask >> greenShift;
-        ulong blueMax = image.BlueMask >> blueShift;
+        int redShift = System.Numerics.BitOperations.TrailingZeroCount(colorMasks.Red);
+        int greenShift = System.Numerics.BitOperations.TrailingZeroCount(colorMasks.Green);
+        int blueShift = System.Numerics.BitOperations.TrailingZeroCount(colorMasks.Blue);
+        ulong redMax = colorMasks.Red >> redShift;
+        ulong greenMax = colorMasks.Green >> greenShift;
+        ulong blueMax = colorMasks.Blue >> blueShift;
 
         for (int y = 0; y < targetHeight; y++)
         {
@@ -106,19 +141,19 @@ internal static class X11FrameConverter
 
                 destination[destinationOffset] = ScaleMaskedChannel(
                     pixel,
-                    image.BlueMask,
+                    colorMasks.Blue,
                     blueShift,
                     blueMax
                 );
                 destination[destinationOffset + 1] = ScaleMaskedChannel(
                     pixel,
-                    image.GreenMask,
+                    colorMasks.Green,
                     greenShift,
                     greenMax
                 );
                 destination[destinationOffset + 2] = ScaleMaskedChannel(
                     pixel,
-                    image.RedMask,
+                    colorMasks.Red,
                     redShift,
                     redMax
                 );
@@ -203,4 +238,6 @@ internal static class X11FrameConverter
             return null;
         }
     }
+
+    private readonly record struct ColorMasks(ulong Red, ulong Green, ulong Blue);
 }
