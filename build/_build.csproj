@@ -11,4 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Nuke.Common" Version="9.0.4" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="**/bin/**/*.cs;**/obj/**/*.cs" />
+  </ItemGroup>
 </Project>
