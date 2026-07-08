@@ -2,9 +2,7 @@ using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Models;
-using WindowSwitcher.Tests;
 using WindowSwitcher.ViewModels;
-using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 using Xunit;
 

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Sentry;
 using Tmds.DBus;
 using WindowSwitcher.Diagnostics;
 using WindowSwitcher.Lib.Models;
