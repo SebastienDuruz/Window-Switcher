@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Sentry;
 using WindowSwitcher.Lib.Data;
@@ -13,19 +14,21 @@ namespace WindowSwitcher.Diagnostics;
 
 internal interface ITelemetrySettingsProvider
 {
-    (string SentryDsn, string TelemetryUserId) GetSettings();
+    (string SentryDsn, string TelemetryInstallationId) GetSettings();
 }
 
 internal sealed class ConfigFileTelemetrySettingsProvider : ITelemetrySettingsProvider
 {
-    public (string SentryDsn, string TelemetryUserId) GetSettings()
+    public (string SentryDsn, string TelemetryInstallationId) GetSettings()
     {
         return ConfigFileAccessor
             .GetInstance()
             .ReadConfig(config =>
                 (
                     SentryAppTelemetry.ResolveSentryDsn(config.SentryDsn),
-                    SentryAppTelemetry.ResolveTelemetryUserId(config.TelemetryUserId)
+                    SentryAppTelemetry.ResolveTelemetryInstallationId(
+                        config.TelemetryInstallationId
+                    )
                 )
             );
     }
@@ -33,13 +36,14 @@ internal sealed class ConfigFileTelemetrySettingsProvider : ITelemetrySettingsPr
 
 internal sealed class SentryAppTelemetry : IAppTelemetry
 {
-    internal const string AppStartedMetricName = "window_switcher.app_started";
+    internal const string AppStartedMetricName = AppTelemetryEvents.AppStarted;
+    internal const string TelemetrySchemaVersion = "2";
 
     private readonly ISentrySdkAdapter _sentrySdk;
     private readonly ITelemetrySettingsProvider _telemetrySettingsProvider;
     private readonly object _syncRoot = new();
     private IDisposable? _sdkHandle;
-    private string _telemetryUserId = string.Empty;
+    private string _telemetryInstallationId = string.Empty;
     private bool _appStartedRecorded;
 
     public SentryAppTelemetry(
@@ -59,7 +63,8 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         if (IsInitialized())
             return;
 
-        (string sentryDsn, string telemetryUserId) = _telemetrySettingsProvider.GetSettings();
+        (string sentryDsn, string telemetryInstallationId) =
+            _telemetrySettingsProvider.GetSettings();
 
         try
         {
@@ -73,10 +78,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 }
 
                 _sdkHandle = handle;
-                _telemetryUserId = telemetryUserId;
+                _telemetryInstallationId = telemetryInstallationId;
             }
 
-            ConfigureBaseScope(telemetryUserId);
+            ConfigureBaseScope(telemetryInstallationId);
         }
         catch (Exception ex)
         {
@@ -87,7 +92,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     public async Task RecordAppStartedAsync(string previewMode)
     {
         string normalizedPreviewMode = AppTelemetrySanitizer.NormalizePreviewMode(previewMode);
-        string telemetryUserId;
+        string telemetryInstallationId;
 
         lock (_syncRoot)
         {
@@ -95,7 +100,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 return;
 
             _appStartedRecorded = true;
-            telemetryUserId = _telemetryUserId;
+            telemetryInstallationId = _telemetryInstallationId;
         }
 
         if (!IsInitialized())
@@ -106,7 +111,13 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             _sentrySdk.EmitCounter(
                 AppStartedMetricName,
                 1,
-                CreateAppStartedMetricAttributes(normalizedPreviewMode, telemetryUserId)
+                CreateMetricAttributes(
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["preview_mode"] = normalizedPreviewMode,
+                        ["telemetry_installation_id"] = telemetryInstallationId,
+                    }
+                )
             );
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
@@ -191,7 +202,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         {
             handle = _sdkHandle;
             _sdkHandle = null;
-            _telemetryUserId = string.Empty;
+            _telemetryInstallationId = string.Empty;
         }
 
         if (handle is null)
@@ -237,12 +248,12 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         return new ConfigFile().SentryDsn;
     }
 
-    internal static string ResolveTelemetryUserId(string? configuredTelemetryUserId)
+    internal static string ResolveTelemetryInstallationId(string? configuredTelemetryInstallationId)
     {
-        if (Guid.TryParse(configuredTelemetryUserId, out Guid parsed))
+        if (Guid.TryParse(configuredTelemetryInstallationId, out Guid parsed))
             return parsed.ToString("D");
 
-        return new ConfigFile().TelemetryUserId;
+        return new ConfigFile().TelemetryInstallationId;
     }
 
     internal static SentryEvent? FilterSentryEvent(SentryEvent sentryEvent)
@@ -267,36 +278,43 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         return terminalExceptions.All(IsIgnorableSentryException);
     }
 
-    internal static IReadOnlyDictionary<string, string> CreateAppStartedMetricAttributes(
-        string previewMode,
-        string telemetryUserId
+    internal static IReadOnlyDictionary<string, string> CreateMetricAttributes(
+        IReadOnlyDictionary<string, string>? attributes = null
     )
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(telemetryUserId);
-
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var mergedAttributes = new Dictionary<string, string>(
+            CreateBaseTags(),
+            StringComparer.Ordinal
+        );
+        if (attributes is not null)
         {
-            ["os"] = GetSentryOperatingSystemTag(),
-            ["session_type"] = GetSentrySessionTypeTag(),
-            ["build_channel"] = GetSentryEnvironment(),
-            ["app_version"] = GetInformationalVersion(),
-            ["preview_mode"] = AppTelemetrySanitizer.NormalizePreviewMode(previewMode),
-            ["telemetry_user_id"] = telemetryUserId,
-        };
+            foreach (KeyValuePair<string, string> attribute in attributes)
+            {
+                if (
+                    string.IsNullOrWhiteSpace(attribute.Key)
+                    || string.IsNullOrWhiteSpace(attribute.Value)
+                )
+                    continue;
+
+                mergedAttributes[NormalizeTagKey(attribute.Key)] = NormalizeTagValue(
+                    attribute.Value
+                );
+            }
+        }
+
+        return mergedAttributes;
     }
 
-    private void ConfigureBaseScope(string telemetryUserId)
+    private void ConfigureBaseScope(string telemetryInstallationId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(telemetryUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(telemetryInstallationId);
 
         _sentrySdk.ConfigureScope(scope =>
         {
-            scope.User = new SentryUser { Id = telemetryUserId };
-            scope.SetTag("os", GetSentryOperatingSystemTag());
-            scope.SetTag("session_type", GetSentrySessionTypeTag());
-            scope.SetTag("app_version", GetInformationalVersion());
-            scope.SetTag("build_channel", GetSentryEnvironment());
-            scope.SetTag("telemetry_user_id", telemetryUserId);
+            scope.User = new SentryUser { Id = telemetryInstallationId };
+
+            foreach (KeyValuePair<string, string> tag in CreateBaseTags())
+                scope.SetTag(tag.Key, tag.Value);
         });
     }
 
@@ -393,6 +411,36 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         return "unknown";
     }
 
+    private static IReadOnlyDictionary<string, string> CreateBaseTags()
+    {
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["telemetry_schema_version"] = TelemetrySchemaVersion,
+            ["os"] = GetSentryOperatingSystemTag(),
+            ["os_arch"] = GetProcessArchitectureTag(),
+            ["session_type"] = GetSentrySessionTypeTag(),
+            ["app_version"] = GetInformationalVersion(),
+            ["build_channel"] = GetSentryEnvironment(),
+            ["distribution_channel"] = GetAssemblyMetadataValue(
+                "TelemetryDistributionChannel",
+                "source"
+            ),
+            ["package_kind"] = GetAssemblyMetadataValue("TelemetryPackageKind", "unpackaged"),
+        };
+    }
+
+    private static string GetProcessArchitectureTag()
+    {
+        return RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.Arm64 => "arm64",
+            Architecture.Arm => "arm",
+            Architecture.X64 => "x64",
+            Architecture.X86 => "x86",
+            _ => "unknown",
+        };
+    }
+
     private static string GetSentrySessionTypeTag()
     {
         if (!OperatingSystem.IsLinux())
@@ -412,6 +460,17 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
         return value.Trim().ToLowerInvariant().Replace(' ', '_');
+    }
+
+    private static string GetAssemblyMetadataValue(string key, string fallback)
+    {
+        string? value = typeof(App)
+            .Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute =>
+                string.Equals(attribute.Key, key, StringComparison.Ordinal)
+            )
+            ?.Value;
+        return string.IsNullOrWhiteSpace(value) ? fallback : NormalizeTagValue(value);
     }
 
     private static bool IsDebugBuild()

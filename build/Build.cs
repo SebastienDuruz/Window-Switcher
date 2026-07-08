@@ -29,6 +29,12 @@ sealed class Build : NukeBuild
     /// <summary>Whether Sentry telemetry is compiled into the application.</summary>
     [Parameter] readonly bool EnableSentryTelemetry = true;
 
+    /// <summary>Distribution channel label included in telemetry metadata.</summary>
+    [Parameter] readonly string DistributionChannel = "source";
+
+    /// <summary>Package kind label included in telemetry metadata.</summary>
+    [Parameter] readonly string PackageKind = "unpackaged";
+
     /// <summary>Windows RID used for installer publish output.</summary>
     [Parameter] readonly string WindowsRuntime = "win-x64";
 
@@ -67,6 +73,10 @@ sealed class Build : NukeBuild
 
     string EffectiveVersion => Version ?? ReadVersionFromProps(VersionPropsPath);
     string EnableSentryTelemetryProperty => EnableSentryTelemetry ? "true" : "false";
+    string TelemetryBuildProperties =>
+        $"-p:EnableSentryTelemetry={EnableSentryTelemetryProperty} " +
+        $"-p:TelemetryDistributionChannel={NormalizeTelemetryBuildLabel(DistributionChannel)} " +
+        $"-p:TelemetryPackageKind={NormalizeTelemetryBuildLabel(PackageKind)}";
 
     AbsolutePath EffectiveWindowsPublishDir => WindowsPublishDir ?? ArtifactsDirectory / "publish" / WindowsRuntime;
     AbsolutePath EffectiveLinuxPublishDir => LinuxPublishDir ?? ArtifactsDirectory / "publish" / LinuxRuntime;
@@ -90,7 +100,7 @@ sealed class Build : NukeBuild
         .DependsOn(ValidateParameters)
         .Executes(() =>
         {
-            RunDotNet($"restore \"{AppProjectPath}\" -p:EnableSentryTelemetry={EnableSentryTelemetryProperty}");
+            RunDotNet($"restore \"{AppProjectPath}\" {TelemetryBuildProperties}");
         });
 
     /// <summary>
@@ -100,7 +110,7 @@ sealed class Build : NukeBuild
         .DependsOn(Restore)
         .Executes(() =>
         {
-            RunDotNet($"build \"{AppProjectPath}\" -c {Configuration} -p:EnableSentryTelemetry={EnableSentryTelemetryProperty}");
+            RunDotNet($"build \"{AppProjectPath}\" -c {Configuration} {TelemetryBuildProperties}");
         });
 
     /// <summary>
@@ -303,8 +313,19 @@ sealed class Build : NukeBuild
         RunDotNet(
             $"publish \"{AppProjectPath}\" -c {Configuration} -r {runtime} " +
             $"-o \"{outputDirectory}\" --self-contained {selfContainedValue} " +
-            $"-p:UsedAvaloniaProducts= -p:EnableSentryTelemetry={EnableSentryTelemetryProperty} " +
+            $"-p:UsedAvaloniaProducts= {TelemetryBuildProperties} " +
             $"-p:Version={EffectiveVersion} -p:PackageVersion={EffectiveVersion} -p:InformationalVersion={EffectiveVersion}");
+    }
+
+    /// <summary>
+    /// Normalizes build labels before they become MSBuild property values.
+    /// </summary>
+    static string NormalizeTelemetryBuildLabel(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "unknown";
+
+        return value.Trim().ToLowerInvariant().Replace(' ', '_');
     }
 
     /// <summary>

@@ -24,7 +24,7 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.FloatingWindowsConfig);
             Assert.NotNull(sut.Config.WindowKeybindTargets);
             Assert.Equal(new ConfigFile().SentryDsn, sut.Config.SentryDsn);
-            Assert.True(Guid.TryParse(sut.Config.TelemetryUserId, out _));
+            Assert.True(Guid.TryParse(sut.Config.TelemetryInstallationId, out _));
         }
         finally
         {
@@ -89,7 +89,7 @@ public sealed class ConfigFileAccessorTests
             Assert.Empty(config.WhitelistPrefixes);
             Assert.Empty(config.BlacklistPrefixes);
             Assert.Equal(string.Empty, config.SentryDsn);
-            Assert.True(Guid.TryParse(config.TelemetryUserId, out _));
+            Assert.True(Guid.TryParse(config.TelemetryInstallationId, out _));
 
             WindowConfig persistedConfig = Assert.Single(
                 config
@@ -160,17 +160,17 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
-    public void ResetUserSettings_RegeneratesTelemetryUserId()
+    public void ResetUserSettings_RegeneratesTelemetryInstallationId()
     {
         string dataFolder = CreateTempDataFolder();
         try
         {
             var sut = CreateAccessor(dataFolder);
-            string originalId = sut.Config.TelemetryUserId;
+            string originalId = sut.Config.TelemetryInstallationId;
 
             sut.ResetUserSettings();
 
-            string regeneratedId = sut.Config.TelemetryUserId;
+            string regeneratedId = sut.Config.TelemetryInstallationId;
             Assert.NotEqual(originalId, regeneratedId);
             Assert.True(Guid.TryParse(regeneratedId, out _));
         }

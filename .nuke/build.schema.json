@@ -116,6 +116,9 @@
         "Configuration": {
           "type": "string"
         },
+        "DistributionChannel": {
+          "type": "string"
+        },
         "EnableSentryTelemetry": {
           "type": "boolean"
         },
@@ -129,6 +132,9 @@
           "type": "string"
         },
         "MakensisPath": {
+          "type": "string"
+        },
+        "PackageKind": {
           "type": "string"
         },
         "SelfContained": {

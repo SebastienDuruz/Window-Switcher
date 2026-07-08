@@ -454,8 +454,10 @@ public class ConfigFileAccessor
         config.WhitelistPrefixes ??= new List<string>();
         config.BlacklistPrefixes ??= new List<string>();
         config.SentryDsn ??= string.Empty;
-        if (!Guid.TryParse(config.TelemetryUserId, out _))
-            config.TelemetryUserId = Guid.NewGuid().ToString("D");
+        if (Guid.TryParse(config.TelemetryInstallationId, out Guid parsedInstallationId))
+            config.TelemetryInstallationId = parsedInstallationId.ToString("D");
+        else
+            config.TelemetryInstallationId = Guid.NewGuid().ToString("D");
 
         config.FloatingWindowsConfig = (config.FloatingWindowsConfig ?? [])
             .Where(windowConfig => windowConfig is not null)
@@ -487,7 +489,7 @@ public class ConfigFileAccessor
             MoveWindows = config.MoveWindows,
             StartMinimized = config.StartMinimized,
             SentryDsn = config.SentryDsn,
-            TelemetryUserId = config.TelemetryUserId,
+            TelemetryInstallationId = config.TelemetryInstallationId,
             UseFixedWindowSize = config.UseFixedWindowSize,
             FocusOnHover = config.FocusOnHover,
             WindowWidth = config.WindowWidth,
