@@ -26,6 +26,9 @@ sealed class Build : NukeBuild
     /// <summary>Whether published binaries should be self-contained.</summary>
     [Parameter] readonly bool SelfContained;
 
+    /// <summary>Whether Sentry telemetry is compiled into the application.</summary>
+    [Parameter] readonly bool EnableSentryTelemetry = true;
+
     /// <summary>Windows RID used for installer publish output.</summary>
     [Parameter] readonly string WindowsRuntime = "win-x64";
 
@@ -63,6 +66,7 @@ sealed class Build : NukeBuild
     AbsolutePath InstallerNsiPath => InstallerAssetsDirectory / "WindowSwitcher.nsi";
 
     string EffectiveVersion => Version ?? ReadVersionFromProps(VersionPropsPath);
+    string EnableSentryTelemetryProperty => EnableSentryTelemetry ? "true" : "false";
 
     AbsolutePath EffectiveWindowsPublishDir => WindowsPublishDir ?? ArtifactsDirectory / "publish" / WindowsRuntime;
     AbsolutePath EffectiveLinuxPublishDir => LinuxPublishDir ?? ArtifactsDirectory / "publish" / LinuxRuntime;
@@ -86,7 +90,7 @@ sealed class Build : NukeBuild
         .DependsOn(ValidateParameters)
         .Executes(() =>
         {
-            RunDotNet($"restore \"{AppProjectPath}\"");
+            RunDotNet($"restore \"{AppProjectPath}\" -p:EnableSentryTelemetry={EnableSentryTelemetryProperty}");
         });
 
     /// <summary>
@@ -96,7 +100,7 @@ sealed class Build : NukeBuild
         .DependsOn(Restore)
         .Executes(() =>
         {
-            RunDotNet($"build \"{AppProjectPath}\" -c {Configuration}");
+            RunDotNet($"build \"{AppProjectPath}\" -c {Configuration} -p:EnableSentryTelemetry={EnableSentryTelemetryProperty}");
         });
 
     /// <summary>
@@ -299,7 +303,8 @@ sealed class Build : NukeBuild
         RunDotNet(
             $"publish \"{AppProjectPath}\" -c {Configuration} -r {runtime} " +
             $"-o \"{outputDirectory}\" --self-contained {selfContainedValue} " +
-            $"-p:UsedAvaloniaProducts= -p:Version={EffectiveVersion} -p:PackageVersion={EffectiveVersion} -p:InformationalVersion={EffectiveVersion}");
+            $"-p:UsedAvaloniaProducts= -p:EnableSentryTelemetry={EnableSentryTelemetryProperty} " +
+            $"-p:Version={EffectiveVersion} -p:PackageVersion={EffectiveVersion} -p:InformationalVersion={EffectiveVersion}");
     }
 
     /// <summary>

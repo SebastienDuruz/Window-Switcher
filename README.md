@@ -152,6 +152,7 @@ If `make` is not available on your system, use the underlying commands directly:
 - Restore packages: `dotnet restore Window-Switcher.slnx`
 - Restore local tools: `dotnet tool restore`
 - Build: `dotnet build Window-Switcher.slnx`
+- Build without Sentry: `dotnet build Window-Switcher.slnx -p:EnableSentryTelemetry=false`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 - Format: `dotnet csharpier .`
@@ -173,6 +174,8 @@ If `make` is not available on your system, use the underlying commands directly:
 | `make artifacts` | Build host-specific release artifacts through Nuke. |
 | `make installer` | Build the Windows installer through Nuke (Windows host only). |
 | `make appimage` | Build the Linux AppImage through Nuke (Linux host only). |
+
+Set `SENTRY_TELEMETRY=false` to compile without Sentry, for example `make build SENTRY_TELEMETRY=false`.
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
@@ -213,6 +216,8 @@ Examples:
 
 - Windows installer (on Windows): `./build/build.cmd --target Installer`
 - Linux AppImage (on Linux): `./build/build.sh --target AppImage`
+- Windows installer without Sentry: `./build/build.cmd --target Installer --enable-sentry-telemetry false`
+- Linux AppImage without Sentry: `./build/build.sh --target AppImage --enable-sentry-telemetry false`
 
 Outputs:
 
@@ -333,28 +338,30 @@ Window Switcher uses [Sentry](https://sentry.io/) for:
 - unhandled exception reporting
 - a single startup metric
 
-Unhandled exceptions are always reported when Sentry is enabled. A single startup metric is emitted once per application start.
+Sentry is a compile-time feature and is enabled by default. Builds created with Sentry enabled do not expose a runtime setting to disable it.
 
-Sentry is configured from the application `config.json` file. There is no in-app setting for it.
+To compile Window Switcher without any Sentry dependency or Sentry traffic, pass:
 
-Example:
-
-```json
-{
-  "EnableSentry": true,
-  "SentryDsn": "https://examplePublicKey@o0.ingest.sentry.io/0"
-}
+```bash
+dotnet build Window-Switcher.slnx -p:EnableSentryTelemetry=false
 ```
 
-To disable all Sentry traffic, set:
+The same flag is available through Make:
 
-```json
-{
-  "EnableSentry": false
-}
+```bash
+make build SENTRY_TELEMETRY=false
 ```
 
-You can find the config file path from `Help > About`.
+And through Nuke artifact builds:
+
+```bash
+./build/build.cmd --target Installer --enable-sentry-telemetry false
+./build/build.sh --target AppImage --enable-sentry-telemetry false
+```
+
+The `SentryDsn` value in `config.json` can still override the project DSN for custom builds, but it is not an opt-out setting. Builds compiled with `EnableSentryTelemetry=false` ignore Sentry configuration entirely.
+
+Unhandled exceptions are reported when Sentry is compiled in. A single startup metric is emitted once per application start.
 
 Window Switcher sends only low-cardinality runtime metadata such as:
 

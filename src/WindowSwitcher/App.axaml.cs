@@ -109,7 +109,7 @@ public partial class App : Application
     {
         IPlatformAppInfoProvider appInfoProvider =
             AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>();
-        string previewMode = SentryAppTelemetry.NormalizePreviewMode(
+        string previewMode = AppTelemetrySanitizer.NormalizePreviewMode(
             appInfoProvider.GetSnapshot().PreviewMode
         );
 
@@ -135,7 +135,8 @@ public partial class App : Application
         IGlobalWindowKeybindRuntimeService runtimeService,
         IGlobalKeyboardService globalKeyboardService,
         IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         await StartGlobalWindowKeybindRuntimeServiceAsync(runtimeService, cancellationToken)
             .ConfigureAwait(false);
@@ -150,7 +151,8 @@ public partial class App : Application
     private static async Task StartGlobalKeyboardServiceAsync(
         IGlobalKeyboardService globalKeyboardService,
         IGlobalKeyboardStartupStatusService globalKeyboardStartupStatusService,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -172,7 +174,8 @@ public partial class App : Application
 
     private static async Task StartGlobalWindowKeybindRuntimeServiceAsync(
         IGlobalWindowKeybindRuntimeService runtimeService,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -265,7 +268,8 @@ public partial class App : Application
 
     private void OnDispatcherUnhandledException(
         object? sender,
-        DispatcherUnhandledExceptionEventArgs e)
+        DispatcherUnhandledExceptionEventArgs e
+    )
     {
         AppTelemetry.CaptureUnhandledException(e.Exception, "dispatcher_unhandled");
     }
@@ -273,14 +277,15 @@ public partial class App : Application
     private void OnCurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         AppTelemetry.CaptureUnhandledException(
-            SentryAppTelemetry.CreateUnhandledException(e.ExceptionObject),
+            AppTelemetrySanitizer.CreateUnhandledException(e.ExceptionObject),
             "appdomain_unhandled"
         );
     }
 
     private void OnTaskSchedulerUnobservedTaskException(
         object? sender,
-        UnobservedTaskExceptionEventArgs e)
+        UnobservedTaskExceptionEventArgs e
+    )
     {
         AppTelemetry.CaptureUnhandledException(e.Exception, "task_unobserved");
     }

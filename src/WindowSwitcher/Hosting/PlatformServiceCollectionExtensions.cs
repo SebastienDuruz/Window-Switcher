@@ -2,8 +2,6 @@ using System;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using WindowSwitcher.Diagnostics;
-using WindowSwitcher.Lib.Data.Updates;
-using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Commands;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
@@ -14,6 +12,8 @@ using WindowSwitcher.Lib.Data.Platform.Policies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Updates;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Services;
 
@@ -61,21 +61,37 @@ public static class PlatformServiceCollectionExtensions
             );
         }
 
-        services.AddSingleton<IGlobalKeyboardListenerFactory, RuntimeGlobalKeyboardListenerFactory>();
+        services.AddSingleton<
+            IGlobalKeyboardListenerFactory,
+            RuntimeGlobalKeyboardListenerFactory
+        >();
         services.AddSingleton<IGlobalKeyboardListener>(serviceProvider =>
             serviceProvider.GetRequiredService<IGlobalKeyboardListenerFactory>().Create()
         );
         services.AddSingleton<HttpClient>();
         services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
-        services.AddSingleton<IGlobalKeyboardStartupStatusService, GlobalKeyboardStartupStatusService>();
+        services.AddSingleton<
+            IGlobalKeyboardStartupStatusService,
+            GlobalKeyboardStartupStatusService
+        >();
         services.AddSingleton<IGlobalKeyboardService, GlobalKeyboardService>();
         services.AddSingleton<IWindowKeybindManager, WindowKeybindManager>();
-        services.AddSingleton<IWindowKeybindTargetCatalogService, WindowKeybindTargetCatalogService>();
+        services.AddSingleton<
+            IWindowKeybindTargetCatalogService,
+            WindowKeybindTargetCatalogService
+        >();
         services.AddSingleton<IWindowKeybindActivator, WindowKeybindActivator>();
-        services.AddSingleton<IGlobalWindowKeybindRuntimeService, GlobalWindowKeybindRuntimeService>();
+        services.AddSingleton<
+            IGlobalWindowKeybindRuntimeService,
+            GlobalWindowKeybindRuntimeService
+        >();
+#if SENTRY_TELEMETRY
         services.AddSingleton<ISentrySdkAdapter, SentrySdkAdapter>();
         services.AddSingleton<ITelemetrySettingsProvider, ConfigFileTelemetrySettingsProvider>();
         services.AddSingleton<IAppTelemetry, SentryAppTelemetry>();
+#else
+        services.AddSingleton<IAppTelemetry, NoOpAppTelemetry>();
+#endif
         services.AddSingleton<
             IFloatingWindowSettingsService,
             ConfigFileFloatingWindowSettingsService

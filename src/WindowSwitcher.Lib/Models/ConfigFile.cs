@@ -8,8 +8,8 @@ public class ConfigFile
     public bool ResizeWindows { get; set; } = true;
     public bool MoveWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = false;
-    public bool EnableSentry { get; set; } = true;
-    public string SentryDsn { get; set; } = "https://d4530a120abfe1da5f25305d84502c0a@o4511093969584128.ingest.de.sentry.io/4511093982036048";
+    public string SentryDsn { get; set; } =
+        "https://d4530a120abfe1da5f25305d84502c0a@o4511093969584128.ingest.de.sentry.io/4511093982036048";
     public string TelemetryUserId { get; set; } = Guid.NewGuid().ToString("D");
     public bool UseFixedWindowSize { get; set; } = false;
     public bool FocusOnHover { get; set; } = false;

@@ -23,7 +23,6 @@ public sealed class ConfigFileAccessorTests
             Assert.NotNull(sut.Config.BlacklistPrefixes);
             Assert.NotNull(sut.Config.FloatingWindowsConfig);
             Assert.NotNull(sut.Config.WindowKeybindTargets);
-            Assert.True(sut.Config.EnableSentry);
             Assert.Equal(new ConfigFile().SentryDsn, sut.Config.SentryDsn);
             Assert.True(Guid.TryParse(sut.Config.TelemetryUserId, out _));
         }
@@ -89,12 +88,13 @@ public sealed class ConfigFileAccessorTests
 
             Assert.Empty(config.WhitelistPrefixes);
             Assert.Empty(config.BlacklistPrefixes);
-            Assert.True(config.EnableSentry);
             Assert.Equal(string.Empty, config.SentryDsn);
             Assert.True(Guid.TryParse(config.TelemetryUserId, out _));
 
             WindowConfig persistedConfig = Assert.Single(
-                config.FloatingWindowsConfig.Where(entry => entry is not null).Select(entry => entry!)
+                config
+                    .FloatingWindowsConfig.Where(entry => entry is not null)
+                    .Select(entry => entry!)
             );
             Assert.Equal("proc|my title", persistedConfig.ConfigKey);
 
@@ -124,7 +124,10 @@ public sealed class ConfigFileAccessorTests
             ConfigFileAccessor.ConfigLoadFailure? failure = sut.ConsumeLastReadFailure();
             Assert.NotNull(failure);
             Assert.Equal("invalid_json", failure.Reason);
-            Assert.Equal(typeof(Newtonsoft.Json.JsonReaderException).FullName, failure.ExceptionType);
+            Assert.Equal(
+                typeof(Newtonsoft.Json.JsonReaderException).FullName,
+                failure.ExceptionType
+            );
             Assert.True(failure.DefaultsRestored);
             Assert.Null(sut.ConsumeLastReadFailure());
             Assert.NotNull(sut.Config.WhitelistPrefixes);
@@ -206,7 +209,8 @@ public sealed class ConfigFileAccessorTests
 
             WindowConfig persisted = Assert.Single(
                 sut.ReadConfig(config =>
-                    config.FloatingWindowsConfig.Where(entry => entry is not null)
+                    config
+                        .FloatingWindowsConfig.Where(entry => entry is not null)
                         .Select(entry => entry!)
                         .ToList()
                 )
@@ -259,7 +263,8 @@ public sealed class ConfigFileAccessorTests
             resolved.WindowWidth = 999;
             WindowConfig persisted = Assert.Single(
                 sut.ReadConfig(config =>
-                    config.FloatingWindowsConfig.Where(entry => entry is not null)
+                    config
+                        .FloatingWindowsConfig.Where(entry => entry is not null)
                         .Select(entry => entry!)
                         .ToList()
                 )
@@ -359,26 +364,6 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
-    public void WriteUserSettings_PersistsEnableSentryValueToDisk()
-    {
-        string dataFolder = CreateTempDataFolder();
-        try
-        {
-            var sut = CreateAccessor(dataFolder);
-
-            sut.UpdateConfig(config => config.EnableSentry = false);
-            sut.WriteUserSettings();
-
-            string json = File.ReadAllText(sut.GetFilePath());
-            Assert.Contains("\"EnableSentry\": false", json, StringComparison.Ordinal);
-        }
-        finally
-        {
-            DeleteDirectory(dataFolder);
-        }
-    }
-
-    [Fact]
     public void WriteUserSettings_PersistsSentryDsnValueToDisk()
     {
         string dataFolder = CreateTempDataFolder();
@@ -386,7 +371,9 @@ public sealed class ConfigFileAccessorTests
         {
             var sut = CreateAccessor(dataFolder);
 
-            sut.UpdateConfig(config => config.SentryDsn = "https://examplePublicKey@o0.ingest.sentry.io/0");
+            sut.UpdateConfig(config =>
+                config.SentryDsn = "https://examplePublicKey@o0.ingest.sentry.io/0"
+            );
             sut.WriteUserSettings();
 
             string json = File.ReadAllText(sut.GetFilePath());
@@ -409,27 +396,25 @@ public sealed class ConfigFileAccessorTests
         try
         {
             var sut = CreateAccessor(dataFolder);
-            sut.SaveWindowKeybindTargets(
-                [
-                    new WindowKeybindTargetConfig
-                    {
-                        TargetId = "proc|editor",
-                        DisplayLabel = "Editor",
-                        Shortcuts =
-                        [
-                            new WindowKeybindShortcut
+            sut.SaveWindowKeybindTargets([
+                new WindowKeybindTargetConfig
+                {
+                    TargetId = "proc|editor",
+                    DisplayLabel = "Editor",
+                    Shortcuts =
+                    [
+                        new WindowKeybindShortcut
+                        {
+                            Combination = new KeyCombination
                             {
-                                Combination = new KeyCombination
-                                {
-                                    Alt = true,
-                                    Shift = true,
-                                    Key = KeybindPrimaryKey.F2,
-                                },
+                                Alt = true,
+                                Shift = true,
+                                Key = KeybindPrimaryKey.F2,
                             },
-                        ],
-                    },
-                ]
-            );
+                        },
+                    ],
+                },
+            ]);
             sut.WriteUserSettings();
 
             string json = File.ReadAllText(sut.GetFilePath());
