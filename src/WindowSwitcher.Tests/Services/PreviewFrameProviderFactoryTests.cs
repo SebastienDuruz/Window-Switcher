@@ -5,7 +5,6 @@ using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 using WindowSwitcher.Lib.Models;
 using Xunit;

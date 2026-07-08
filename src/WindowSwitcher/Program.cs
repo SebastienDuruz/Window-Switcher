@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Threading;
 using Avalonia;
-using Avalonia.Skia;
-using Avalonia.X11;
 using WindowSwitcher.Hosting;
 
 namespace WindowSwitcher;

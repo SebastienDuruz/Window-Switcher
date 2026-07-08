@@ -94,6 +94,9 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         string normalizedPreviewMode = AppTelemetrySanitizer.NormalizePreviewMode(previewMode);
         string telemetryInstallationId;
 
+        if (!IsInitialized())
+            return;
+
         lock (_syncRoot)
         {
             if (_appStartedRecorded)
@@ -102,9 +105,6 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             _appStartedRecorded = true;
             telemetryInstallationId = _telemetryInstallationId;
         }
-
-        if (!IsInitialized())
-            return;
 
         try
         {

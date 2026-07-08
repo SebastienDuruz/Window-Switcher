@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using WindowSwitcher.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Commands;
@@ -69,7 +71,10 @@ public static class PlatformServiceCollectionExtensions
             serviceProvider.GetRequiredService<IGlobalKeyboardListenerFactory>().Create()
         );
         services.AddSingleton<HttpClient>();
-        services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
+        if (IsWindowsStoreBuild())
+            services.AddSingleton<IAppUpdateService, StoreManagedAppUpdateService>();
+        else
+            services.AddSingleton<IAppUpdateService, GitHubAppUpdateService>();
         services.AddSingleton<
             IGlobalKeyboardStartupStatusService,
             GlobalKeyboardStartupStatusService
@@ -103,5 +108,24 @@ public static class PlatformServiceCollectionExtensions
 
         services.AddSingleton<SystemInfoService>();
         return services;
+    }
+
+    private static bool IsWindowsStoreBuild()
+    {
+        string? distributionChannel = typeof(PlatformServiceCollectionExtensions)
+            .Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute =>
+                string.Equals(
+                    attribute.Key,
+                    "TelemetryDistributionChannel",
+                    StringComparison.Ordinal
+                )
+            )
+            ?.Value;
+        return string.Equals(
+            distributionChannel,
+            "windows_store",
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 }

@@ -18,7 +18,8 @@ public class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         ISettingsRepository settingsRepository,
         Action applyAction,
-        Action<string> applyPreviewHighlightColorAction)
+        Action<string> applyPreviewHighlightColorAction
+    )
     {
         ArgumentNullException.ThrowIfNull(settingsRepository);
         ArgumentNullException.ThrowIfNull(applyAction);

@@ -121,7 +121,7 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 Window Switcher is open source: the project and its source code remain available under the GPL3 license.
 
-Precompiled builds are no longer distributed for free. Paid compiled builds may be provided through distribution channels such as the Windows Store. These builds are intended for users who prefer a ready-to-install package and may be compiled with Sentry enabled without a runtime opt-out.
+Official precompiled builds are no longer distributed for free. Paid compiled builds may be provided through distribution channels such as the Windows Store. These builds are intended for users who prefer a ready-to-install package and are compiled with Sentry enabled without a runtime opt-out.
 
 If you want the free version, build Window Switcher from source. Sentry is enabled by default in source builds, and can be disabled at compile time.
 
@@ -224,6 +224,7 @@ Examples:
 - Windows Store-labelled build: `./build/build.cmd --target Compile --distribution-channel windows_store --package-kind store`
 
 To compile Nuke artifacts without Sentry, pass `--enable-sentry-telemetry false`.
+Builds labelled with `--distribution-channel windows_store` do not use the GitHub release updater; in-app updates are reported as managed by Microsoft Store.
 
 Outputs:
 

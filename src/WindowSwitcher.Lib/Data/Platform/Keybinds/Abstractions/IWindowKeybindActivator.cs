@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 
 /// <summary>
