@@ -4,8 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.ViewModels;
@@ -80,10 +80,7 @@ public partial class AppInfoViewModel : ObservableObject
             () => CheckForUpdatesAsync(force: true, showUpToDateMessage: true),
             () => !IsCheckingForUpdates && !IsStartingUpdate
         );
-        UpdateNowCommand = new AsyncRelayCommand(
-            StartUpdateAsync,
-            () => CanUpdateNow
-        );
+        UpdateNowCommand = new AsyncRelayCommand(StartUpdateAsync, () => CanUpdateNow);
 
         Refresh();
     }
@@ -218,12 +215,15 @@ public partial class AppInfoViewModel : ObservableObject
     {
         Assembly assembly = typeof(AppInfoViewModel).Assembly;
         string? informationalVersion = assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion;
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
 
         if (!string.IsNullOrWhiteSpace(informationalVersion))
         {
-            int metadataSeparatorIndex = informationalVersion.IndexOf('+', StringComparison.Ordinal);
+            int metadataSeparatorIndex = informationalVersion.IndexOf(
+                '+',
+                StringComparison.Ordinal
+            );
             return metadataSeparatorIndex >= 0
                 ? informationalVersion[..metadataSeparatorIndex]
                 : informationalVersion;

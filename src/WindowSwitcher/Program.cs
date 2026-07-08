@@ -33,24 +33,37 @@ static class Program
         if (OperatingSystem.IsLinux())
         {
             builder = builder.With(
-                new X11PlatformOptions
-                {
-                    RenderingMode =
-                    [
-                        X11RenderingMode.Egl,
-                        X11RenderingMode.Glx,
-                        X11RenderingMode.Software,
-                    ],
-                }
+                new X11PlatformOptions { RenderingMode = CreateLinuxRenderingModes() }
             );
         }
         else if (OperatingSystem.IsWindows())
         {
             builder = builder.With(
-                new Win32PlatformOptions() { RenderingMode = [Win32RenderingMode.Software] }
+                new Win32PlatformOptions { RenderingMode = CreateWindowsRenderingModes() }
             );
         }
 
         return builder.WithInterFont();
+    }
+
+    private static X11RenderingMode[] CreateLinuxRenderingModes()
+    {
+        return
+        [
+            X11RenderingMode.Vulkan,
+            X11RenderingMode.Egl,
+            X11RenderingMode.Glx,
+            X11RenderingMode.Software,
+        ];
+    }
+
+    private static Win32RenderingMode[] CreateWindowsRenderingModes()
+    {
+        return
+        [
+            Win32RenderingMode.Vulkan,
+            Win32RenderingMode.AngleEgl,
+            Win32RenderingMode.Software,
+        ];
     }
 }

@@ -5,8 +5,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using WindowSwitcher.Hosting;
-using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Services;
 
@@ -64,7 +64,10 @@ public partial class AppInfoWindow : Window
 
     private static void RequestApplicationShutdownFromLifetime()
     {
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (
+            Application.Current?.ApplicationLifetime
+            is IClassicDesktopStyleApplicationLifetime desktop
+        )
             desktop.Shutdown();
     }
 }
