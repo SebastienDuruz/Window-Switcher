@@ -119,22 +119,25 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 ## Installation
 
-Download the latest release [here](https://github.com/SebastienDuruz/Window-Switcher/releases)
+Window Switcher is open source: the project and its source code remain available under the GPL3 license.
+
+Precompiled builds are no longer distributed for free. Paid compiled builds may be provided through distribution channels such as the Windows Store. These builds are intended for users who prefer a ready-to-install package and may be compiled with Sentry enabled without a runtime opt-out.
+
+If you want the free version, build Window Switcher from source. Sentry is enabled by default in source builds, and can be disabled at compile time.
 
 ### Quick start
 
 **Windows**
 
-- Download and run the `WindowSwitcher-setup-*.exe` installer from the releases page.
+- Use a precompiled paid build when available, or build from source.
 
 **Linux**
 
-- Download the `*.AppImage` from the releases page.
-- Make it executable and run it:
-    - `chmod +x WindowSwitcher-*.AppImage`
-    - `./WindowSwitcher-*.AppImage`
+- Build from source.
 
 ## Build from source
+
+The standard source build keeps Sentry enabled. This is the recommended build mode for normal use because it helps diagnose crashes and basic startup usage.
 
 From the repo root:
 
@@ -152,11 +155,12 @@ If `make` is not available on your system, use the underlying commands directly:
 - Restore packages: `dotnet restore Window-Switcher.slnx`
 - Restore local tools: `dotnet tool restore`
 - Build: `dotnet build Window-Switcher.slnx`
-- Build without Sentry: `dotnet build Window-Switcher.slnx -p:EnableSentryTelemetry=false`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Test: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
-- Format: `dotnet csharpier .`
-- Check formatting: `dotnet csharpier . --check`
+- Format: `dotnet csharpier format .`
+- Check formatting: `dotnet csharpier check .`
+
+To compile without Sentry, pass the MSBuild property `EnableSentryTelemetry=false`.
 
 ### Make commands
 
@@ -175,7 +179,8 @@ If `make` is not available on your system, use the underlying commands directly:
 | `make installer` | Build the Windows installer through Nuke (Windows host only). |
 | `make appimage` | Build the Linux AppImage through Nuke (Linux host only). |
 
-Set `SENTRY_TELEMETRY=false` to compile without Sentry, for example `make build SENTRY_TELEMETRY=false`.
+Set `SENTRY_TELEMETRY=false` to compile without Sentry through Make.
+Set `TELEMETRY_DISTRIBUTION_CHANNEL` and `TELEMETRY_PACKAGE_KIND` to label packaged builds, for example `make build TELEMETRY_DISTRIBUTION_CHANNEL=windows_store TELEMETRY_PACKAGE_KIND=store`.
 
 The application version is centralized in `./Directory.Build.props` via `WindowSwitcherVersion`.
 
@@ -216,8 +221,9 @@ Examples:
 
 - Windows installer (on Windows): `./build/build.cmd --target Installer`
 - Linux AppImage (on Linux): `./build/build.sh --target AppImage`
-- Windows installer without Sentry: `./build/build.cmd --target Installer --enable-sentry-telemetry false`
-- Linux AppImage without Sentry: `./build/build.sh --target AppImage --enable-sentry-telemetry false`
+- Windows Store-labelled build: `./build/build.cmd --target Compile --distribution-channel windows_store --package-kind store`
+
+To compile Nuke artifacts without Sentry, pass `--enable-sentry-telemetry false`.
 
 Outputs:
 
@@ -340,34 +346,29 @@ Window Switcher uses [Sentry](https://sentry.io/) for:
 
 Sentry is a compile-time feature and is enabled by default. Builds created with Sentry enabled do not expose a runtime setting to disable it.
 
-To compile Window Switcher without any Sentry dependency or Sentry traffic, pass:
+To compile Window Switcher without any Sentry dependency or Sentry traffic, use the build-time opt-out for the entrypoint you use:
 
-```bash
-dotnet build Window-Switcher.slnx -p:EnableSentryTelemetry=false
-```
-
-The same flag is available through Make:
-
-```bash
-make build SENTRY_TELEMETRY=false
-```
-
-And through Nuke artifact builds:
-
-```bash
-./build/build.cmd --target Installer --enable-sentry-telemetry false
-./build/build.sh --target AppImage --enable-sentry-telemetry false
-```
+- MSBuild: `EnableSentryTelemetry=false`
+- Make: `SENTRY_TELEMETRY=false`
+- Nuke: `--enable-sentry-telemetry false`
 
 The `SentryDsn` value in `config.json` can still override the project DSN for custom builds, but it is not an opt-out setting. Builds compiled with `EnableSentryTelemetry=false` ignore Sentry configuration entirely.
 
-Unhandled exceptions are reported when Sentry is compiled in. A single startup metric is emitted once per application start.
+Unhandled exceptions are reported when Sentry is compiled in. Metrics are emitted only for low-frequency session events:
 
-Window Switcher sends only low-cardinality runtime metadata such as:
+- `window_switcher.app_started`
 
+Window Switcher sends only targeted runtime metadata such as:
+
+- anonymous installation ID as Sentry `User.Id`
+- anonymous installation ID as `telemetry_installation_id` on `window_switcher.app_started`
+- telemetry schema version
 - OS
+- process architecture
 - session type
 - build channel
+- distribution channel
+- package kind
 - app version
 - preview mode
 - capture source for unhandled exceptions
@@ -381,6 +382,7 @@ Window Switcher does not intentionally send:
 - global keybind definitions
 - screenshots or window previews
 - shell commands
+- hostnames, usernames, emails, or machine-derived identifiers
 
 ## License
 

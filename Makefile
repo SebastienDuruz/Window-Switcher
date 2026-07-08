@@ -4,8 +4,11 @@ TEST_PROJECT := src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj
 BUILD_SCRIPT := ./build/build.sh
 BUILD_CMD := ./build/build.cmd
 SENTRY_TELEMETRY ?= true
-MSBUILD_SENTRY_PROPERTY := -p:EnableSentryTelemetry=$(SENTRY_TELEMETRY)
+TELEMETRY_DISTRIBUTION_CHANNEL ?= source
+TELEMETRY_PACKAGE_KIND ?= unpackaged
+MSBUILD_SENTRY_PROPERTY := -p:EnableSentryTelemetry=$(SENTRY_TELEMETRY) -p:TelemetryDistributionChannel=$(TELEMETRY_DISTRIBUTION_CHANNEL) -p:TelemetryPackageKind=$(TELEMETRY_PACKAGE_KIND)
 NUKE_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
+NUKE_TELEMETRY_ARGUMENTS := $(NUKE_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
 
 ifeq ($(OS),Windows_NT)
 NUKE := $(BUILD_CMD)
@@ -31,6 +34,7 @@ help:
 	@echo "  make appimage      Build the Linux AppImage with Nuke (Linux only)"
 	@echo ""
 	@echo "Set SENTRY_TELEMETRY=false to compile without Sentry."
+	@echo "Set TELEMETRY_DISTRIBUTION_CHANNEL and TELEMETRY_PACKAGE_KIND to label packaged builds."
 
 restore:
 	dotnet restore $(SOLUTION) $(MSBUILD_SENTRY_PROPERTY)
@@ -53,18 +57,18 @@ clean:
 
 format:
 	dotnet tool restore
-	dotnet csharpier .
+	dotnet csharpier format .
 
 format-check:
 	dotnet tool restore
-	dotnet csharpier . --check
+	dotnet csharpier check .
 
 artifacts:
-	$(NUKE) --target Artifacts $(NUKE_SENTRY_ARGUMENT)
+	$(NUKE) --target Artifacts $(NUKE_TELEMETRY_ARGUMENTS)
 
 installer:
 ifeq ($(OS),Windows_NT)
-	$(BUILD_CMD) --target Installer $(NUKE_SENTRY_ARGUMENT)
+	$(BUILD_CMD) --target Installer $(NUKE_TELEMETRY_ARGUMENTS)
 else
 	@echo "The Windows installer can only be built on Windows."
 	@echo "On Linux, use 'make appimage' or 'make artifacts' to build the AppImage."
@@ -76,5 +80,5 @@ ifeq ($(OS),Windows_NT)
 	@echo "The Linux AppImage can only be built on Linux."
 	@exit 2
 else
-	$(BUILD_SCRIPT) --target AppImage $(NUKE_SENTRY_ARGUMENT)
+	$(BUILD_SCRIPT) --target AppImage $(NUKE_TELEMETRY_ARGUMENTS)
 endif

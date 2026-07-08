@@ -7,6 +7,18 @@
         <InformationalVersion>$(WindowSwitcherVersion)</InformationalVersion>
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
         <EnableSentryTelemetry Condition="'$(EnableSentryTelemetry)' == ''">true</EnableSentryTelemetry>
+        <TelemetryDistributionChannel Condition="'$(TelemetryDistributionChannel)' == ''">source</TelemetryDistributionChannel>
+        <TelemetryPackageKind Condition="'$(TelemetryPackageKind)' == ''">unpackaged</TelemetryPackageKind>
         <DefineConstants Condition="'$(EnableSentryTelemetry)' == 'true'">$(DefineConstants);SENTRY_TELEMETRY</DefineConstants>
     </PropertyGroup>
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>TelemetryDistributionChannel</_Parameter1>
+            <_Parameter2>$(TelemetryDistributionChannel)</_Parameter2>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>TelemetryPackageKind</_Parameter1>
+            <_Parameter2>$(TelemetryPackageKind)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
 </Project>
