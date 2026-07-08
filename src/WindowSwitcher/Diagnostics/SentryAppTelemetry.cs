@@ -13,20 +13,21 @@ namespace WindowSwitcher.Diagnostics;
 
 internal interface ITelemetrySettingsProvider
 {
-    (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings();
+    (string SentryDsn, string TelemetryUserId) GetSettings();
 }
 
 internal sealed class ConfigFileTelemetrySettingsProvider : ITelemetrySettingsProvider
 {
-    public (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings()
+    public (string SentryDsn, string TelemetryUserId) GetSettings()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            (
-                config.EnableSentry,
-                SentryAppTelemetry.ResolveSentryDsn(config.SentryDsn),
-                SentryAppTelemetry.ResolveTelemetryUserId(config.TelemetryUserId)
-            )
-        );
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config =>
+                (
+                    SentryAppTelemetry.ResolveSentryDsn(config.SentryDsn),
+                    SentryAppTelemetry.ResolveTelemetryUserId(config.TelemetryUserId)
+                )
+            );
     }
 }
 
@@ -58,10 +59,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         if (IsInitialized())
             return;
 
-        (bool enableSentry, string sentryDsn, string telemetryUserId) =
-            _telemetrySettingsProvider.GetSettings();
-        if (!enableSentry)
-            return;
+        (string sentryDsn, string telemetryUserId) = _telemetrySettingsProvider.GetSettings();
 
         try
         {
@@ -88,7 +86,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
     public async Task RecordAppStartedAsync(string previewMode)
     {
-        string normalizedPreviewMode = NormalizePreviewMode(previewMode);
+        string normalizedPreviewMode = AppTelemetrySanitizer.NormalizePreviewMode(previewMode);
         string telemetryUserId;
 
         lock (_syncRoot)
@@ -114,7 +112,9 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         }
         catch (Exception ex)
         {
-            Trace.TraceWarning($"[Sentry] Failed to capture app_started metric cleanly: {ex.Message}");
+            Trace.TraceWarning(
+                $"[Sentry] Failed to capture app_started metric cleanly: {ex.Message}"
+            );
         }
     }
 
@@ -128,8 +128,9 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
         try
         {
-            _sentrySdk.CaptureException(exception, scope =>
-                scope.SetTag("capture_source", NormalizeTagValue(source))
+            _sentrySdk.CaptureException(
+                exception,
+                scope => scope.SetTag("capture_source", NormalizeTagValue(source))
             );
         }
         catch (Exception ex)
@@ -152,22 +153,28 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
         try
         {
-            _sentrySdk.CaptureException(exception, scope =>
-            {
-                scope.SetTag("capture_source", NormalizeTagValue(source));
-                scope.SetTag("handled", "true");
-
-                if (tags is null)
-                    return;
-
-                foreach (KeyValuePair<string, string> tag in tags)
+            _sentrySdk.CaptureException(
+                exception,
+                scope =>
                 {
-                    if (string.IsNullOrWhiteSpace(tag.Key) || string.IsNullOrWhiteSpace(tag.Value))
-                        continue;
+                    scope.SetTag("capture_source", NormalizeTagValue(source));
+                    scope.SetTag("handled", "true");
 
-                    scope.SetTag(NormalizeTagKey(tag.Key), NormalizeTagValue(tag.Value));
+                    if (tags is null)
+                        return;
+
+                    foreach (KeyValuePair<string, string> tag in tags)
+                    {
+                        if (
+                            string.IsNullOrWhiteSpace(tag.Key)
+                            || string.IsNullOrWhiteSpace(tag.Value)
+                        )
+                            continue;
+
+                        scope.SetTag(NormalizeTagKey(tag.Key), NormalizeTagValue(tag.Value));
+                    }
                 }
-            });
+            );
         }
         catch (Exception ex)
         {
@@ -204,14 +211,6 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         }
     }
 
-    internal static Exception CreateUnhandledException(object? exceptionObject)
-    {
-        return exceptionObject as Exception
-            ?? new InvalidOperationException(
-                $"Unhandled exception payload was not an Exception instance: {exceptionObject?.GetType().FullName ?? "null"}"
-            );
-    }
-
     internal static string GetSentryRelease()
     {
         return BuildSentryRelease(GetInformationalVersion());
@@ -244,26 +243,6 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             return parsed.ToString("D");
 
         return new ConfigFile().TelemetryUserId;
-    }
-
-    internal static string NormalizePreviewMode(string? previewMode)
-    {
-        if (string.IsNullOrWhiteSpace(previewMode))
-            return "unknown";
-
-        string normalized = previewMode.Trim().ToLowerInvariant();
-        if (normalized.Contains("pipewire", StringComparison.Ordinal))
-            return "pipewire";
-        if (normalized.Contains("screenshot", StringComparison.Ordinal))
-            return "screenshots";
-        if (
-            normalized.Contains("desktop window manager", StringComparison.Ordinal)
-            || normalized.Contains("(dwm)", StringComparison.Ordinal)
-            || string.Equals(normalized, "dwm", StringComparison.Ordinal)
-        )
-            return "dwm";
-
-        return "other";
     }
 
     internal static SentryEvent? FilterSentryEvent(SentryEvent sentryEvent)
@@ -301,7 +280,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             ["session_type"] = GetSentrySessionTypeTag(),
             ["build_channel"] = GetSentryEnvironment(),
             ["app_version"] = GetInformationalVersion(),
-            ["preview_mode"] = NormalizePreviewMode(previewMode),
+            ["preview_mode"] = AppTelemetrySanitizer.NormalizePreviewMode(previewMode),
             ["telemetry_user_id"] = telemetryUserId,
         };
     }
@@ -312,10 +291,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
         _sentrySdk.ConfigureScope(scope =>
         {
-            scope.User = new SentryUser
-            {
-                Id = telemetryUserId,
-            };
+            scope.User = new SentryUser { Id = telemetryUserId };
             scope.SetTag("os", GetSentryOperatingSystemTag());
             scope.SetTag("session_type", GetSentrySessionTypeTag());
             scope.SetTag("app_version", GetInformationalVersion());
@@ -398,7 +374,8 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
     private static string GetInformationalVersion()
     {
-        return typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        return typeof(App)
+                .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion
             ?? typeof(App).Assembly.GetName().Version?.ToString()
             ?? "unknown";

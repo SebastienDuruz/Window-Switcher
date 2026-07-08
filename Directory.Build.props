@@ -6,5 +6,7 @@
         <PackageVersion>$(WindowSwitcherVersion)</PackageVersion>
         <InformationalVersion>$(WindowSwitcherVersion)</InformationalVersion>
         <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+        <EnableSentryTelemetry Condition="'$(EnableSentryTelemetry)' == ''">true</EnableSentryTelemetry>
+        <DefineConstants Condition="'$(EnableSentryTelemetry)' == 'true'">$(DefineConstants);SENTRY_TELEMETRY</DefineConstants>
     </PropertyGroup>
 </Project>

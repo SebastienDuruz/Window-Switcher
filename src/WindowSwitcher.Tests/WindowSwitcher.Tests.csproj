@@ -19,4 +19,8 @@
         <ProjectReference Include="..\WindowSwitcher\WindowSwitcher.csproj" />
         <ProjectReference Include="..\WindowSwitcher.Lib\WindowSwitcher.Lib.csproj" />
     </ItemGroup>
+
+    <ItemGroup Condition="'$(EnableSentryTelemetry)' != 'true'">
+        <Compile Remove="AppExceptionTests.cs" />
+    </ItemGroup>
 </Project>

@@ -1,5 +1,5 @@
-using Newtonsoft.Json;
 using System.Diagnostics;
+using Newtonsoft.Json;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Models;
@@ -329,11 +329,7 @@ public class ConfigFileAccessor
     private void RecordReadFailureLocked(Exception exception, string reason)
     {
         string exceptionType = exception.GetType().FullName ?? exception.GetType().Name;
-        _lastReadFailure = new ConfigLoadFailure(
-            reason,
-            exceptionType,
-            DefaultsRestored: true
-        );
+        _lastReadFailure = new ConfigLoadFailure(reason, exceptionType, DefaultsRestored: true);
         Trace.TraceError(
             $"[Config] Failed to read user settings; defaults were restored. Reason={reason}; ExceptionType={exceptionType}"
         );
@@ -490,7 +486,6 @@ public class ConfigFileAccessor
             ResizeWindows = config.ResizeWindows,
             MoveWindows = config.MoveWindows,
             StartMinimized = config.StartMinimized,
-            EnableSentry = config.EnableSentry,
             SentryDsn = config.SentryDsn,
             TelemetryUserId = config.TelemetryUserId,
             UseFixedWindowSize = config.UseFixedWindowSize,

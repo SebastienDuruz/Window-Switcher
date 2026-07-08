@@ -17,13 +17,10 @@ public sealed class SentryAppTelemetryTests
     private static string ExpectedAppVersion =>
         SentryAppTelemetry.GetSentryRelease()["window-switcher@".Length..];
     private static string ExpectedOperatingSystem =>
-        OperatingSystem.IsLinux()
-            ? "linux"
-            : OperatingSystem.IsWindows()
-                ? "windows"
-                : OperatingSystem.IsMacOS()
-                    ? "macos"
-                    : "unknown";
+        OperatingSystem.IsLinux() ? "linux"
+        : OperatingSystem.IsWindows() ? "windows"
+        : OperatingSystem.IsMacOS() ? "macos"
+        : "unknown";
 
     public static TheoryData<string?, string> ResolveSentryDsnCases =>
         new()
@@ -35,13 +32,13 @@ public sealed class SentryAppTelemetryTests
             },
             { string.Empty, DefaultDsn },
             { "   ", DefaultDsn },
-            { null, DefaultDsn }
+            { null, DefaultDsn },
         };
     public static TheoryData<string?, string> ResolveTelemetryUserIdExplicitCases =>
         new()
         {
             { ValidTelemetryUserId, ValidTelemetryUserId },
-            { "  e084ab00-8f33-4ad4-955a-bbc615590c6e  ", ValidTelemetryUserId }
+            { "  e084ab00-8f33-4ad4-955a-bbc615590c6e  ", ValidTelemetryUserId },
         };
 
     [Fact]
@@ -49,7 +46,7 @@ public sealed class SentryAppTelemetryTests
     {
         var exception = new InvalidOperationException("boom");
 
-        Exception result = SentryAppTelemetry.CreateUnhandledException(exception);
+        Exception result = AppTelemetrySanitizer.CreateUnhandledException(exception);
 
         Assert.Same(exception, result);
     }
@@ -57,7 +54,7 @@ public sealed class SentryAppTelemetryTests
     [Fact]
     public void CreateUnhandledException_WrapsNullPayload()
     {
-        Exception result = SentryAppTelemetry.CreateUnhandledException(null);
+        Exception result = AppTelemetrySanitizer.CreateUnhandledException(null);
 
         InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
         Assert.Contains("null", wrapped.Message, StringComparison.Ordinal);
@@ -66,7 +63,7 @@ public sealed class SentryAppTelemetryTests
     [Fact]
     public void CreateUnhandledException_WrapsNonExceptionPayload()
     {
-        Exception result = SentryAppTelemetry.CreateUnhandledException("boom");
+        Exception result = AppTelemetrySanitizer.CreateUnhandledException("boom");
 
         InvalidOperationException wrapped = Assert.IsType<InvalidOperationException>(result);
         Assert.Contains("System.String", wrapped.Message, StringComparison.Ordinal);
@@ -124,7 +121,7 @@ public sealed class SentryAppTelemetryTests
     [InlineData(null, "unknown")]
     public void NormalizePreviewMode_ReturnsExpectedValue(string? previewMode, string expected)
     {
-        string normalized = SentryAppTelemetry.NormalizePreviewMode(previewMode);
+        string normalized = AppTelemetrySanitizer.NormalizePreviewMode(previewMode);
 
         Assert.Equal(expected, normalized);
     }
@@ -167,7 +164,7 @@ public sealed class SentryAppTelemetryTests
         var sentrySdk = new FakeSentrySdkAdapter();
         var sut = CreateSut(
             sentrySdk,
-            new FakeTelemetrySettingsProvider(true, ValidDsn, ValidTelemetryUserId)
+            new FakeTelemetrySettingsProvider(ValidDsn, ValidTelemetryUserId)
         );
 
         sut.Initialize();
@@ -181,23 +178,12 @@ public sealed class SentryAppTelemetryTests
         Assert.True(sentrySdk.ScopeTags.ContainsKey("os"));
         Assert.True(sentrySdk.ScopeTags.ContainsKey("session_type"));
         Assert.Equal(ExpectedAppVersion, sentrySdk.ScopeTags["app_version"]);
-        Assert.Equal(SentryAppTelemetry.GetSentryEnvironment(), sentrySdk.ScopeTags["build_channel"]);
+        Assert.Equal(
+            SentryAppTelemetry.GetSentryEnvironment(),
+            sentrySdk.ScopeTags["build_channel"]
+        );
         Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeTags["telemetry_user_id"]);
         Assert.Equal(ValidTelemetryUserId, sentrySdk.ScopeUserId);
-    }
-
-    [Fact]
-    public void Initialize_SkipsSdkInitialization_WhenDisabled()
-    {
-        var sentrySdk = new FakeSentrySdkAdapter();
-        var sut = CreateSut(
-            sentrySdk,
-            new FakeTelemetrySettingsProvider(false, ValidDsn, ValidTelemetryUserId)
-        );
-
-        sut.Initialize();
-
-        Assert.Equal(0, sentrySdk.InitCallCount);
     }
 
     [Fact]
@@ -206,7 +192,7 @@ public sealed class SentryAppTelemetryTests
         var sentrySdk = new FakeSentrySdkAdapter();
         var sut = CreateSut(
             sentrySdk,
-            new FakeTelemetrySettingsProvider(true, "not-a-dsn", ValidTelemetryUserId)
+            new FakeTelemetrySettingsProvider("not-a-dsn", ValidTelemetryUserId)
         );
 
         sut.Initialize();
@@ -268,7 +254,10 @@ public sealed class SentryAppTelemetryTests
         var sentrySdk = new FakeSentrySdkAdapter();
         var sut = CreateInitializedSut(sentrySdk);
 
-        sut.CaptureUnhandledException(new InvalidOperationException("boom"), "dispatcher_unhandled");
+        sut.CaptureUnhandledException(
+            new InvalidOperationException("boom"),
+            "dispatcher_unhandled"
+        );
 
         CapturedExceptionRecord capturedException = Assert.Single(sentrySdk.CapturedExceptions);
         Assert.Equal("dispatcher_unhandled", capturedException.Tags["capture_source"]);
@@ -309,12 +298,11 @@ public sealed class SentryAppTelemetryTests
         Assert.True(sentrySdk.HandleDisposed);
     }
 
-    private static SentryAppTelemetry CreateInitializedSut(
-        FakeSentrySdkAdapter sentrySdk)
+    private static SentryAppTelemetry CreateInitializedSut(FakeSentrySdkAdapter sentrySdk)
     {
         var sut = CreateSut(
             sentrySdk,
-            new FakeTelemetrySettingsProvider(true, ValidDsn, ValidTelemetryUserId)
+            new FakeTelemetrySettingsProvider(ValidDsn, ValidTelemetryUserId)
         );
         sut.Initialize();
         sentrySdk.ClearCapturedTelemetry();
@@ -323,31 +311,26 @@ public sealed class SentryAppTelemetryTests
 
     private static SentryAppTelemetry CreateSut(
         FakeSentrySdkAdapter sentrySdk,
-        ITelemetrySettingsProvider telemetrySettingsProvider)
+        ITelemetrySettingsProvider telemetrySettingsProvider
+    )
     {
         return new SentryAppTelemetry(sentrySdk, telemetrySettingsProvider);
     }
 
     private sealed class FakeTelemetrySettingsProvider : ITelemetrySettingsProvider
     {
-        private readonly bool _enableSentry;
         private readonly string _sentryDsn;
         private readonly string _telemetryUserId;
 
-        public FakeTelemetrySettingsProvider(
-            bool enableSentry,
-            string sentryDsn,
-            string telemetryUserId
-        )
+        public FakeTelemetrySettingsProvider(string sentryDsn, string telemetryUserId)
         {
-            _enableSentry = enableSentry;
             _sentryDsn = sentryDsn;
             _telemetryUserId = telemetryUserId;
         }
 
-        public (bool EnableSentry, string SentryDsn, string TelemetryUserId) GetSettings()
+        public (string SentryDsn, string TelemetryUserId) GetSettings()
         {
-            return (_enableSentry, _sentryDsn, _telemetryUserId);
+            return (_sentryDsn, _telemetryUserId);
         }
     }
 

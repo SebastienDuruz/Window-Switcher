@@ -25,7 +25,15 @@
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="NSIS" Version="2.51.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(EnableSentryTelemetry)' == 'true'">
         <PackageReference Include="Sentry" Version="6.6.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(EnableSentryTelemetry)' != 'true'">
+        <Compile Remove="Diagnostics\SentryAppTelemetry.cs" />
+        <Compile Remove="Diagnostics\SentrySdkAdapter.cs" />
     </ItemGroup>
 
     <ItemGroup>
