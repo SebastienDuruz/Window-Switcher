@@ -1,6 +1,5 @@
 using System.Threading.Channels;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Discovery;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Logging;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Options;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Reading;
@@ -21,7 +20,9 @@ public sealed class InputEventService : IInputEventService
     private readonly object _syncRoot = new();
 
     private readonly Dictionary<string, Task> _readerTasks = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, InputDeviceInfo> _devicesByPath = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, InputDeviceInfo> _devicesByPath = new(
+        StringComparer.Ordinal
+    );
 
     private Channel<InputEvent> _channel;
     private CancellationTokenSource? _runCts;
@@ -38,7 +39,7 @@ public sealed class InputEventService : IInputEventService
     public InputEventService(InputEventServiceOptions? options = null)
     {
         _options = options ?? new InputEventServiceOptions();
-        _discovery = new InputDeviceDiscovery(_options.Logger);
+        _discovery = new InputDeviceDiscovery();
         _decoder = new EventDecoder();
         _router = new InputRouter(_options);
         _channel = CreateChannel();
@@ -58,7 +59,9 @@ public sealed class InputEventService : IInputEventService
             lock (_syncRoot)
             {
                 // Expose a stable snapshot so callers never observe concurrent dictionary mutations.
-                return _devicesByPath.Values.OrderBy(static d => d.Path, StringComparer.Ordinal).ToArray();
+                return _devicesByPath
+                    .Values.OrderBy(static d => d.Path, StringComparer.Ordinal)
+                    .ToArray();
             }
         }
     }
@@ -82,16 +85,20 @@ public sealed class InputEventService : IInputEventService
         try
         {
             // Link external startup cancellation with service lifetime cancellation.
-            using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _runCts!.Token);
+            using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(
+                ct,
+                _runCts!.Token
+            );
             await RefreshReadersAsync(startupCts.Token).ConfigureAwait(false);
 
             if (_options.AutoDiscover)
             {
                 // Periodic discovery runs in the background until StopAsync cancels the run token.
-                _autoDiscoverTask = Task.Run(() => AutoDiscoverLoopAsync(_runCts.Token), _runCts.Token);
+                _autoDiscoverTask = Task.Run(
+                    () => AutoDiscoverLoopAsync(_runCts.Token),
+                    _runCts.Token
+                );
             }
-
-            Log(InputLogLevel.Info, "InputEventService started");
         }
         catch
         {
@@ -141,8 +148,6 @@ public sealed class InputEventService : IInputEventService
         // Complete the channel after producers are done so consumers can finish cleanly.
         _channel.Writer.TryComplete();
         runCts?.Dispose();
-
-        Log(InputLogLevel.Info, "InputEventService stopped");
     }
 
     /// <inheritdoc />
@@ -164,10 +169,7 @@ public sealed class InputEventService : IInputEventService
             {
                 break;
             }
-            catch (Exception ex)
-            {
-                Log(InputLogLevel.Warn, "Auto-discovery failed", ex);
-            }
+            catch (Exception) { }
 
             try
             {
@@ -247,8 +249,8 @@ public sealed class InputEventService : IInputEventService
             path,
             _options.ReadBufferEvents,
             _options.ReconnectOnDisconnect,
-            _options.ReconnectDelay,
-            _options.Logger);
+            _options.ReconnectDelay
+        );
 
         var runToken = _runCts?.Token ?? CancellationToken.None;
         var task = Task.Run(() => reader.RunAsync(HandleNativeEventAsync, runToken), runToken);
@@ -267,9 +269,8 @@ public sealed class InputEventService : IInputEventService
             _ => RemoveReader(path),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-
-        Log(InputLogLevel.Info, $"Reader registered: {path}");
+            TaskScheduler.Default
+        );
     }
 
     private async Task<InputDeviceInfo?> GetOrProbeInfoAsync(string path, CancellationToken ct)
@@ -292,7 +293,11 @@ public sealed class InputEventService : IInputEventService
         return probed;
     }
 
-    private ValueTask HandleNativeEventAsync(string devicePath, Linux.NativeInputEvent nativeEvent, CancellationToken ct)
+    private ValueTask HandleNativeEventAsync(
+        string devicePath,
+        Linux.NativeInputEvent nativeEvent,
+        CancellationToken ct
+    )
     {
         var decoded = _decoder.Decode(devicePath, nativeEvent);
         if (!_router.ShouldEmit(decoded))
@@ -341,10 +346,9 @@ public sealed class InputEventService : IInputEventService
                 KeyUp?.Invoke(this, keyEvent);
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Handlers are user code; swallow to keep device reading alive.
-            Log(InputLogLevel.Warn, "Key event subscriber failed", ex);
         }
     }
 
@@ -354,14 +358,7 @@ public sealed class InputEventService : IInputEventService
         {
             foreach (var device in devices)
             {
-                var isNew = !_devicesByPath.ContainsKey(device.Path);
                 _devicesByPath[device.Path] = device;
-
-                if (isNew)
-                {
-                    Log(InputLogLevel.Info,
-                        $"Discovered {device.Path} kind={device.Kind} name=\"{device.Name}\" accessible={device.IsAccessible}");
-                }
             }
         }
     }
@@ -381,15 +378,10 @@ public sealed class InputEventService : IInputEventService
             FullMode = _options.ChannelFullMode,
             SingleReader = false,
             SingleWriter = false,
-            AllowSynchronousContinuations = false
+            AllowSynchronousContinuations = false,
         };
 
         // Multiple device readers publish concurrently to a single fan-in channel.
         return Channel.CreateBounded<InputEvent>(channelOptions);
-    }
-
-    private void Log(InputLogLevel level, string message, Exception? ex = null)
-    {
-        _options.Logger?.Invoke(level, message, ex);
     }
 }

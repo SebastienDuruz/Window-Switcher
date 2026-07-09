@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Logging;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Reading;
 
@@ -16,7 +15,6 @@ internal sealed class EvdevReader
     private readonly int _readBufferEvents;
     private readonly bool _reconnectOnDisconnect;
     private readonly TimeSpan _reconnectDelay;
-    private readonly InputLogHandler? _log;
 
     /// <summary>
     /// Creates a reader bound to a specific evdev path.
@@ -25,19 +23,18 @@ internal sealed class EvdevReader
     /// <param name="readBufferEvents">Target number of native events to request per read.</param>
     /// <param name="reconnectOnDisconnect">Whether to reopen the device after disconnect/read failures.</param>
     /// <param name="reconnectDelay">Delay between reconnect attempts.</param>
-    /// <param name="logger">Optional log callback.</param>
     public EvdevReader(
         string devicePath,
         int readBufferEvents,
         bool reconnectOnDisconnect,
-        TimeSpan reconnectDelay,
-        InputLogHandler? logger)
+        TimeSpan reconnectDelay
+    )
     {
         _devicePath = devicePath;
         _readBufferEvents = Math.Max(1, readBufferEvents);
         _reconnectOnDisconnect = reconnectOnDisconnect;
-        _reconnectDelay = reconnectDelay <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(500) : reconnectDelay;
-        _log = logger;
+        _reconnectDelay =
+            reconnectDelay <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(500) : reconnectDelay;
     }
 
     /// <summary>
@@ -48,7 +45,8 @@ internal sealed class EvdevReader
     /// <returns>A task that completes when the reader exits.</returns>
     public async Task RunAsync(
         Func<string, NativeInputEvent, CancellationToken, ValueTask> onInputEvent,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         while (!ct.IsCancellationRequested)
         {
@@ -56,7 +54,6 @@ internal sealed class EvdevReader
             if (fd < 0)
             {
                 var openErrno = LinuxNative.GetLastErrno();
-                _log?.Invoke(InputLogLevel.Warn, $"Failed to open {_devicePath} (errno={openErrno})", null);
 
                 if (!_reconnectOnDisconnect || LinuxNative.IsPermissionError(openErrno))
                 {
@@ -67,24 +64,17 @@ internal sealed class EvdevReader
                 continue;
             }
 
-            _log?.Invoke(InputLogLevel.Info, $"Reader started for {_devicePath}", null);
-
             try
             {
                 await ReadLoopAsync(fd, onInputEvent, ct).ConfigureAwait(false);
             }
-            catch (DeviceDisconnectedException)
-            {
-                _log?.Invoke(InputLogLevel.Warn, $"Device disconnected: {_devicePath}", null);
-            }
+            catch (DeviceDisconnectedException) { }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 break;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _log?.Invoke(InputLogLevel.Warn, $"Reader failed for {_devicePath}", ex);
-
                 if (!_reconnectOnDisconnect)
                 {
                     return;
@@ -93,7 +83,6 @@ internal sealed class EvdevReader
             finally
             {
                 _ = LinuxNative.Close(fd);
-                _log?.Invoke(InputLogLevel.Info, $"Reader stopped for {_devicePath}", null);
             }
 
             if (!_reconnectOnDisconnect)
@@ -108,7 +97,8 @@ internal sealed class EvdevReader
     private async Task ReadLoopAsync(
         int fd,
         Func<string, NativeInputEvent, CancellationToken, ValueTask> onInputEvent,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         var eventSize = NativeInputEvent.Size;
         var readBuffer = new byte[eventSize * _readBufferEvents];
@@ -128,7 +118,9 @@ internal sealed class EvdevReader
                 var offset = 0;
                 while (buffered - offset >= eventSize)
                 {
-                    var native = MemoryMarshal.Read<NativeInputEvent>(parseBuffer.AsSpan(offset, eventSize));
+                    var native = MemoryMarshal.Read<NativeInputEvent>(
+                        parseBuffer.AsSpan(offset, eventSize)
+                    );
                     await onInputEvent(_devicePath, native, ct).ConfigureAwait(false);
                     offset += eventSize;
                 }

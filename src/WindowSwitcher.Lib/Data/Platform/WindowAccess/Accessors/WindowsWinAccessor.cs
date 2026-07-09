@@ -139,24 +139,7 @@ public class WindowsWinAccessor : WinAccessorBase
             IntPtr windowHandle = IntPtr.Parse(windowId);
             BringWindowToFront(windowHandle);
         }
-        catch (FormatException ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Cannot raise window because its id is not a valid handle. ExceptionType={ex.GetType().FullName}"
-            );
-        }
-        catch (OverflowException ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Cannot raise window because its id is outside the valid handle range. ExceptionType={ex.GetType().FullName}"
-            );
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Failed to raise window. ExceptionType={ex.GetType().FullName}"
-            );
-        }
+        catch (Exception) { }
     }
 
     public override Task RaiseWindowAsync(
@@ -249,11 +232,7 @@ public class WindowsWinAccessor : WinAccessorBase
                 _ = User32Functions.AttachThreadInput(currentThreadId, targetThreadId, false);
 
             if (attachedToForeground)
-                _ = User32Functions.AttachThreadInput(
-                    currentThreadId,
-                    foregroundThreadId,
-                    false
-                );
+                _ = User32Functions.AttachThreadInput(currentThreadId, foregroundThreadId, false);
         }
     }
 
@@ -263,24 +242,9 @@ public class WindowsWinAccessor : WinAccessorBase
         {
             User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
         }
-        catch (FormatException ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Cannot rename window because its id is not a valid handle. ExceptionType={ex.GetType().FullName}"
-            );
-        }
-        catch (OverflowException ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Cannot rename window because its id is outside the valid handle range. ExceptionType={ex.GetType().FullName}"
-            );
-        }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowAccess] Failed to rename window. ExceptionType={ex.GetType().FullName}"
-            );
-        }
+        catch (FormatException) { }
+        catch (OverflowException) { }
+        catch (Exception) { }
     }
 
     public override Task RenameWindowTitleAsync(

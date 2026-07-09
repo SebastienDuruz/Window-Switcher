@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -40,10 +39,7 @@ internal sealed class StartupUpdateNotificationService
         {
             // Shutdown path.
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"[Updates] Startup update check failed: {ex.Message}");
-        }
+        catch (Exception) { }
     }
 
     private void ShowAppInfoWindow()

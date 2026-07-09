@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -164,9 +163,6 @@ public partial class App : Application
         catch (Exception ex)
         {
             globalKeyboardStartupStatusService.ReportStartupFailure(ex);
-            Trace.TraceWarning(
-                $"[GlobalKeyboard] Global keyboard listening is unavailable: {ex.Message}"
-            );
         }
     }
 
@@ -183,12 +179,7 @@ public partial class App : Application
         {
             // Shutdown path.
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[GlobalKeyboard] Global keybind runtime is unavailable: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
     }
 
     private async void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
@@ -202,23 +193,13 @@ public partial class App : Application
             {
                 await GlobalWindowKeybindRuntimeService.StopAsync().ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
-                Trace.TraceWarning(
-                    $"[GlobalKeyboard] Failed to stop global keybind runtime cleanly: {ex.Message}"
-                );
-            }
+            catch (Exception) { }
 
             try
             {
                 await GlobalWindowKeybindRuntimeService.DisposeAsync().ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
-                Trace.TraceWarning(
-                    $"[GlobalKeyboard] Failed to dispose global keybind runtime cleanly: {ex.Message}"
-                );
-            }
+            catch (Exception) { }
             finally
             {
                 GlobalWindowKeybindRuntimeService = null;
@@ -237,23 +218,13 @@ public partial class App : Application
         {
             await GlobalKeyboardService.StopAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[GlobalKeyboard] Failed to stop global keyboard listener cleanly: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
 
         try
         {
             await GlobalKeyboardService.DisposeAsync().ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[GlobalKeyboard] Failed to dispose global keyboard listener cleanly: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
         finally
         {
             GlobalKeyboardCts?.Dispose();

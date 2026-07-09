@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Newtonsoft.Json;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
@@ -330,9 +329,6 @@ public class ConfigFileAccessor
     {
         string exceptionType = exception.GetType().FullName ?? exception.GetType().Name;
         _lastReadFailure = new ConfigLoadFailure(reason, exceptionType, DefaultsRestored: true);
-        Trace.TraceError(
-            $"[Config] Failed to read user settings; defaults were restored. Reason={reason}; ExceptionType={exceptionType}"
-        );
     }
 
     private void WriteConfigAtomicLocked(ConfigFile config)
@@ -439,12 +435,7 @@ public class ConfigFileAccessor
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
         }
-        catch
-        {
-            Trace.TraceWarning(
-                "[Config] Failed to delete temporary settings file after atomic write."
-            );
-        }
+        catch { }
     }
 
     private static ConfigFile NormalizeConfig(ConfigFile config)

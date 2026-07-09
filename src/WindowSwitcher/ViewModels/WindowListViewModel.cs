@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,7 +30,8 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     public WindowListViewModel(
         IWindowSnapshotProvider windowSnapshotProvider,
         IWindowFilterSettingsProvider windowFilterSettingsProvider,
-        IViewModelDispatcher dispatcher)
+        IViewModelDispatcher dispatcher
+    )
     {
         ArgumentNullException.ThrowIfNull(windowSnapshotProvider);
         ArgumentNullException.ThrowIfNull(windowFilterSettingsProvider);
@@ -169,12 +169,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         {
             // Shutdown path.
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[WindowList] Failed to refresh window list; polling will continue. ExceptionType={ex.GetType().FullName}"
-            );
-        }
+        catch (Exception) { }
     }
 
     private async Task FetchAndApplyWindowsAsync(CancellationToken cancellationToken)

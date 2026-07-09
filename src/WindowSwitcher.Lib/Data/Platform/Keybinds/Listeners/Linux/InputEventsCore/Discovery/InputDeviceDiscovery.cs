@@ -1,6 +1,5 @@
 using System.Text;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Logging;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Discovery;
@@ -11,16 +10,11 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 public sealed class InputDeviceDiscovery
 {
     private const string InputDirectory = "/dev/input";
-    private readonly InputLogHandler? _log;
 
     /// <summary>
     /// Creates a discovery component.
     /// </summary>
-    /// <param name="logger">Optional log callback for probe warnings and diagnostics.</param>
-    public InputDeviceDiscovery(InputLogHandler? logger = null)
-    {
-        _log = logger;
-    }
+    public InputDeviceDiscovery() { }
 
     /// <summary>
     /// Scans <c>/dev/input/event*</c> and returns probe results for each visible node.
@@ -34,13 +28,14 @@ public sealed class InputDeviceDiscovery
         var devices = new List<InputDeviceInfo>();
 
         if (!Directory.Exists(InputDirectory))
-        {
-            _log?.Invoke(InputLogLevel.Warn, $"Input directory not found: {InputDirectory}", null);
             return Task.FromResult<IReadOnlyList<InputDeviceInfo>>(devices);
-        }
 
         // Numeric sort keeps event10 after event9 rather than lexicographic event1/event10/event2 ordering.
-        foreach (var path in Directory.EnumerateFiles(InputDirectory, "event*").OrderBy(PathSortKey, StringComparer.Ordinal))
+        foreach (
+            var path in Directory
+                .EnumerateFiles(InputDirectory, "event*")
+                .OrderBy(PathSortKey, StringComparer.Ordinal)
+        )
         {
             ct.ThrowIfCancellationRequested();
 
@@ -84,22 +79,19 @@ public sealed class InputDeviceDiscovery
 
             if (LinuxNative.IsPermissionError(errno))
             {
-                // Surface permission failures explicitly so callers can report actionable guidance.
-                _log?.Invoke(InputLogLevel.Warn, $"Permission denied for device: {path} (errno={errno})", null);
                 return new InputDeviceInfo
                 {
                     Path = path,
                     IsAccessible = false,
-                    AccessError = $"Permission denied (errno={errno})"
+                    AccessError = $"Permission denied (errno={errno})",
                 };
             }
 
-            _log?.Invoke(InputLogLevel.Warn, $"Unable to open device: {path} (errno={errno})", null);
             return new InputDeviceInfo
             {
                 Path = path,
                 IsAccessible = false,
-                AccessError = $"Open failed (errno={errno})"
+                AccessError = $"Open failed (errno={errno})",
             };
         }
 
@@ -127,7 +119,7 @@ public sealed class InputDeviceDiscovery
                 BusType = id.BusType,
                 Kind = kind,
                 Caps = caps,
-                IsAccessible = true
+                IsAccessible = true,
             };
         }
         finally
@@ -139,7 +131,10 @@ public sealed class InputDeviceDiscovery
     private static string PathSortKey(string path)
     {
         var fileName = Path.GetFileName(path);
-        if (fileName.StartsWith("event", StringComparison.Ordinal) && int.TryParse(fileName[5..], out var eventNumber))
+        if (
+            fileName.StartsWith("event", StringComparison.Ordinal)
+            && int.TryParse(fileName[5..], out var eventNumber)
+        )
         {
             return eventNumber.ToString("D6");
         }
@@ -167,7 +162,8 @@ public sealed class InputDeviceDiscovery
             eventTypes: eventTypes,
             keyCodes: keyCodes,
             relativeAxes: relAxes,
-            absoluteAxes: absAxes);
+            absoluteAxes: absAxes
+        );
     }
 
     private static HashSet<ushort> ReadBitset(int fd, int eventType, int maxCode)
@@ -207,7 +203,8 @@ public sealed class InputDeviceDiscovery
     private static DeviceKind DeduceKind(InputDeviceCapabilities caps)
     {
         // Keyboard heuristic: key capability plus alpha and enter keys.
-        var isKeyboard = caps.EventTypes.Contains(LinuxInputConstants.EvKey)
+        var isKeyboard =
+            caps.EventTypes.Contains(LinuxInputConstants.EvKey)
             && caps.KeyCodes.Contains(LinuxInputConstants.KeyA)
             && caps.KeyCodes.Contains(LinuxInputConstants.KeyZ)
             && caps.KeyCodes.Contains(LinuxInputConstants.KeyEnter);
@@ -218,8 +215,12 @@ public sealed class InputDeviceDiscovery
         }
 
         // Mouse heuristic: relative axes and at least one common mouse button.
-        var isMouse = caps.EventTypes.Contains(LinuxInputConstants.EvRel)
-            && (caps.KeyCodes.Contains(LinuxInputConstants.BtnLeft) || caps.KeyCodes.Contains(LinuxInputConstants.BtnRight));
+        var isMouse =
+            caps.EventTypes.Contains(LinuxInputConstants.EvRel)
+            && (
+                caps.KeyCodes.Contains(LinuxInputConstants.BtnLeft)
+                || caps.KeyCodes.Contains(LinuxInputConstants.BtnRight)
+            );
 
         if (isMouse)
         {
