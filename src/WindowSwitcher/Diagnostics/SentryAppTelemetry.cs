@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -83,10 +82,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
             ConfigureBaseScope(telemetryInstallationId);
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"[Sentry] Failed to initialize cleanly: {ex.Message}");
-        }
+        catch (Exception) { }
     }
 
     public async Task RecordAppStartedAsync(string previewMode)
@@ -121,12 +117,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             );
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[Sentry] Failed to capture app_started metric cleanly: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
     }
 
     public void CaptureUnhandledException(Exception exception, string source)
@@ -144,10 +135,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 scope => scope.SetTag("capture_source", NormalizeTagValue(source))
             );
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"[Sentry] Failed to capture exception cleanly: {ex.Message}");
-        }
+        catch (Exception) { }
     }
 
     public void CaptureHandledException(
@@ -187,12 +175,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 }
             );
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning(
-                $"[Sentry] Failed to capture handled exception cleanly: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
     }
 
     public async Task ShutdownAsync()
@@ -212,10 +195,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         {
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            Trace.TraceWarning($"[Sentry] Failed to flush events cleanly: {ex.Message}");
-        }
+        catch (Exception) { }
         finally
         {
             handle.Dispose();
@@ -341,9 +321,6 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         options.DisableSystemDiagnosticsMetricsIntegration();
         options.EnableMetrics = true;
         options.SetBeforeSend(static (sentryEvent, _) => FilterSentryEvent(sentryEvent));
-#if DEBUG
-        options.Debug = true;
-#endif
     }
 
     private static IEnumerable<Exception> GetTerminalExceptions(Exception exception)

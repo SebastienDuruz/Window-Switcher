@@ -1,5 +1,4 @@
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Runtime;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
@@ -10,7 +9,8 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 /// Runtime bridge from global key events to configured window activation actions.
 /// </summary>
 public sealed class GlobalWindowKeybindRuntimeService
-    : IGlobalWindowKeybindRuntimeService, IKeyboardInputFilter
+    : IGlobalWindowKeybindRuntimeService,
+        IKeyboardInputFilter
 {
     private readonly object _syncRoot = new();
     private readonly IGlobalKeyboardListener _globalKeyboardListener;
@@ -30,7 +30,8 @@ public sealed class GlobalWindowKeybindRuntimeService
     public GlobalWindowKeybindRuntimeService(
         IGlobalKeyboardListener globalKeyboardListener,
         IWindowKeybindManager keybindManager,
-        IWindowKeybindActivator activator)
+        IWindowKeybindActivator activator
+    )
     {
         ArgumentNullException.ThrowIfNull(globalKeyboardListener);
         ArgumentNullException.ThrowIfNull(keybindManager);
@@ -63,7 +64,6 @@ public sealed class GlobalWindowKeybindRuntimeService
             IsRunning = true;
         }
 
-        GlobalKeyboardTrace.Info("Global window keybind runtime service started.");
         return Task.CompletedTask;
     }
 
@@ -84,7 +84,6 @@ public sealed class GlobalWindowKeybindRuntimeService
             IsRunning = false;
         }
 
-        GlobalKeyboardTrace.Info("Global window keybind runtime service stopped.");
         return Task.CompletedTask;
     }
 
@@ -98,7 +97,12 @@ public sealed class GlobalWindowKeybindRuntimeService
             if (!IsRunning)
                 return KeyboardFilterDecision.Forward();
 
-            if (!GlobalKeyEventKeyResolver.TryResolve(keyEvent, out ResolvedGlobalKeyEvent resolvedEvent))
+            if (
+                !GlobalKeyEventKeyResolver.TryResolve(
+                    keyEvent,
+                    out ResolvedGlobalKeyEvent resolvedEvent
+                )
+            )
             {
                 if (_consumedModifiers.Count > 0)
                     return KeyboardFilterDecision.Consume();
@@ -149,19 +153,15 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Warning(
-                $"Global window keybind runtime shutdown reported a non-fatal error: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
 
         GC.SuppressFinalize(this);
     }
 
     private KeyboardFilterDecision ProcessModifierEventUnsafe(
         KeybindModifier modifier,
-        ResolvedGlobalKeyEvent resolvedEvent)
+        ResolvedGlobalKeyEvent resolvedEvent
+    )
     {
         ApplyModifierStateUnsafe(modifier, resolvedEvent.State);
 
@@ -220,7 +220,8 @@ public sealed class GlobalWindowKeybindRuntimeService
 
     private KeyboardFilterDecision ProcessPrimaryEventUnsafe(
         KeybindPrimaryKey primaryKey,
-        ResolvedGlobalKeyEvent resolvedEvent)
+        ResolvedGlobalKeyEvent resolvedEvent
+    )
     {
         if (primaryKey == KeybindPrimaryKey.None)
         {
@@ -312,10 +313,7 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             _ = await _activator.TryActivateTargetAsync(targetId).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Warning($"Runtime keybind activation failed: {ex.Message}");
-        }
+        catch (Exception) { }
     }
 
     private KeyCombination BuildCombination(KeybindPrimaryKey primaryKey)
@@ -361,7 +359,8 @@ public sealed class GlobalWindowKeybindRuntimeService
     private void ApplyPrimaryStateUnsafe(
         KeybindPrimaryKey primaryKey,
         GlobalKeyState state,
-        bool isRepeat)
+        bool isRepeat
+    )
     {
         if (state == GlobalKeyState.Up)
         {
@@ -406,10 +405,7 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             RefreshCatalogSnapshot();
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Warning($"Failed to refresh keybind snapshot: {ex.Message}");
-        }
+        catch (Exception) { }
     }
 
     private void ThrowIfDisposed()

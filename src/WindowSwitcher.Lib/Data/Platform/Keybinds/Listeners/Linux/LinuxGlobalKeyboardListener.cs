@@ -1,12 +1,10 @@
 using System.Runtime.InteropServices;
-using System.Threading.Channels;
 using System.Runtime.Versioning;
+using System.Threading.Channels;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Discovery;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Logging;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 
@@ -19,7 +17,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 {
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
-    private readonly InputDeviceDiscovery _discovery = new(HandleInputServiceLog);
+    private readonly InputDeviceDiscovery _discovery = new();
     private readonly EventDecoder _decoder = new();
     private readonly List<NativeInputEvent> _bufferedEvents = [];
     private CancellationTokenSource? _runCts;
@@ -87,12 +85,10 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 .ToArray();
 
             IsRunning = true;
-            GlobalKeyboardTrace.Info("Linux global keyboard listener started.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             await CleanupAfterFailedStartAsync().ConfigureAwait(false);
-            GlobalKeyboardTrace.Error("Linux global keyboard listener failed to start.", ex);
             throw;
         }
         finally
@@ -136,8 +132,6 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             runCts?.Dispose();
             forwarder?.Dispose();
             ResetBufferedState();
-
-            GlobalKeyboardTrace.Info("Linux global keyboard listener stopped.");
         }
         finally
         {
@@ -163,12 +157,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Warning(
-                $"Linux global keyboard listener shutdown reported a non-fatal error: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
 
         KeyEvent = null;
         InputFilter = null;
@@ -188,12 +177,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
         InputDeviceInfo[] deniedDevices = devices.Where(device => !device.IsAccessible).ToArray();
         if (deniedDevices.Length == 0)
-        {
-            GlobalKeyboardTrace.Warning(
-                "Linux global keyboard listener started but no keyboard device was discovered."
-            );
             return;
-        }
 
         throw new LinuxInputAccessException(deniedDevices.Select(device => device.Path).ToArray());
     }
@@ -201,7 +185,8 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
     private async Task ReadDeviceLoopAsync(
         string devicePath,
         ChannelWriter<LinuxCaptureEvent> writer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         byte[] readBuffer = new byte[NativeInputEvent.Size * 64];
         byte[] parseBuffer = new byte[readBuffer.Length + NativeInputEvent.Size];
@@ -214,9 +199,6 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 int openErrno = LinuxNative.GetLastErrno();
                 if (LinuxNative.IsPermissionError(openErrno))
                 {
-                    GlobalKeyboardTrace.Warning(
-                        $"Failed to open {devicePath} for exclusive keyboard capture (errno={openErrno})."
-                    );
                     return;
                 }
 
@@ -251,7 +233,10 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                                 parseBuffer.AsSpan(offset, NativeInputEvent.Size)
                             );
                             await writer
-                                .WriteAsync(new LinuxCaptureEvent(devicePath, nativeEvent), cancellationToken)
+                                .WriteAsync(
+                                    new LinuxCaptureEvent(devicePath, nativeEvent),
+                                    cancellationToken
+                                )
                                 .ConfigureAwait(false);
                             offset += NativeInputEvent.Size;
                         }
@@ -284,20 +269,12 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                     throw new IOException($"read({devicePath}) failed (errno={errno}).");
                 }
             }
-            catch (DeviceDisconnectedException)
-            {
-                GlobalKeyboardTrace.Warning($"Linux keyboard device disconnected: {devicePath}");
-            }
+            catch (DeviceDisconnectedException) { }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
-            catch (Exception ex)
-            {
-                GlobalKeyboardTrace.Warning(
-                    $"Linux keyboard reader failed for {devicePath}: {ex.Message}"
-                );
-            }
+            catch (Exception) { }
             finally
             {
                 if (grabbed)
@@ -361,9 +338,8 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             return filter.ProcessEvent(eventArgs);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            GlobalKeyboardTrace.Warning($"Linux keyboard filter failed: {ex.Message}");
             return KeyboardFilterDecision.Forward();
         }
     }
@@ -428,12 +404,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             {
                 ((EventHandler<GlobalKeyEventArgs>)subscriber).Invoke(this, eventArgs);
             }
-            catch (Exception ex)
-            {
-                GlobalKeyboardTrace.Warning(
-                    $"Global keyboard subscriber failed for key {eventArgs.KeyCode}: {ex.Message}"
-                );
-            }
+            catch (Exception) { }
         }
     }
 
@@ -448,41 +419,13 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Expected during shutdown.
         }
-    }
-
-    private static void HandleInputServiceLog(
-        InputLogLevel level,
-        string message,
-        Exception? exception)
-    {
-        string logMessage = $"Linux InputEvents.Core: {message}";
-        switch (level)
-        {
-            case InputLogLevel.Debug:
-                GlobalKeyboardTrace.Debug(logMessage);
-                break;
-            case InputLogLevel.Info:
-                GlobalKeyboardTrace.Info(logMessage);
-                break;
-            case InputLogLevel.Warn:
-                GlobalKeyboardTrace.Warning(logMessage);
-                break;
-            case InputLogLevel.Error:
-                GlobalKeyboardTrace.Error(logMessage, exception);
-                return;
-            default:
-                GlobalKeyboardTrace.Debug(logMessage);
-                break;
-        }
-
-        if (exception is not null && level >= InputLogLevel.Warn)
-            GlobalKeyboardTrace.Error(logMessage, exception);
     }
 
     private async Task CleanupAfterFailedStartAsync()
@@ -510,12 +453,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             if (processorTask is not null)
                 await processorTask.ConfigureAwait(false);
         }
-        catch (Exception cleanupException)
-        {
-            GlobalKeyboardTrace.Warning(
-                $"Linux global keyboard listener cleanup reported a non-fatal error: {cleanupException.Message}"
-            );
-        }
+        catch (Exception) { }
         finally
         {
             runCts?.Dispose();
@@ -530,7 +468,10 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             throw new ObjectDisposedException(nameof(LinuxGlobalKeyboardListener));
     }
 
-    private readonly record struct LinuxCaptureEvent(string DevicePath, NativeInputEvent NativeEvent);
+    private readonly record struct LinuxCaptureEvent(
+        string DevicePath,
+        NativeInputEvent NativeEvent
+    );
 
     private sealed class DeviceDisconnectedException : Exception;
 }

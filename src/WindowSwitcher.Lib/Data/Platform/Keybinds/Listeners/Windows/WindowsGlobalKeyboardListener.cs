@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Windows;
@@ -74,7 +73,6 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
             await _startTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             IsRunning = true;
-            GlobalKeyboardTrace.Info("Windows global keyboard listener started.");
         }
         catch
         {
@@ -98,7 +96,6 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
             await StopThreadCoreAsync(cancellationToken).ConfigureAwait(false);
             IsRunning = false;
-            GlobalKeyboardTrace.Info("Windows global keyboard listener stopped.");
         }
         finally
         {
@@ -124,12 +121,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Warning(
-                $"Windows global keyboard listener shutdown reported a non-fatal error: {ex.Message}"
-            );
-        }
+        catch (Exception) { }
 
         KeyEvent = null;
         InputFilter = null;
@@ -154,12 +146,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         }
 
         if (!quitPosted)
-        {
-            int error = Marshal.GetLastWin32Error();
-            GlobalKeyboardTrace.Warning(
-                $"Failed to request keyboard hook thread shutdown after retries (Win32={error})."
-            );
-        }
+            _ = Marshal.GetLastWin32Error();
 
         if (stopTcs is not null)
             await stopTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -185,7 +172,6 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             );
             _startTcs?.TrySetException(exception);
             _stopTcs?.TrySetResult(null);
-            GlobalKeyboardTrace.Error("Windows low-level keyboard hook installation failed.", exception);
             return;
         }
 
@@ -202,10 +188,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
                 if (messageResult < 0)
                 {
-                    int error = Marshal.GetLastWin32Error();
-                    GlobalKeyboardTrace.Warning(
-                        $"Windows hook message loop failed (GetMessage Win32={error})."
-                    );
+                    _ = Marshal.GetLastWin32Error();
                     break;
                 }
 
@@ -213,10 +196,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
                 _ = DispatchMessage(ref message);
             }
         }
-        catch (Exception ex)
-        {
-            GlobalKeyboardTrace.Error("Windows hook thread terminated unexpectedly.", ex);
-        }
+        catch (Exception) { }
         finally
         {
             CleanupHook();
@@ -264,9 +244,8 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             Emit(eventArgs);
             return ApplyDecision(decision, keyboardData, state, code, wParam, lParam);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            GlobalKeyboardTrace.Warning($"Windows keyboard callback reported a non-fatal error: {ex.Message}");
             return CallNextHookEx(_hookHandle, code, wParam, lParam);
         }
     }
@@ -281,9 +260,8 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         {
             return filter.ProcessEvent(eventArgs);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            GlobalKeyboardTrace.Warning($"Windows keyboard filter failed: {ex.Message}");
             return KeyboardFilterDecision.Forward();
         }
     }
@@ -294,7 +272,8 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         GlobalKeyState state,
         int code,
         IntPtr wParam,
-        IntPtr lParam)
+        IntPtr lParam
+    )
     {
         if (decision.DiscardBufferedEvents)
             ClearBufferedEvents();
@@ -373,10 +352,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         if (sent == inputs.Length)
             return;
 
-        int error = Marshal.GetLastWin32Error();
-        GlobalKeyboardTrace.Warning(
-            $"SendInput replay was partial ({sent}/{inputs.Length}, Win32={error})."
-        );
+        _ = Marshal.GetLastWin32Error();
     }
 
     private static NativeInput CreateNativeInput(BufferedKeyboardEvent bufferedEvent)
@@ -427,10 +403,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         if (_hookHandle != IntPtr.Zero)
         {
             if (!UnhookWindowsHookEx(_hookHandle))
-            {
-                int error = Marshal.GetLastWin32Error();
-                GlobalKeyboardTrace.Warning($"UnhookWindowsHookEx failed (Win32={error}).");
-            }
+                _ = Marshal.GetLastWin32Error();
 
             _hookHandle = IntPtr.Zero;
         }
@@ -454,12 +427,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             {
                 ((EventHandler<GlobalKeyEventArgs>)subscriber).Invoke(this, eventArgs);
             }
-            catch (Exception ex)
-            {
-                GlobalKeyboardTrace.Warning(
-                    $"Global keyboard subscriber failed for key {eventArgs.KeyCode}: {ex.Message}"
-                );
-            }
+            catch (Exception) { }
         }
     }
 
@@ -503,9 +471,13 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         uint ScanCode,
         bool IsExtended,
         GlobalKeyState State,
-        IntPtr ExtraInfo)
+        IntPtr ExtraInfo
+    )
     {
-        public static BufferedKeyboardEvent From(KeyboardHookData keyboardData, GlobalKeyState state)
+        public static BufferedKeyboardEvent From(
+            KeyboardHookData keyboardData,
+            GlobalKeyState state
+        )
         {
             return new BufferedKeyboardEvent(
                 keyboardData.VirtualKeyCode,

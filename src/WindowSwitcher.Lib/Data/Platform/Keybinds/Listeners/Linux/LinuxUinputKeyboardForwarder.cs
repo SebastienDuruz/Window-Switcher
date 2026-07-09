@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 
@@ -96,9 +95,13 @@ internal sealed class LinuxUinputKeyboardForwarder : IDisposable
 
     private void ConfigureDevice(IEnumerable<InputDeviceInfo> keyboardDevices)
     {
-        if (LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiSetEvBit, LinuxInputConstants.EvKey) < 0)
+        if (
+            LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiSetEvBit, LinuxInputConstants.EvKey) < 0
+        )
             ThrowLastIoctlFailure("UI_SET_EVBIT(EV_KEY)");
-        if (LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiSetEvBit, LinuxInputConstants.EvSyn) < 0)
+        if (
+            LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiSetEvBit, LinuxInputConstants.EvSyn) < 0
+        )
             ThrowLastIoctlFailure("UI_SET_EVBIT(EV_SYN)");
 
         HashSet<ushort> keyCodes = keyboardDevices
@@ -112,10 +115,7 @@ internal sealed class LinuxUinputKeyboardForwarder : IDisposable
             if (LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiSetKeyBit, keyCode) >= 0)
                 continue;
 
-            int errno = LinuxNative.GetLastErrno();
-            GlobalKeyboardTrace.Warning(
-                $"Failed to expose Linux key code {keyCode} on the virtual keyboard (errno={errno})."
-            );
+            _ = LinuxNative.GetLastErrno();
         }
 
         var setup = new NativeUinputSetup

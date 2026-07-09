@@ -1,11 +1,10 @@
 using System.Threading.Channels;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Logging;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Options;
 
 /// <summary>
-/// Configuration for discovery, filtering, buffering, and logging behavior of <c>InputEventService</c>.
+/// Configuration for discovery, filtering, and buffering behavior of <c>InputEventService</c>.
 /// </summary>
 public sealed class InputEventServiceOptions
 {
@@ -52,7 +51,8 @@ public sealed class InputEventServiceOptions
     /// <summary>
     /// Backpressure strategy used when the output channel reaches capacity.
     /// </summary>
-    public BoundedChannelFullMode ChannelFullMode { get; init; } = BoundedChannelFullMode.DropOldest;
+    public BoundedChannelFullMode ChannelFullMode { get; init; } =
+        BoundedChannelFullMode.DropOldest;
 
     /// <summary>
     /// Period between auto-discovery scans when <see cref="AutoDiscover"/> is enabled.
@@ -68,9 +68,4 @@ public sealed class InputEventServiceOptions
     /// Optional allow-list of key codes applied only to <see cref="KeyEvent"/> events.
     /// </summary>
     public KeyCode[]? IncludeKeys { get; init; }
-
-    /// <summary>
-    /// Optional log sink used by discovery, readers, and service lifecycle events.
-    /// </summary>
-    public InputLogHandler? Logger { get; init; }
 }
