@@ -147,24 +147,11 @@ public sealed partial class PipeWireFrameProvider
 
         if (_isWaylandSession)
         {
-            PortalCaptureBootstrap? started = null;
-
-            if (_isKdeDesktopSession)
-            {
-                started = await TryStartKdeBackendWindowScreencastAsync(
-                        windowId,
-                        cancellationToken
-                    )
+            PortalCaptureBootstrap? started = _isKdeDesktopSession
+                ? await TryStartKdeBackendWindowScreencastAsync(windowId, cancellationToken)
+                    .ConfigureAwait(false)
+                : await TryStartWaylandPortalWindowScreencastAsync(windowId, cancellationToken)
                     .ConfigureAwait(false);
-            }
-            else
-            {
-                started = await TryStartWaylandPortalWindowScreencastAsync(
-                        windowId,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-            }
 
             if (started is null)
                 return null;

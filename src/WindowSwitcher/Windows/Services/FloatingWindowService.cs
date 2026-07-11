@@ -47,6 +47,7 @@ internal sealed class FloatingWindowService
     private readonly Lock _resizePreviewRefreshSync = new();
     private Bitmap? _pendingStreamFrame;
     private NativeBgraPreviewFrame? _pendingNativeBgraStreamFrame;
+    private int _previewCaptureEnabled;
     private int _streamFrameDrainScheduled;
     private int _nativeBgraStreamFrameDrainScheduled;
     private CancellationTokenSource? _resizePreviewRefreshCancellation;
@@ -84,6 +85,7 @@ internal sealed class FloatingWindowService
         _nativeThumbnailRenderer = nativeThumbnailRenderer;
         _windowScreenshot = windowScreenshot;
         _previewBorder = previewBorder;
+        _previewCaptureEnabled = ReadPreviewCaptureEnabled() ? 1 : 0;
         _previewCaptureSuspendedWhileDisabled = !IsPreviewCaptureEnabled();
     }
 
@@ -188,7 +190,9 @@ internal sealed class FloatingWindowService
         CancelPendingResizePreviewRefresh(executeRefresh: false);
         UpdateLayout();
         CancelPreviewOperations(recreateTokenSource: true);
-        if (!IsPreviewCaptureEnabled())
+        bool previewCaptureEnabled = ReadPreviewCaptureEnabled();
+        Volatile.Write(ref _previewCaptureEnabled, previewCaptureEnabled ? 1 : 0);
+        if (!previewCaptureEnabled)
         {
             if (!_previewCaptureSuspendedWhileDisabled)
             {
@@ -538,7 +542,12 @@ internal sealed class FloatingWindowService
         }
     }
 
-    private static bool IsPreviewCaptureEnabled()
+    private bool IsPreviewCaptureEnabled()
+    {
+        return Volatile.Read(ref _previewCaptureEnabled) != 0;
+    }
+
+    private static bool ReadPreviewCaptureEnabled()
     {
         return ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
     }

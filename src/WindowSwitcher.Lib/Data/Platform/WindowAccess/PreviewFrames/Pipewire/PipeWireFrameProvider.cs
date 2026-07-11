@@ -30,7 +30,7 @@ public sealed partial class PipeWireFrameProvider
     private const int PipeWireForcedNodeRefreshCooldownMs = 1_000;
     private const int MaxConcurrentWaylandPortalSessionCreations = 1;
     private const int PipeWireStreamingPullTimeoutMs = 75;
-    private const int PipeWireStreamingMinFrameIntervalMs = 40;
+    private const int PipeWireStreamingMinFrameIntervalMs = 50;
     private const string PortalDesktopDestination = "org.freedesktop.portal.Desktop";
     private const string KdePortalBackendDestination = "org.freedesktop.impl.portal.desktop.kde";
     private const string KdePortalScreenCastInterface = "org.freedesktop.impl.portal.ScreenCast";
@@ -68,6 +68,7 @@ public sealed partial class PipeWireFrameProvider
     private readonly bool _isWaylandSession;
     private readonly bool _isKdeDesktopSession;
     private Connection? _sessionBusConnection;
+    private string? _sessionBusLocalName;
     private bool _disposed;
 
     public PipeWireFrameProvider(
@@ -284,6 +285,7 @@ public sealed partial class PipeWireFrameProvider
         {
             sessionBusConnection = _sessionBusConnection;
             _sessionBusConnection = null;
+            _sessionBusLocalName = null;
         }
 
         DisposeSessionBusConnection(sessionBusConnection);
@@ -324,21 +326,19 @@ public sealed partial class PipeWireFrameProvider
             string? restoreToken = GetStoredWaylandScreenCastRestoreToken(windowId);
 
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath createRequestPath = await RunWithoutSynchronizationContext(() =>
-                    screenCast.CreateSessionAsync(
-                        new Dictionary<string, object>
-                        {
-                            ["handle_token"] = $"ws_create_{token}",
-                            ["session_handle_token"] = sessionToken,
-                        }
-                    )
-                )
-                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
-                .ConfigureAwait(false);
-
-            PortalRequestResponse? createResponse = await WaitForPortalRequestResponseAsync(
+            string createHandleToken = $"ws_create_{token}";
+            ObjectPath createRequestPath = BuildPortalRequestPath(connection, createHandleToken);
+            PortalRequestResponse? createResponse = await InvokePortalRequestAsync(
                     connection,
                     createRequestPath,
+                    () =>
+                        screenCast.CreateSessionAsync(
+                            new Dictionary<string, object>
+                            {
+                                ["handle_token"] = createHandleToken,
+                                ["session_handle_token"] = sessionToken,
+                            }
+                        ),
                     TimeSpan.FromMinutes(2),
                     cancellationToken
                 )
@@ -367,15 +367,14 @@ public sealed partial class PipeWireFrameProvider
 
             var sessionObjectPath = new ObjectPath(sessionPath);
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath selectRequestPath = await RunWithoutSynchronizationContext(() =>
-                    screenCast.SelectSourcesAsync(sessionObjectPath, selectOptions)
-                )
-                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
-                .ConfigureAwait(false);
-
-            PortalRequestResponse? selectResponse = await WaitForPortalRequestResponseAsync(
+            ObjectPath selectRequestPath = BuildPortalRequestPath(
+                connection,
+                $"ws_select_{token}"
+            );
+            PortalRequestResponse? selectResponse = await InvokePortalRequestAsync(
                     connection,
                     selectRequestPath,
+                    () => screenCast.SelectSourcesAsync(sessionObjectPath, selectOptions),
                     TimeSpan.FromMinutes(5),
                     cancellationToken
                 )
@@ -388,19 +387,17 @@ public sealed partial class PipeWireFrameProvider
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            ObjectPath startRequestPath = await RunWithoutSynchronizationContext(() =>
-                    screenCast.StartAsync(
-                        sessionObjectPath,
-                        string.Empty,
-                        new Dictionary<string, object> { ["handle_token"] = $"ws_start_{token}" }
-                    )
-                )
-                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
-                .ConfigureAwait(false);
-
-            PortalRequestResponse? startResponse = await WaitForPortalRequestResponseAsync(
+            string startHandleToken = $"ws_start_{token}";
+            ObjectPath startRequestPath = BuildPortalRequestPath(connection, startHandleToken);
+            PortalRequestResponse? startResponse = await InvokePortalRequestAsync(
                     connection,
                     startRequestPath,
+                    () =>
+                        screenCast.StartAsync(
+                            sessionObjectPath,
+                            string.Empty,
+                            new Dictionary<string, object> { ["handle_token"] = startHandleToken }
+                        ),
                     TimeSpan.FromMinutes(5),
                     cancellationToken
                 )
@@ -509,9 +506,17 @@ public sealed partial class PipeWireFrameProvider
 
         try
         {
-            await RunWithoutSynchronizationContext(() => connection.ConnectAsync())
+            ConnectionInfo connectionInfo = await RunWithoutSynchronizationContext(
+                    () => connection.ConnectAsync()
+                )
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
                 .ConfigureAwait(false);
+
+            lock (_dbusSync)
+            {
+                if (ReferenceEquals(_sessionBusConnection, connection))
+                    _sessionBusLocalName = connectionInfo.LocalName;
+            }
             return connection;
         }
         catch (Exception)
@@ -522,6 +527,7 @@ public sealed partial class PipeWireFrameProvider
                 if (ReferenceEquals(_sessionBusConnection, connection))
                 {
                     _sessionBusConnection = null;
+                    _sessionBusLocalName = null;
                     shouldDispose = true;
                 }
             }
@@ -771,6 +777,85 @@ public sealed partial class PipeWireFrameProvider
 
         string sender = parts[^2];
         return $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
+    }
+
+    private ObjectPath BuildPortalRequestPath(Connection connection, string handleToken)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentException.ThrowIfNullOrWhiteSpace(handleToken);
+
+        string? localName;
+        lock (_dbusSync)
+        {
+            localName = ReferenceEquals(_sessionBusConnection, connection)
+                ? _sessionBusLocalName
+                : null;
+        }
+        if (string.IsNullOrWhiteSpace(localName))
+            throw new InvalidOperationException("The session bus connection does not have a local name.");
+
+        string senderPathSegment = localName.TrimStart(':').Replace('.', '_');
+        return new ObjectPath(
+            $"/org/freedesktop/portal/desktop/request/{senderPathSegment}/{handleToken}"
+        );
+    }
+
+    private static async Task<PortalRequestResponse?> InvokePortalRequestAsync(
+        Connection connection,
+        ObjectPath expectedRequestPath,
+        Func<Task<ObjectPath>> invokeRequestAsync,
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(invokeRequestAsync);
+
+        IPipeWirePortalRequest request = connection.CreateProxy<IPipeWirePortalRequest>(
+            PortalDesktopDestination,
+            expectedRequestPath
+        );
+        var completion = new TaskCompletionSource<PortalRequestResponse>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        using IDisposable watcher = await RunWithoutSynchronizationContext(() =>
+                request.WatchResponseAsync(response =>
+                {
+                    IDictionary<string, object> results =
+                        response.Results ?? new Dictionary<string, object>();
+                    _ = completion.TrySetResult(
+                        new PortalRequestResponse(response.Response, results)
+                    );
+                })
+            )
+            .ConfigureAwait(false);
+
+        ObjectPath actualRequestPath = await RunWithoutSynchronizationContext(invokeRequestAsync)
+            .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
+            .ConfigureAwait(false);
+        if (!string.Equals(
+                actualRequestPath.ToString(),
+                expectedRequestPath.ToString(),
+                StringComparison.Ordinal
+            ))
+        {
+            return await WaitForPortalRequestResponseAsync(
+                    connection,
+                    actualRequestPath,
+                    timeout,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
     }
 
     private static string DescribePortalResultKeys(IDictionary<string, object> results)

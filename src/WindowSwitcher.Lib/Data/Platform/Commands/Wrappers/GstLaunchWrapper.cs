@@ -8,6 +8,8 @@ namespace WindowSwitcher.Lib.Data.Platform.Commands.Wrappers;
 public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaunchWrapper
 {
     private const int QueueBufferCount = 2;
+    private const int MaximumPreviewFrameRate = 20;
+    private const string SinkName = "ws_sink";
 
     public string Execute(string args)
     {
@@ -51,6 +53,56 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         return value.Value;
     }
 
+    internal static string BuildPipeWirePipelineDescription(
+        string nodeId,
+        int widthPx,
+        int heightPx,
+        int? pipeWireRemoteFd,
+        bool includeConversionPipeline
+    )
+    {
+        var builder = new StringBuilder();
+        builder.Append("pipewiresrc ");
+        builder.Append("path=");
+        builder.Append(QuoteGstValue(nodeId));
+        builder.Append(' ');
+        if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
+        {
+            builder.Append("fd=");
+            builder.Append(pipeWireRemoteFd.Value.ToString());
+            builder.Append(' ');
+        }
+
+        builder.Append("always-copy=false use-bufferpool=true do-timestamp=true ");
+        if (includeConversionPipeline)
+        {
+            builder.Append("! videorate drop-only=true max-rate=");
+            builder.Append(MaximumPreviewFrameRate.ToString());
+            builder.Append(" ! videoconvert ");
+            builder.Append("! videoscale add-borders=false ");
+        }
+
+        builder.Append("! video/x-raw,format=BGRA,width=");
+        builder.Append(widthPx.ToString());
+        builder.Append(",height=");
+        builder.Append(heightPx.ToString());
+        builder.Append(",pixel-aspect-ratio=1/1 ");
+        builder.Append("! queue leaky=downstream max-size-buffers=");
+        builder.Append(QueueBufferCount.ToString());
+        builder.Append(" max-size-bytes=0 max-size-time=0 ");
+        builder.Append("! appsink name=");
+        builder.Append(SinkName);
+        builder.Append(" emit-signals=false sync=false max-buffers=");
+        builder.Append(QueueBufferCount.ToString());
+        builder.Append(" drop=true");
+        return builder.ToString();
+    }
+
+    private static string QuoteGstValue(string value)
+    {
+        return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+    }
+
     private sealed class GStreamerAppSinkPipeWireRawBgraStream : IPipeWireRawBgraStream
     {
         private const ulong MillisecondInNanoseconds = 1_000_000;
@@ -58,7 +110,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
         private const int GstStateNull = 1;
         private const int GstStatePlaying = 4;
         private const int GstStateChangeFailure = 0;
-        private const string SinkName = "ws_sink";
         private const int FastPathProbeTimeoutMs = 350;
         private static readonly Lock InitSync = new();
         private static bool _initialized;
@@ -97,6 +148,19 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             try
             {
                 EnsureInitialized();
+                if (pipeWireRemoteFd.HasValue)
+                {
+                    // KDE's portal stream negotiates through the conversion path. Starting an
+                    // additional raw pipeline first consumes time and can invalidate the stream.
+                    return TryStartPipeline(
+                        nodeId,
+                        widthPx,
+                        heightPx,
+                        pipeWireRemoteFd,
+                        includeConversionPipeline: true
+                    );
+                }
+
                 IPipeWireRawBgraStream? fastPathStream = TryStartPipeline(
                     nodeId,
                     widthPx,
@@ -138,11 +202,15 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             bool includeConversionPipeline
         )
         {
-            string pipelineDescription = BuildPipelineDescription(
+            int? pipelineRemoteFd = DuplicatePipeWireRemoteFd(pipeWireRemoteFd);
+            if (pipeWireRemoteFd.HasValue && !pipelineRemoteFd.HasValue)
+                return null;
+
+            string pipelineDescription = BuildPipeWirePipelineDescription(
                 nodeId,
                 widthPx,
                 heightPx,
-                pipeWireRemoteFd,
+                pipelineRemoteFd,
                 includeConversionPipeline
             );
 
@@ -169,6 +237,15 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             }
 
             return new GStreamerAppSinkPipeWireRawBgraStream(pipeline, appSink);
+        }
+
+        private static int? DuplicatePipeWireRemoteFd(int? pipeWireRemoteFd)
+        {
+            if (!pipeWireRemoteFd.HasValue || pipeWireRemoteFd.Value < 0)
+                return null;
+
+            int duplicatedFd = DuplicateFileDescriptor(pipeWireRemoteFd.Value);
+            return duplicatedFd >= 0 ? duplicatedFd : null;
         }
 
         public PipeWireRawBgraFrame? PullFrame(int timeoutMs, CancellationToken cancellationToken)
@@ -311,54 +388,6 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
             }
         }
 
-        private static string BuildPipelineDescription(
-            string nodeId,
-            int widthPx,
-            int heightPx,
-            int? pipeWireRemoteFd,
-            bool includeConversionPipeline
-        )
-        {
-            var builder = new StringBuilder();
-            builder.Append("pipewiresrc ");
-            builder.Append("path=");
-            builder.Append(QuoteGstValue(nodeId));
-            builder.Append(' ');
-            if (pipeWireRemoteFd.HasValue && pipeWireRemoteFd.Value >= 0)
-            {
-                builder.Append("fd=");
-                builder.Append(pipeWireRemoteFd.Value.ToString());
-                builder.Append(' ');
-            }
-
-            builder.Append("always-copy=false use-bufferpool=true do-timestamp=true ");
-            if (includeConversionPipeline)
-            {
-                builder.Append("! videoconvert ");
-                builder.Append("! videoscale add-borders=false ");
-            }
-
-            builder.Append("! video/x-raw,format=BGRA,width=");
-            builder.Append(widthPx.ToString());
-            builder.Append(",height=");
-            builder.Append(heightPx.ToString());
-            builder.Append(",pixel-aspect-ratio=1/1 ");
-            builder.Append("! queue leaky=downstream max-size-buffers=");
-            builder.Append(QueueBufferCount.ToString());
-            builder.Append(" max-size-bytes=0 max-size-time=0 ");
-            builder.Append("! appsink name=");
-            builder.Append(SinkName);
-            builder.Append(" emit-signals=false sync=false max-buffers=");
-            builder.Append(QueueBufferCount.ToString());
-            builder.Append(" drop=true");
-            return builder.ToString();
-        }
-
-        private static string QuoteGstValue(string value)
-        {
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
-        }
-
         [DllImport("libgstreamer-1.0.so.0", EntryPoint = "gst_init")]
         private static extern void GstInit(IntPtr argc, IntPtr argv);
 
@@ -412,6 +441,9 @@ public sealed class GstLaunchWrapper() : CommandBase("gst-launch-1.0"), IGstLaun
 
         [DllImport("libglib-2.0.so.0", EntryPoint = "g_error_free")]
         private static extern void GErrorFree(IntPtr error);
+
+        [DllImport("libc", EntryPoint = "dup")]
+        private static extern int DuplicateFileDescriptor(int fileDescriptor);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct GstMapInfo
