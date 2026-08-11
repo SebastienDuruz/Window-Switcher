@@ -22,33 +22,15 @@ public sealed class LinuxDependencyRegistryTests
     }
 
     [Fact]
-    public void IsGstPipeWireSrcAvailable_UsesGstInspectDirectly()
+    public void Constructor_PreservesLegacySecondArgumentWithoutUsingIt()
     {
         var which = new TrackingCommandWrapper(_ => string.Empty);
-        var gstInspect = new TrackingCommandWrapper(_ => "Factory Details: pipewiresrc");
+        var gstInspect = new TrackingCommandWrapper(_ => throw new InvalidOperationException());
         var sut = new LinuxDependencyRegistry(which, gstInspect);
 
-        bool available = sut.IsGstPipeWireSrcAvailable;
+        _ = sut.IsWmctrlAvailable;
 
-        Assert.True(available);
-        Assert.Equal(0, which.CountCallsFor("gst-launch-1.0"));
-        Assert.Single(gstInspect.Calls);
-    }
-
-    [Fact]
-    public void IsGstPipeWireSrcAvailable_UsesCachedResult()
-    {
-        var which = new TrackingCommandWrapper(_ => string.Empty);
-        var gstInspect = new TrackingCommandWrapper(_ => "Factory Details: pipewiresrc");
-        var sut = new LinuxDependencyRegistry(which, gstInspect);
-
-        bool first = sut.IsGstPipeWireSrcAvailable;
-        bool second = sut.IsGstPipeWireSrcAvailable;
-
-        Assert.True(first);
-        Assert.True(second);
-        Assert.Equal(0, which.CountCallsFor("gst-launch-1.0"));
-        Assert.Single(gstInspect.Calls);
+        Assert.Empty(gstInspect.Calls);
     }
 
     [Fact]
@@ -58,12 +40,12 @@ public sealed class LinuxDependencyRegistryTests
         var raised = new List<string>();
         sut.DependencyMissing += dependency => raised.Add(dependency);
 
-        sut.ReportMissingOnce("pw-dump");
-        sut.ReportMissingOnce("PW-DUMP");
+        sut.ReportMissingOnce("libpipewire-0.3.so.0");
+        sut.ReportMissingOnce("LIBPIPEWIRE-0.3.SO.0");
         sut.ReportMissingOnce(" ");
 
         Assert.Single(raised);
-        Assert.Equal("pw-dump", raised[0]);
+        Assert.Equal("libpipewire-0.3.so.0", raised[0]);
         Assert.Single(sut.GetReportedMissing());
     }
 

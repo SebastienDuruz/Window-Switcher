@@ -12,39 +12,21 @@ public sealed class LinuxDependencyRegistry(
 ) : ILinuxDependencyRegistry
 {
     private const string WmctrlBinary = "wmctrl";
-    private const string GstLaunchBinary = "gst-launch-1.0";
-    private const string PwDumpBinary = "pw-dump";
-    private const string GdbusBinary = "gdbus";
-    private const string GstPipeWirePlugin = "pipewiresrc";
 
     private readonly object _syncRoot = new();
     private readonly HashSet<string> _reportedMissing = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, bool> _binaryAvailabilityCache = new(
         StringComparer.OrdinalIgnoreCase
     );
-    private readonly ICommandWrapper _whichWrapper = whichWrapper ?? new WhichWrapper();
-    private readonly ICommandWrapper _gstInspectWrapper =
-        gstInspectWrapper ?? new GstInspectWrapper();
-
-    private bool _gstPipeWireSrcChecked;
-    private bool _gstPipeWireSrcAvailable;
+    private readonly ICommandWrapper _whichWrapper = ResolveWhichWrapper(
+        whichWrapper,
+        gstInspectWrapper
+    );
 
     public event Action<string>? DependencyMissing;
 
     /// <inheritdoc />
     public bool IsWmctrlAvailable => CheckBinaryCached(WmctrlBinary);
-
-    /// <inheritdoc />
-    public bool IsGstLaunchAvailable => CheckBinaryCached(GstLaunchBinary);
-
-    /// <inheritdoc />
-    public bool IsPwDumpAvailable => CheckBinaryCached(PwDumpBinary);
-
-    /// <inheritdoc />
-    public bool IsGdbusAvailable => CheckBinaryCached(GdbusBinary);
-
-    /// <inheritdoc />
-    public bool IsGstPipeWireSrcAvailable => CheckGstPipeWireSrcCached();
 
     /// <summary>
     /// Returns missing dependencies already reported to the application.
@@ -88,28 +70,18 @@ public sealed class LinuxDependencyRegistry(
         }
     }
 
-    private bool CheckGstPipeWireSrcCached()
-    {
-        lock (_syncRoot)
-        {
-            if (_gstPipeWireSrcChecked)
-                return _gstPipeWireSrcAvailable;
-
-            _gstPipeWireSrcAvailable = IsGstPipeWireSrcAvailableCore();
-            _gstPipeWireSrcChecked = true;
-            return _gstPipeWireSrcAvailable;
-        }
-    }
-
     private bool IsBinaryAvailable(string dependency)
     {
         string output = _whichWrapper.Execute(dependency);
         return !string.IsNullOrWhiteSpace(output);
     }
 
-    private bool IsGstPipeWireSrcAvailableCore()
+    private static ICommandWrapper ResolveWhichWrapper(
+        ICommandWrapper? wrapper,
+        ICommandWrapper? legacyCompatibilityArgument
+    )
     {
-        string output = _gstInspectWrapper.Execute(GstPipeWirePlugin);
-        return !string.IsNullOrWhiteSpace(output);
+        _ = legacyCompatibilityArgument;
+        return wrapper ?? new WhichWrapper();
     }
 }

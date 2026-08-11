@@ -26,36 +26,35 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void LinuxFactory_ReturnsNoOpProvider_WhenPipeWireDependenciesAreMissing()
     {
-        var dependencies = new FakeLinuxDependencyRegistry
-        {
-            IsGstPipeWireSrcAvailable = false,
-            IsPwDumpAvailable = true,
-        };
+        var dependencies = new FakeLinuxDependencyRegistry();
 
-        var factory = new LinuxPreviewFrameProviderFactory(dependencies);
+        var factory = new LinuxPreviewFrameProviderFactory(
+            dependencies,
+            supportsX11PreviewCapture: () => false,
+            supportsPipeWire: () => false
+        );
         var provider = factory.Create(new FakeWinAccessor());
 
         Assert.IsType<NoOpPreviewFrameProvider>(provider);
-        Assert.Contains("gstreamer-pipewire", dependencies.ReportedMissing);
+        Assert.Contains("libpipewire-0.3.so.0", dependencies.ReportedMissing);
     }
 
     [Fact]
     public void RuntimeFactory_ReturnsNoOpProvider_WhenPipeWireDependenciesAreMissing()
     {
-        var dependencies = new FakeLinuxDependencyRegistry
-        {
-            IsGstLaunchAvailable = false,
-            IsGstPipeWireSrcAvailable = false,
-            IsPwDumpAvailable = false,
-        };
+        var dependencies = new FakeLinuxDependencyRegistry();
 
-        var factory = new RuntimePreviewFrameProviderFactory(dependencies);
+        var factory = new RuntimePreviewFrameProviderFactory(
+            dependencies,
+            supportsX11PreviewCapture: () => false,
+            supportsPipeWire: () => false
+        );
         var provider = factory.Create(new FakeWinAccessor());
 
         if (OperatingSystem.IsLinux())
         {
             Assert.IsType<NoOpPreviewFrameProvider>(provider);
-            Assert.Contains("gstreamer-pipewire", dependencies.ReportedMissing);
+            Assert.Contains("libpipewire-0.3.so.0", dependencies.ReportedMissing);
         }
         else
         {
@@ -66,12 +65,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void LinuxFactory_ReturnsX11Provider_WhenAccessorIsX11AndNativeCaptureIsSupported()
     {
-        var dependencies = new FakeLinuxDependencyRegistry
-        {
-            IsGstLaunchAvailable = false,
-            IsGstPipeWireSrcAvailable = false,
-            IsPwDumpAvailable = false,
-        };
+        var dependencies = new FakeLinuxDependencyRegistry();
 
         var factory = new LinuxPreviewFrameProviderFactory(
             dependencies,
@@ -86,12 +80,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void LinuxFactory_ReturnsNoOpProvider_WhenX11CaptureIsUnavailable()
     {
-        var dependencies = new FakeLinuxDependencyRegistry
-        {
-            IsGstLaunchAvailable = true,
-            IsGstPipeWireSrcAvailable = true,
-            IsPwDumpAvailable = true,
-        };
+        var dependencies = new FakeLinuxDependencyRegistry();
 
         var factory = new LinuxPreviewFrameProviderFactory(
             dependencies,
@@ -106,10 +95,6 @@ public sealed class PreviewFrameProviderFactoryTests
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry
     {
         public bool IsWmctrlAvailable { get; init; }
-        public bool IsGstLaunchAvailable { get; init; }
-        public bool IsPwDumpAvailable { get; init; }
-        public bool IsGdbusAvailable { get; init; }
-        public bool IsGstPipeWireSrcAvailable { get; init; }
         public HashSet<string> ReportedMissing { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public void ReportMissingOnce(string dependency)

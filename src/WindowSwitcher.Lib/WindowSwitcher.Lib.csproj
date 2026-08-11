@@ -3,6 +3,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -12,4 +13,42 @@
         <PackageReference Include="System.Drawing.Common" Version="10.0.9" />
         <PackageReference Include="Tmds.DBus" Version="0.94.2" />
     </ItemGroup>
+
+    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        <PipeWireNativeSource>$(MSBuildProjectDirectory)/Data/Platform/WindowAccess/PreviewFrames/Pipewire/Native/window_switcher_pipewire.c</PipeWireNativeSource>
+        <PipeWireNativeOutput>$(MSBuildProjectDirectory)/obj/$(Configuration)/$(TargetFramework)/libwindowswitcher-pipewire.so</PipeWireNativeOutput>
+        <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);GetPipeWireNativeBuildOutput</TargetsForTfmSpecificBuildOutput>
+    </PropertyGroup>
+
+    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        <None
+            Include="$(PipeWireNativeOutput)"
+            Link="libwindowswitcher-pipewire.so"
+            CopyToOutputDirectory="PreserveNewest"
+            CopyToPublishDirectory="PreserveNewest"
+            Visible="false" />
+    </ItemGroup>
+
+    <Target
+        Name="BuildPipeWireNative"
+        BeforeTargets="PrepareForBuild"
+        Inputs="$(PipeWireNativeSource)"
+        Outputs="$(PipeWireNativeOutput)"
+        Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        <MakeDir Directories="$(IntermediateOutputPath)" />
+        <Exec Command="cc -std=c17 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror -shared `pkg-config --cflags libpipewire-0.3` &quot;$(PipeWireNativeSource)&quot; -o &quot;$(PipeWireNativeOutput)&quot; `pkg-config --libs libpipewire-0.3` -pthread" />
+        <Copy SourceFiles="$(PipeWireNativeOutput)" DestinationFolder="$(TargetDir)" />
+    </Target>
+
+    <Target
+        Name="GetPipeWireNativeBuildOutput"
+        DependsOnTargets="BuildPipeWireNative"
+        Returns="@(BuildOutput)"
+        Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        <ItemGroup>
+            <BuildOutput Include="$(PipeWireNativeOutput)">
+                <TargetPath>libwindowswitcher-pipewire.so</TargetPath>
+            </BuildOutput>
+        </ItemGroup>
+    </Target>
 </Project>

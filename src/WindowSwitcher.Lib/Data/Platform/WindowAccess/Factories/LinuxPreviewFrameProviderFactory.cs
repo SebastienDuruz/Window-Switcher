@@ -20,6 +20,7 @@ public sealed class LinuxPreviewFrameProviderFactory(
     private readonly ILinuxDependencyRegistry _linuxDependencies =
         linuxDependencies ?? LinuxDependencies.Instance;
     private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProvider.IsSupported;
+    private readonly Func<bool> _supportsPipeWire = LibPipeWireNative.IsAvailable;
 
     internal LinuxPreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
@@ -29,6 +30,17 @@ public sealed class LinuxPreviewFrameProviderFactory(
     {
         ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
         _supportsX11PreviewCapture = supportsX11PreviewCapture;
+    }
+
+    internal LinuxPreviewFrameProviderFactory(
+        ILinuxDependencyRegistry? linuxDependencies,
+        Func<bool> supportsX11PreviewCapture,
+        Func<bool> supportsPipeWire
+    )
+        : this(linuxDependencies, supportsX11PreviewCapture)
+    {
+        ArgumentNullException.ThrowIfNull(supportsPipeWire);
+        _supportsPipeWire = supportsPipeWire;
     }
 
     /// <inheritdoc />
@@ -41,7 +53,7 @@ public sealed class LinuxPreviewFrameProviderFactory(
                 ? new X11PreviewFrameProvider(accessorBase)
                 : new NoOpPreviewFrameProvider();
 
-        if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies))
+        if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies, _supportsPipeWire))
             return new NoOpPreviewFrameProvider();
 
         return new PipeWireFrameProvider(accessorBase);

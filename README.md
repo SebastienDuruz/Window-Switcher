@@ -115,7 +115,7 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 - Runtime: Windows or Linux
 - Source build: .NET SDK 10 (`net10.0`)
-- Linux preview/focus features require external tools (see Linux dependencies below)
+- Linux preview/focus features require system dependencies (see Linux dependencies below)
 
 ## Installation
 
@@ -251,9 +251,7 @@ Prerequisites:
 Make sure your system has:
 
 - [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows)
-- [`gst-launch-1.0`](https://gstreamer.freedesktop.org/) + `pipewiresrc` plugin (PipeWire video stream)
-- [`pw-dump`](https://pipewire.pages.freedesktop.org/pipewire/page_man_pw-dump_1.html) (PipeWire node discovery and matching)
-- [`gdbus`](https://manpages.ubuntu.com/manpages/jammy/man1/gdbus.1.html) (optional, only if portal fallback is enabled)
+- [`libpipewire-0.3`](https://pipewire.org/) and an XDG Desktop Portal ScreenCast backend (Wayland previews)
 
 Install examples (depends on your distro):
 
@@ -261,11 +259,16 @@ Install examples (depends on your distro):
 - Arch: `sudo pacman -S wmctrl`
 - Fedora: `sudo dnf install wmctrl`
 
-Wayland PipeWire packages (examples):
+Wayland PipeWire and portal packages (examples; names vary by distribution and desktop):
 
-- Debian/Ubuntu: `sudo apt install gstreamer1.0-tools gstreamer1.0-pipewire pipewire-bin libglib2.0-bin`
-- Arch: `sudo pacman -S gst-plugin-pipewire gstreamer pipewire glib2`
-- Fedora: `sudo dnf install gstreamer1 pipewire-gstreamer pipewire-utils glib2`
+- Debian/Ubuntu: `sudo apt install libpipewire-0.3-0 xdg-desktop-portal`
+- Arch: `sudo pacman -S pipewire xdg-desktop-portal`
+- Fedora: `sudo dnf install pipewire-libs xdg-desktop-portal`
+
+Building from source on Linux also requires a C compiler, `pkg-config`, and the
+PipeWire development headers (`libpipewire-0.3-dev` on Debian/Ubuntu,
+`pipewire` on Arch, or `pipewire-devel` on Fedora). The native capture adapter
+is compiled with the application and included automatically in publish/AppImage outputs.
 
 ## Usage
 
