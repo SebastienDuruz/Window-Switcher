@@ -21,6 +21,10 @@
                 <MenuItem Header="_Filters" Click="OpenFiltersWindowClick" />
                 <MenuItem Header="_Keybinds" Click="OpenKeybindsWindowClick" />
                 <MenuItem Header="_Settings" Click="OpenSettingsWindowClick" />
+                <Separator />
+                <MenuItem x:Name="ResetAllPreviewsMenuItem"
+                          Header="_Reset all previews"
+                          Click="ResetAllPreviewsClick" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
                 <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>

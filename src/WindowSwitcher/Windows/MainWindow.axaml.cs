@@ -27,6 +27,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
 {
     private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
     private IPreviewFrameProvider PreviewFrameProvider { get; }
+    private readonly IPreviewSelectionReset? _previewSelectionReset;
     private readonly FloatingWindowRegistry _floatingWindowRegistry;
     private FiltersWindow FiltersWindow { get; }
     private SettingsWindow SettingsWindow { get; }
@@ -50,6 +51,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
         PropertyChanged += OnWindowPropertyChanged;
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
+        _previewSelectionReset = PreviewFrameProvider as IPreviewSelectionReset;
+        ResetAllPreviewsMenuItem.IsVisible = _previewSelectionReset is not null;
+        if (_previewSelectionReset is not null)
+            _previewSelectionReset.SelectionPromptChanged += OnSelectionPromptChanged;
         IFloatingWindowSettingsService floatingWindowSettingsService =
             AppServiceProvider.GetRequiredService<IFloatingWindowSettingsService>();
         _configurationService =
@@ -121,6 +126,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
             _updateNotificationCts.Cancel();
         if (OperatingSystem.IsLinux())
             LinuxDependencies.DependencyMissing -= OnDependencyMissing;
+        if (_previewSelectionReset is not null)
+            _previewSelectionReset.SelectionPromptChanged -= OnSelectionPromptChanged;
         PropertyChanged -= OnWindowPropertyChanged;
         _previewCoordinator.Dispose();
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
@@ -248,6 +255,43 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void AddToTempBlacklist(string windowId)
     {
         _blacklistCoordinator.AddToTemporaryBlacklist(windowId);
+    }
+
+    public bool CanResetPreviewSelection => _previewSelectionReset is not null;
+
+    public void ResetPreviewSelection(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+
+        _previewSelectionReset?.ResetSelection(windowId);
+    }
+
+    private void ResetAllPreviewsClick(object? sender, RoutedEventArgs e)
+    {
+        _previewSelectionReset?.ResetAllSelections();
+    }
+
+    private void OnSelectionPromptChanged(
+        object? sender,
+        PreviewSelectionPromptEventArgs eventArgs
+    )
+    {
+        if (StaticData.AppClosing)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (
+                _floatingWindowRegistry.TryGet(
+                    eventArgs.WindowId,
+                    out FloatingWindow floatingWindow
+                )
+            )
+            {
+                floatingWindow.SetSelectionPending(eventArgs.IsPending);
+            }
+        });
     }
 
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)

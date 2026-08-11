@@ -16,14 +16,14 @@ public sealed class DependencyNotificationDialogContentTests
     public void CreateMessage_ReturnsSortedDistinctDependencyList()
     {
         string message = DependencyNotificationDialogContent.CreateMessage(
-            ["pw-dump", "gst-launch-1.0", "PW-DUMP"]
+            ["libpipewire-0.3.so.0", "wmctrl", "LIBPIPEWIRE-0.3.SO.0"]
         );
 
         Assert.Equal(
             """
             Missing dependencies:
-            - gst-launch-1.0
-            - pw-dump
+            - libpipewire-0.3.so.0
+            - wmctrl
 
             Install them and restart the app.
             """,

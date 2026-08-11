@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
@@ -19,9 +20,7 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
         [
             $"wmctrl: {(LinuxDependencies.IsWmctrlAvailable ? "OK" : "missing")}",
             $"xcomposite: {(X11PreviewFrameProvider.IsSupported() ? "OK" : "missing")}",
-            $"gstreamer pipewiresrc: {(LinuxDependencies.IsGstPipeWireSrcAvailable ? "OK" : "missing")}",
-            $"gdbus: {(LinuxDependencies.IsGdbusAvailable ? "OK" : "missing")}",
-            $"pw-dump: {(LinuxDependencies.IsPwDumpAvailable ? "OK" : "missing")}",
+            $"libpipewire: {(LibPipeWireNative.IsAvailable() ? "OK" : "missing")}",
         ];
 
         var reported = LinuxDependencies.GetReportedMissing().ToArray();
@@ -47,8 +46,7 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
         if (string.Equals(sessionType, "x11", StringComparison.OrdinalIgnoreCase))
             return X11PreviewFrameProvider.IsSupported() ? "XComposite" : "Unavailable";
 
-        bool pipeWireReady =
-            LinuxDependencies.IsGstPipeWireSrcAvailable && LinuxDependencies.IsPwDumpAvailable;
+        bool pipeWireReady = LibPipeWireNative.IsAvailable();
         if (string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase))
             return pipeWireReady ? "PipeWire" : "Unavailable";
 

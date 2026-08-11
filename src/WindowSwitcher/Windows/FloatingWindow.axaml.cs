@@ -28,8 +28,13 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private static readonly Cursor TopRightCornerCursor = new(StandardCursorType.TopRightCorner);
     private static readonly Cursor BottomLeftCornerCursor = new(StandardCursorType.BottomLeftCorner);
     private static readonly Cursor BottomRightCornerCursor = new(StandardCursorType.BottomRightCorner);
+    private static readonly IBrush PendingSelectionBorderBrush = new SolidColorBrush(
+        Color.FromRgb(255, 185, 0)
+    );
     private volatile bool _isPointerInside;
     private bool _closeRequestedByHost;
+    private bool _isPreviewSelected;
+    private bool _isSelectionPending;
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
@@ -128,6 +133,19 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
                 Command = new ContextMenuCommand(() => _ = RenameWindowTitleAsync()),
             }
         );
+        if (_floatingWindowHost.CanResetPreviewSelection)
+        {
+            FloatingWindowContextMenu.Items.Add(new Separator());
+            FloatingWindowContextMenu.Items.Add(
+                new MenuItem()
+                {
+                    Header = "Reset preview stream",
+                    Command = new ContextMenuCommand(() =>
+                        _floatingWindowHost.ResetPreviewSelection(WindowConfig.WindowId)
+                    ),
+                }
+            );
+        }
 
         ApplySettingsCore(refreshPreviewPipeline: false);
     }
@@ -304,7 +322,16 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
     public void SetPreviewHighlight(bool isSelected)
     {
-        _service.SetPreviewHighlight(isSelected);
+        _isPreviewSelected = isSelected;
+        if (!_isSelectionPending)
+            _service.SetPreviewHighlight(isSelected);
+    }
+
+    internal void SetSelectionPending(bool isPending)
+    {
+        _isSelectionPending = isPending;
+        ApplyPreviewBorderAppearance();
+        _service.SetPreviewHighlight(isPending || _isPreviewSelected);
     }
 
     public void UpdateWindowTitle(string newTitle)
@@ -353,17 +380,19 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             WindowCanvas.Cursor = DefaultCursor;
 
         if (Color.TryParse(configSnapshot.PreviewHighlightColor, out Color highlightColor))
-        {
-            var highlightBrush = new SolidColorBrush(highlightColor);
-            WindowLabel.Foreground = highlightBrush;
-            PreviewBorder.BorderBrush = highlightBrush;
-        }
-        else
-        {
-            PreviewBorder.BorderBrush = WindowLabel.Foreground;
-        }
+            WindowLabel.Foreground = new SolidColorBrush(highlightColor);
+
+        ApplyPreviewBorderAppearance();
 
         if (refreshPreviewPipeline)
             _service.ApplySettings();
+    }
+
+    private void ApplyPreviewBorderAppearance()
+    {
+        PreviewBorder.BorderThickness = new Thickness(_isSelectionPending ? 4 : 2);
+        PreviewBorder.BorderBrush = _isSelectionPending
+            ? PendingSelectionBorderBrush
+            : WindowLabel.Foreground;
     }
 }

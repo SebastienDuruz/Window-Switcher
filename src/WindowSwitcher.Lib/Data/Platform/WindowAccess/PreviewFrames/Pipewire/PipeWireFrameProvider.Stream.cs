@@ -1,374 +1,764 @@
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
-using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
-public sealed partial class PipeWireFrameProvider
+internal interface IPipeWireNativeStream : IDisposable
 {
-    private sealed class WindowCaptureContext(
-        string windowId,
-        string nodeId,
-        string? portalSessionPath,
-        string? portalSessionDestination,
-        PipeWireWindowStream stream,
-        int? targetWidthPx,
-        int? targetHeightPx
+    bool IsFaulted { get; }
+    void UpdateTargetDimensions(int width, int height);
+    void SetActive(bool active);
+    IAsyncEnumerable<NativeBgraPreviewFrame> ReadFramesAsync(CancellationToken cancellationToken);
+    ValueTask<NativeBgraPreviewFrame?> ReadFrameAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    );
+}
+
+internal interface IPipeWireNativeStreamFactory
+{
+    Task<IPipeWireNativeStream?> CreateAsync(
+        CloseSafeHandle remoteHandle,
+        uint pipeWireNodeId,
+        int width,
+        int height,
+        CancellationToken cancellationToken
+    );
+}
+
+internal sealed class PipeWireNativeStreamFactory(
+    IPipeWireDiagnostics? diagnostics = null
+) : IPipeWireNativeStreamFactory
+{
+    private readonly IPipeWireDiagnostics _diagnostics =
+        diagnostics ?? TracePipeWireDiagnostics.Instance;
+
+    public Task<IPipeWireNativeStream?> CreateAsync(
+        CloseSafeHandle remoteHandle,
+        uint pipeWireNodeId,
+        int width,
+        int height,
+        CancellationToken cancellationToken
     )
     {
-        public string WindowId { get; } = windowId;
-        public string NodeId { get; } = nodeId;
-        public string? PortalSessionPath { get; } = portalSessionPath;
-        public string? PortalSessionDestination { get; } = portalSessionDestination;
-        public PipeWireWindowStream Stream { get; } = stream;
-        private readonly object _syncRoot = new();
-        public int? TargetWidthPx { get; private set; } = targetWidthPx;
-        public int? TargetHeightPx { get; private set; } = targetHeightPx;
-        public int ConsecutiveFailures { get; set; }
-        public int ConsecutiveNoFrameTimeouts { get; set; }
-        public bool IsDisposed { get; private set; }
+        ArgumentNullException.ThrowIfNull(remoteHandle);
+        return PipeWireNativeStream.CreateAsync(
+            remoteHandle,
+            pipeWireNodeId,
+            width,
+            height,
+            _diagnostics,
+            cancellationToken
+        );
+    }
+}
 
-        public void ApplyRequest(ScreenshotRequest request)
+internal interface IPipeWireDiagnostics
+{
+    void Information(string message);
+    void Warning(string message);
+    void Error(string message, Exception? exception = null);
+}
+
+internal sealed class TracePipeWireDiagnostics : IPipeWireDiagnostics
+{
+    private static readonly TimeSpan RepetitionWindow = TimeSpan.FromSeconds(30);
+    private readonly object _syncRoot = new();
+    private readonly Dictionary<string, DateTimeOffset> _lastReports = new(StringComparer.Ordinal);
+
+    internal static TracePipeWireDiagnostics Instance { get; } = new();
+
+    public void Information(string message)
+    {
+        if (!ShouldReport($"information:{message}"))
+            return;
+        Trace.TraceInformation("PipeWire: {0}", message);
+        WriteDebugConsole("info", message);
+    }
+
+    public void Warning(string message)
+    {
+        if (!ShouldReport($"warning:{message}"))
+            return;
+        Trace.TraceWarning("PipeWire: {0}", message);
+        WriteDebugConsole("warning", message);
+    }
+
+    public void Error(string message, Exception? exception = null)
+    {
+        string key = $"error:{message}:{exception?.GetType().FullName}";
+        if (!ShouldReport(key))
+            return;
+        Trace.TraceError(
+            exception is null ? "PipeWire: {0}" : "PipeWire: {0} ({1})",
+            message,
+            exception?.GetType().Name ?? string.Empty
+        );
+        WriteDebugConsole(
+            "error",
+            exception is null ? message : $"{message} ({exception.GetType().Name})"
+        );
+    }
+
+    [Conditional("DEBUG")]
+    private static void WriteDebugConsole(string level, string message)
+    {
+        Console.Error.WriteLine($"PipeWire [{level}]: {message}");
+    }
+
+    private bool ShouldReport(string key)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        lock (_syncRoot)
         {
-            int? requestWidth = NormalizeTargetDimension(request.MaxWidthPx);
-            int? requestHeight = NormalizeTargetDimension(request.MaxHeightPx);
-            bool updated = false;
-            lock (_syncRoot)
+            if (
+                _lastReports.TryGetValue(key, out DateTimeOffset previous)
+                && now - previous < RepetitionWindow
+            )
+                return false;
+
+            _lastReports[key] = now;
+            if (_lastReports.Count > 64)
             {
-                if (TargetWidthPx == requestWidth && TargetHeightPx == requestHeight)
-                    return;
-
-                TargetWidthPx = requestWidth;
-                TargetHeightPx = requestHeight;
-                updated = true;
+                foreach (
+                    string expired in _lastReports
+                        .Where(pair => now - pair.Value >= RepetitionWindow)
+                        .Select(pair => pair.Key)
+                        .ToArray()
+                )
+                    _lastReports.Remove(expired);
             }
-
-            if (updated)
-                Stream.UpdateTargetDimensions(requestWidth, requestHeight);
+            return true;
         }
+    }
+}
 
-        public void Dispose(Action<string, string?> closePortalSession)
+internal sealed class PipeWireNativeStream : IPipeWireNativeStream
+{
+    private const int BufferPoolSize = 3;
+    private const int MaximumOutputFrameBytes = 16 * 1024 * 1024;
+    private const int MaximumInputFrameBytes = 128 * 1024 * 1024;
+    private const uint MaximumFramesPerSecond = 20;
+
+    private readonly object _syncRoot = new();
+    private readonly LatestFrameChannel _frames = new();
+    private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
+    private readonly IPipeWireDiagnostics _diagnostics;
+    private readonly ObsPipeWireNative.FrameCallback _frameCallback;
+    private readonly ObsPipeWireNative.StateCallback _stateCallback;
+    private GCHandle _selfHandle;
+    private IntPtr _nativeStream;
+    private int _targetWidth;
+    private int _targetHeight;
+    private bool _faulted;
+    private bool _disposed;
+    private bool _framePublishedReported;
+
+    private PipeWireNativeStream(int width, int height, IPipeWireDiagnostics diagnostics)
+    {
+        _targetWidth = width;
+        _targetHeight = height;
+        _diagnostics = diagnostics;
+        _frameCallback = OnFrame;
+        _stateCallback = OnStateChanged;
+    }
+
+    public bool IsFaulted
+    {
+        get
         {
-            if (IsDisposed)
-                return;
-
-            IsDisposed = true;
-            Stream.Dispose();
-            if (!string.IsNullOrWhiteSpace(PortalSessionPath))
-                closePortalSession(PortalSessionPath, PortalSessionDestination);
-        }
-
-        public void Suspend()
-        {
-            if (IsDisposed)
-                return;
-
-            Stream.Suspend();
+            lock (_syncRoot)
+                return _faulted || _disposed;
         }
     }
 
-    private sealed class PipeWireWindowStream : IDisposable
+    internal static Task<IPipeWireNativeStream?> CreateAsync(
+        CloseSafeHandle remoteHandle,
+        uint pipeWireNodeId,
+        int width,
+        int height,
+        IPipeWireDiagnostics diagnostics,
+        CancellationToken cancellationToken
+    )
     {
-        private const int MaxFrameBytes = 16 * 1024 * 1024;
-        private const int DefaultRawFrameWidthPx = 640;
-        private const int DefaultRawFrameHeightPx = 360;
+        ArgumentNullException.ThrowIfNull(remoteHandle);
+        ArgumentNullException.ThrowIfNull(diagnostics);
+        return Task.Run<IPipeWireNativeStream?>(
+            () => Create(remoteHandle, pipeWireNodeId, width, height, diagnostics, cancellationToken),
+            cancellationToken
+        );
+    }
 
-        private readonly string _nodeId;
-        private readonly IGstLaunchWrapper _gstLaunch;
-        private readonly CloseSafeHandle? _pipeWireRemoteHandle;
-        private readonly object _syncRoot = new();
-
-        private IPipeWireRawBgraStream? _stream;
-        private bool _hasReceivedFrame;
-        private bool _disposed;
-        private bool _faulted;
-        private bool _restartInProgress;
-        private bool _restartRequested;
-        private int _rawFrameWidthPx;
-        private int _rawFrameHeightPx;
-
-        public PipeWireWindowStream(
-            string nodeId,
-            IGstLaunchWrapper gstLaunch,
-            CloseSafeHandle? pipeWireRemoteHandle,
-            int? maxWidthPx,
-            int? maxHeightPx
-        )
+    private static PipeWireNativeStream? Create(
+        CloseSafeHandle remoteHandle,
+        uint pipeWireNodeId,
+        int width,
+        int height,
+        IPipeWireDiagnostics diagnostics,
+        CancellationToken cancellationToken
+    )
+    {
+        var created = new PipeWireNativeStream(width, height, diagnostics);
+        try
         {
-            ArgumentNullException.ThrowIfNull(gstLaunch);
-            _nodeId = nodeId;
-            _gstLaunch = gstLaunch;
-            _pipeWireRemoteHandle = pipeWireRemoteHandle;
-            int? normalizedMaxWidthPx = NormalizeTargetDimension(maxWidthPx);
-            int? normalizedMaxHeightPx = NormalizeTargetDimension(maxHeightPx);
-            _rawFrameWidthPx = normalizedMaxWidthPx ?? DefaultRawFrameWidthPx;
-            _rawFrameHeightPx = normalizedMaxHeightPx ?? DefaultRawFrameHeightPx;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryComputeFrameLayout(width, height, MaximumOutputFrameBytes, out _))
+                return null;
+
+            int fileDescriptor = GetFileDescriptor(remoteHandle);
+            if (fileDescriptor < 0)
+                return null;
+
+            created._selfHandle = GCHandle.Alloc(created, GCHandleType.Normal);
+            diagnostics.Information("initialisation du backend PipeWire natif OBS");
+            created._nativeStream = ObsPipeWireNative.CreateStream(
+                fileDescriptor,
+                pipeWireNodeId,
+                checked((uint)width),
+                checked((uint)height),
+                MaximumFramesPerSecond,
+                created._frameCallback,
+                created._stateCallback,
+                GCHandle.ToIntPtr(created._selfHandle)
+            );
+            remoteHandle.Dispose();
+            if (created._nativeStream == IntPtr.Zero || created.IsFaulted)
+                return null;
+            return created;
         }
-
-        public bool NeedsRestart()
+        catch (OperationCanceledException)
         {
-            lock (_syncRoot)
-            {
-                if (_disposed)
-                    return false;
-
-                return _faulted || _stream is null || _stream.IsFaulted;
-            }
+            return null;
         }
-
-        public bool HasReceivedFrame()
+        catch (Exception exception)
         {
-            lock (_syncRoot)
-            {
-                return _hasReceivedFrame;
-            }
+            diagnostics.Error("native OBS PipeWire stream initialization failed", exception);
+            return null;
         }
-
-        public void Restart()
+        finally
         {
-            lock (_syncRoot)
-            {
-                if (_disposed || _restartInProgress)
-                {
-                    if (_restartInProgress)
-                        _restartRequested = true;
-                    return;
-                }
+            remoteHandle.Dispose();
+            if (created._nativeStream == IntPtr.Zero || created.IsFaulted)
+                created.Dispose();
+        }
+    }
 
-                _restartInProgress = true;
-            }
+    public void UpdateTargetDimensions(int width, int height)
+    {
+        if (!TryComputeFrameLayout(width, height, MaximumOutputFrameBytes, out _))
+            return;
 
-            Stop();
-
-            int rawFrameWidthPx;
-            int rawFrameHeightPx;
-            lock (_syncRoot)
-            {
-                if (_disposed)
-                {
-                    _restartInProgress = false;
-                    return;
-                }
-
-                rawFrameWidthPx = _rawFrameWidthPx;
-                rawFrameHeightPx = _rawFrameHeightPx;
-            }
-
-            IPipeWireRawBgraStream? stream = null;
-            if (
-                rawFrameWidthPx > 0
-                && rawFrameHeightPx > 0
-                && TryComputeRawFrameByteCount(rawFrameWidthPx, rawFrameHeightPx, out int rawBytes)
-                && rawBytes <= MaxFrameBytes
-            )
-            {
-                stream = _gstLaunch.StartPipeWireRawBgraStream(
-                    _nodeId,
-                    rawFrameWidthPx,
-                    rawFrameHeightPx,
-                    GetPipeWireRemoteFd()
-                );
-            }
-
-            if (stream is null)
-            {
-                lock (_syncRoot)
-                {
-                    _faulted = true;
-                    _restartInProgress = false;
-                }
-
+        IntPtr stream;
+        lock (_syncRoot)
+        {
+            if (_disposed || (_targetWidth == width && _targetHeight == height))
                 return;
-            }
-
-            bool restartRequested;
-            lock (_syncRoot)
-            {
-                _faulted = false;
-                _hasReceivedFrame = false;
-                _stream = stream;
-                restartRequested = _restartRequested;
-                _restartRequested = false;
-                _restartInProgress = false;
-            }
-
-            if (restartRequested)
-                _ = Task.Run(Restart);
+            _targetWidth = width;
+            _targetHeight = height;
+            stream = _nativeStream;
         }
 
-        public void UpdateTargetDimensions(int? maxWidthPx, int? maxHeightPx)
-        {
-            int normalizedWidthPx = NormalizeTargetDimension(maxWidthPx) ?? DefaultRawFrameWidthPx;
-            int normalizedHeightPx =
-                NormalizeTargetDimension(maxHeightPx) ?? DefaultRawFrameHeightPx;
+        if (
+            stream != IntPtr.Zero
+            && ObsPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height)) < 0
+        )
+            MarkFaulted("PipeWire format renegotiation failed");
+    }
 
-            bool shouldRestart = false;
-            lock (_syncRoot)
-            {
-                if (_disposed)
-                    return;
-
-                if (
-                    _rawFrameWidthPx == normalizedWidthPx
-                    && _rawFrameHeightPx == normalizedHeightPx
-                )
-                {
-                    return;
-                }
-
-                _rawFrameWidthPx = normalizedWidthPx;
-                _rawFrameHeightPx = normalizedHeightPx;
-
-                if (_restartInProgress)
-                {
-                    _restartRequested = true;
-                    return;
-                }
-
-                shouldRestart = _stream is not null || _faulted;
-            }
-
-            if (shouldRestart)
-                Restart();
-        }
-
-        public void Suspend()
+    public void SetActive(bool active)
+    {
+        IntPtr stream;
+        lock (_syncRoot)
         {
             if (_disposed)
                 return;
-
-            Stop();
+            stream = _nativeStream;
         }
 
-        public NativeBgraPreviewFrame? PullNativeFrame(
-            int timeoutMs,
-            CancellationToken cancellationToken
-        )
+        if (stream != IntPtr.Zero && ObsPipeWireNative.SetActive(stream, active ? 1 : 0) < 0)
+            MarkFaulted("PipeWire could not change stream activity");
+        if (!active)
+            _frames.Drain();
+    }
+
+    public async IAsyncEnumerable<NativeBgraPreviewFrame> ReadFramesAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
+    {
+        SetActive(true);
+        while (await _frames.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            EnsureRunning();
+            while (_frames.Reader.TryRead(out NativeBgraPreviewFrame? frame))
+                yield return frame;
+        }
+    }
 
-            IPipeWireRawBgraStream? stream;
-            lock (_syncRoot)
-            {
-                if (_disposed || _faulted)
-                    return null;
+    public async ValueTask<NativeBgraPreviewFrame?> ReadFrameAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    )
+    {
+        SetActive(true);
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+        try
+        {
+            return await _frames.Reader.ReadAsync(timeoutSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (ChannelClosedException)
+        {
+            return null;
+        }
+    }
 
-                stream = _stream;
-            }
-
-            if (stream is null)
-                return null;
-
-            PipeWireRawBgraFrame? rawFrame = stream.PullFrame(timeoutMs, cancellationToken);
-            if (rawFrame is null)
-            {
-                if (stream.IsFaulted)
-                    MarkFaulted();
-                return null;
-            }
-
+    private void OnFrame(
+        IntPtr userData,
+        IntPtr source,
+        uint accessibleSize,
+        int sourceStride,
+        uint sourceWidth,
+        uint sourceHeight,
+        ObsPipeWireNative.PixelFormat pixelFormat
+    )
+    {
+        try
+        {
             if (
-                rawFrame.Data == IntPtr.Zero
-                || rawFrame.WidthPx <= 0
-                || rawFrame.HeightPx <= 0
-                || rawFrame.Length <= 0
-                || rawFrame.Length > MaxFrameBytes
+                source == IntPtr.Zero
+                || accessibleSize == 0
+                || accessibleSize > MaximumInputFrameBytes
+                || sourceWidth is 0 or > int.MaxValue
+                || sourceHeight is 0 or > int.MaxValue
             )
-            {
-                rawFrame.Dispose();
-                return null;
-            }
+                return;
 
-            lock (_syncRoot)
-                _hasReceivedFrame = true;
-
-            return new NativeBgraPreviewFrame(
-                rawFrame.Data,
-                rawFrame.Length,
-                rawFrame.WidthPx,
-                rawFrame.HeightPx,
-                rawFrame.Dispose
-            );
-        }
-
-        private void EnsureRunning()
-        {
+            int targetWidth;
+            int targetHeight;
             lock (_syncRoot)
             {
                 if (_disposed)
                     return;
-
-                if (_stream is not null && !_stream.IsFaulted && !_faulted)
-                    return;
+                targetWidth = _targetWidth;
+                targetHeight = _targetHeight;
             }
 
-            Restart();
+            if (!TryComputeFrameLayout(targetWidth, targetHeight, MaximumOutputFrameBytes, out int length))
+                return;
+            NativeFrameBufferPool.Lease? lease = _bufferPool.TryRent(length);
+            if (lease is null)
+                return;
+
+            bool copied = BgraFrameCopier.TryCopyOrScale(
+                source,
+                checked((int)accessibleSize),
+                sourceStride,
+                checked((int)sourceWidth),
+                checked((int)sourceHeight),
+                pixelFormat,
+                lease.Pointer,
+                targetWidth,
+                targetHeight
+            );
+            if (!copied)
+            {
+                lease.Dispose();
+                return;
+            }
+
+            _frames.Publish(
+                new NativeBgraPreviewFrame(
+                    lease.Pointer,
+                    length,
+                    targetWidth,
+                    targetHeight,
+                    lease.Dispose
+                )
+            );
+            lock (_syncRoot)
+            {
+                if (_framePublishedReported)
+                    return;
+                _framePublishedReported = true;
+            }
+            _diagnostics.Information("première frame CPU publiée par le backend OBS");
         }
-
-        private static bool TryComputeRawFrameByteCount(
-            int frameWidthPx,
-            int frameHeightPx,
-            out int frameByteCount
-        )
+        catch (Exception exception)
         {
-            frameByteCount = 0;
-            if (frameWidthPx <= 0 || frameHeightPx <= 0)
-                return false;
-
             try
             {
-                int stride = checked(frameWidthPx * 4);
-                frameByteCount = checked(stride * frameHeightPx);
-                return frameByteCount > 0;
+                _diagnostics.Error("native frame callback failed", exception);
             }
-            catch (OverflowException)
-            {
-                return false;
-            }
+            catch { }
         }
+    }
 
-        private void MarkFaulted()
+    private void OnStateChanged(IntPtr userData, int state, string? message)
+    {
+        try
+        {
+            if (state < 0)
+            {
+                MarkFaulted(
+                    string.IsNullOrWhiteSpace(message)
+                        ? "PipeWire stream entered the error state"
+                        : $"PipeWire stream entered the error state: {message}"
+                );
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(message))
+                _diagnostics.Information(message);
+            else
+                _diagnostics.Information($"PipeWire stream state changed to {state}");
+        }
+        catch
         {
             lock (_syncRoot)
                 _faulted = true;
         }
+    }
 
-        private void Stop()
+    private void MarkFaulted(string message)
+    {
+        lock (_syncRoot)
         {
-            IPipeWireRawBgraStream? stream;
-            lock (_syncRoot)
-            {
-                stream = _stream;
-                _stream = null;
-                _hasReceivedFrame = false;
-                _faulted = true;
-            }
-
-            stream?.Dispose();
+            if (_faulted || _disposed)
+                return;
+            _faulted = true;
         }
+        _diagnostics.Error(message);
+        _frames.Complete();
+    }
+
+    private static int GetFileDescriptor(CloseSafeHandle remoteHandle)
+    {
+        if (remoteHandle.IsClosed || remoteHandle.IsInvalid)
+            return -1;
+        long value = remoteHandle.DangerousGetHandle().ToInt64();
+        return value is >= 0 and <= int.MaxValue ? (int)value : -1;
+    }
+
+    private static bool TryComputeFrameLayout(
+        int width,
+        int height,
+        int maximumLength,
+        out int length
+    )
+    {
+        length = 0;
+        if (width <= 0 || height <= 0)
+            return false;
+        try
+        {
+            length = checked(checked(width * 4) * height);
+            return length > 0 && length <= maximumLength;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
+    public void Dispose()
+    {
+        IntPtr stream;
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            stream = _nativeStream;
+            _nativeStream = IntPtr.Zero;
+        }
+
+        _frames.Complete();
+        _frames.Drain();
+        if (stream != IntPtr.Zero)
+        {
+            try
+            {
+                ObsPipeWireNative.DestroyStream(stream);
+            }
+            catch (Exception exception)
+            {
+                _diagnostics.Error("native OBS PipeWire stream cleanup failed", exception);
+            }
+        }
+        if (_selfHandle.IsAllocated)
+            _selfHandle.Free();
+        _bufferPool.Dispose();
+    }
+}
+
+internal sealed class LatestFrameChannel
+{
+    private readonly Channel<NativeBgraPreviewFrame> _channel = Channel.CreateBounded<NativeBgraPreviewFrame>(
+        new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = false,
+            SingleWriter = true,
+            AllowSynchronousContinuations = false,
+        }
+    );
+
+    internal ChannelReader<NativeBgraPreviewFrame> Reader => _channel.Reader;
+
+    internal void Publish(NativeBgraPreviewFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        while (!_channel.Writer.TryWrite(frame))
+        {
+            if (_channel.Reader.TryRead(out NativeBgraPreviewFrame? replaced))
+            {
+                replaced.Dispose();
+                continue;
+            }
+            frame.Dispose();
+            return;
+        }
+    }
+
+    internal void Drain()
+    {
+        while (_channel.Reader.TryRead(out NativeBgraPreviewFrame? frame))
+            frame.Dispose();
+    }
+
+    internal void Complete()
+    {
+        _channel.Writer.TryComplete();
+    }
+}
+
+internal sealed class NativeFrameBufferPool(int maximumBuffers) : IDisposable
+{
+    private readonly object _syncRoot = new();
+    private readonly List<Entry> _entries = [];
+    private bool _disposed;
+
+    internal Lease? TryRent(int length)
+    {
+        if (length <= 0)
+            return null;
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return null;
+            Entry? entry = _entries.FirstOrDefault(candidate => !candidate.IsLeased);
+            if (entry is null)
+            {
+                if (_entries.Count >= maximumBuffers)
+                    return null;
+                entry = new Entry();
+                _entries.Add(entry);
+            }
+            if (entry.Capacity < length)
+            {
+                if (entry.Pointer != IntPtr.Zero)
+                    Marshal.FreeHGlobal(entry.Pointer);
+                entry.Pointer = Marshal.AllocHGlobal(length);
+                if (entry.Pointer == IntPtr.Zero)
+                    return null;
+                entry.Capacity = length;
+            }
+            entry.IsLeased = true;
+            return new Lease(this, entry, length);
+        }
+    }
+
+    private void Return(Entry entry)
+    {
+        lock (_syncRoot)
+        {
+            entry.IsLeased = false;
+            if (!_disposed || entry.Pointer == IntPtr.Zero)
+                return;
+            Marshal.FreeHGlobal(entry.Pointer);
+            entry.Pointer = IntPtr.Zero;
+            entry.Capacity = 0;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            foreach (Entry entry in _entries.Where(candidate => !candidate.IsLeased))
+            {
+                if (entry.Pointer != IntPtr.Zero)
+                    Marshal.FreeHGlobal(entry.Pointer);
+                entry.Pointer = IntPtr.Zero;
+                entry.Capacity = 0;
+            }
+        }
+    }
+
+    internal sealed class Entry
+    {
+        internal IntPtr Pointer;
+        internal int Capacity;
+        internal bool IsLeased;
+    }
+
+    internal sealed class Lease : IDisposable
+    {
+        private NativeFrameBufferPool? _owner;
+        private readonly Entry _entry;
+
+        internal Lease(NativeFrameBufferPool owner, Entry entry, int length)
+        {
+            _owner = owner;
+            _entry = entry;
+            Length = length;
+        }
+
+        internal IntPtr Pointer => _entry.Pointer;
+        internal int Length { get; }
 
         public void Dispose()
         {
-            if (_disposed)
-                return;
-
-            _disposed = true;
-            Stop();
-            _pipeWireRemoteHandle?.Dispose();
+            NativeFrameBufferPool? currentOwner = Interlocked.Exchange(ref _owner, null);
+            currentOwner?.Return(_entry);
         }
+    }
+}
 
-        private int? GetPipeWireRemoteFd()
+internal static class BgraFrameCopier
+{
+    private const int MaximumFrameBytes = 16 * 1024 * 1024;
+
+    internal static bool TryCopyOrScale(
+        IntPtr source,
+        int sourceLength,
+        int sourceStride,
+        int sourceWidth,
+        int sourceHeight,
+        IntPtr destination,
+        int destinationWidth,
+        int destinationHeight
+    ) => TryCopyOrScale(
+        source,
+        sourceLength,
+        sourceStride,
+        sourceWidth,
+        sourceHeight,
+        ObsPipeWireNative.PixelFormat.Bgra,
+        destination,
+        destinationWidth,
+        destinationHeight
+    );
+
+    internal static unsafe bool TryCopyOrScale(
+        IntPtr source,
+        int sourceLength,
+        int sourceStride,
+        int sourceWidth,
+        int sourceHeight,
+        ObsPipeWireNative.PixelFormat pixelFormat,
+        IntPtr destination,
+        int destinationWidth,
+        int destinationHeight
+    )
+    {
+        if (
+            source == IntPtr.Zero || destination == IntPtr.Zero || sourceLength <= 0 ||
+            sourceWidth <= 0 || sourceHeight <= 0 || destinationWidth <= 0 || destinationHeight <= 0 ||
+            !Enum.IsDefined(pixelFormat)
+        )
+            return false;
+
+        int absoluteStride;
+        int requiredSourceBytes;
+        int destinationStride;
+        try
         {
-            if (
-                _pipeWireRemoteHandle is null
-                || _pipeWireRemoteHandle.IsClosed
-                || _pipeWireRemoteHandle.IsInvalid
-            )
-                return null;
-
-            long value = _pipeWireRemoteHandle.DangerousGetHandle().ToInt64();
-            return value is >= 0 and <= int.MaxValue ? (int)value : null;
+            absoluteStride = Math.Abs(sourceStride);
+            if (absoluteStride < checked(sourceWidth * 4))
+                return false;
+            requiredSourceBytes = checked(checked(absoluteStride * (sourceHeight - 1)) + checked(sourceWidth * 4));
+            destinationStride = checked(destinationWidth * 4);
+            if (checked(destinationStride * destinationHeight) > MaximumFrameBytes)
+                return false;
         }
+        catch (OverflowException)
+        {
+            return false;
+        }
+        if (requiredSourceBytes > sourceLength)
+            return false;
+
+        byte* sourceStart = (byte*)source;
+        if (sourceStride < 0)
+            sourceStart += checked(absoluteStride * (sourceHeight - 1));
+        byte* destinationStart = (byte*)destination;
+
+        for (int destinationY = 0; destinationY < destinationHeight; destinationY++)
+        {
+            double sourceY = destinationHeight == 1
+                ? 0
+                : (double)destinationY * (sourceHeight - 1) / (destinationHeight - 1);
+            int y0 = (int)sourceY;
+            int y1 = Math.Min(y0 + 1, sourceHeight - 1);
+            double yWeight = sourceY - y0;
+            byte* row0 = sourceStart + y0 * sourceStride;
+            byte* row1 = sourceStart + y1 * sourceStride;
+            byte* destinationRow = destinationStart + destinationY * destinationStride;
+
+            for (int destinationX = 0; destinationX < destinationWidth; destinationX++)
+            {
+                double sourceX = destinationWidth == 1
+                    ? 0
+                    : (double)destinationX * (sourceWidth - 1) / (destinationWidth - 1);
+                int x0 = (int)sourceX;
+                int x1 = Math.Min(x0 + 1, sourceWidth - 1);
+                double xWeight = sourceX - x0;
+                byte* destinationPixel = destinationRow + destinationX * 4;
+
+                for (int outputChannel = 0; outputChannel < 4; outputChannel++)
+                {
+                    int inputChannel = MapInputChannel(pixelFormat, outputChannel);
+                    if (inputChannel < 0)
+                    {
+                        destinationPixel[outputChannel] = 255;
+                        continue;
+                    }
+                    double top = row0[x0 * 4 + inputChannel] * (1 - xWeight)
+                        + row0[x1 * 4 + inputChannel] * xWeight;
+                    double bottom = row1[x0 * 4 + inputChannel] * (1 - xWeight)
+                        + row1[x1 * 4 + inputChannel] * xWeight;
+                    destinationPixel[outputChannel] = (byte)Math.Clamp(
+                        (int)Math.Round(top * (1 - yWeight) + bottom * yWeight), 0, 255
+                    );
+                }
+            }
+        }
+        return true;
+    }
+
+    private static int MapInputChannel(ObsPipeWireNative.PixelFormat format, int outputChannel)
+    {
+        if (outputChannel == 3 && format is ObsPipeWireNative.PixelFormat.Bgrx or ObsPipeWireNative.PixelFormat.Rgbx)
+            return -1;
+        if (format is ObsPipeWireNative.PixelFormat.Bgra or ObsPipeWireNative.PixelFormat.Bgrx)
+            return outputChannel;
+        return outputChannel switch
+        {
+            0 => 2,
+            1 => 1,
+            2 => 0,
+            3 => 3,
+            _ => -1,
+        };
     }
 }

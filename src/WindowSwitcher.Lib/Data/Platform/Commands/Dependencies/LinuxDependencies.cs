@@ -29,26 +29,6 @@ public static class LinuxDependencies
     public static bool IsWmctrlAvailable => Registry.IsWmctrlAvailable;
 
     /// <summary>
-    /// Gets whether <c>gst-launch-1.0</c> is available.
-    /// </summary>
-    public static bool IsGstLaunchAvailable => Registry.IsGstLaunchAvailable;
-
-    /// <summary>
-    /// Gets whether <c>pw-dump</c> is available.
-    /// </summary>
-    public static bool IsPwDumpAvailable => Registry.IsPwDumpAvailable;
-
-    /// <summary>
-    /// Gets whether <c>gdbus</c> is available.
-    /// </summary>
-    public static bool IsGdbusAvailable => Registry.IsGdbusAvailable;
-
-    /// <summary>
-    /// Gets whether the GStreamer <c>pipewiresrc</c> plugin is available.
-    /// </summary>
-    public static bool IsGstPipeWireSrcAvailable => Registry.IsGstPipeWireSrcAvailable;
-
-    /// <summary>
     /// Returns missing dependencies already reported to the application.
     /// </summary>
     public static IReadOnlyCollection<string> GetReportedMissing()
