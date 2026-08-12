@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
@@ -35,6 +34,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private AppInfoWindow AppInfoWindow { get; }
     private RenameWindow RenameWindow { get; }
     private WindowListViewModel ViewModel { get; }
+    private readonly MainWindowViewModel _mainWindowViewModel;
     private readonly FloatingPreviewCoordinator _previewCoordinator;
     private readonly WindowBlacklistCoordinator _blacklistCoordinator;
     private readonly MissingDependencyNotificationService _missingDependencyNotificationService;
@@ -52,7 +52,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
         PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
         _previewSelectionReset = PreviewFrameProvider as IPreviewSelectionReset;
-        ResetAllPreviewsMenuItem.IsVisible = _previewSelectionReset is not null;
         if (_previewSelectionReset is not null)
             _previewSelectionReset.SelectionPromptChanged += OnSelectionPromptChanged;
         IFloatingWindowSettingsService floatingWindowSettingsService =
@@ -72,7 +71,27 @@ public partial class MainWindow : Window, IFloatingWindowHost
             new ConfigFileWindowFilterSettingsProvider(),
             dispatcher
         );
-        DataContext = ViewModel;
+        _mainWindowViewModel = new MainWindowViewModel(
+            ViewModel,
+            openFilters: () => FiltersWindow.ShowPrefixesTab(),
+            openKeybinds: () =>
+            {
+                KeybindsWindow.RefreshData();
+                KeybindsWindow.Show();
+            },
+            openSettings: () => SettingsWindow.Show(),
+            openAbout: OpenAppInfoWindow,
+            openDataFolder: OpenDataFolder,
+            clearConfig: () => _configurationService.ResetFloatingWindowSettings(),
+            resetConfig: () => _configurationService.ResetUserSettings(),
+            canResetAllPreviews: () => _previewSelectionReset is not null,
+            resetAllPreviews: () => _previewSelectionReset?.ResetAllSelections(),
+            addToBlacklist: value => AddToBlacklist(value ?? string.Empty),
+            addToTemporaryBlacklist: value => AddToTempBlacklist(value ?? string.Empty),
+            renameWindow: windowId => RenameWindowTitleAsync(windowId ?? string.Empty)
+        );
+        _mainWindowViewModel.SetPreviewResetAvailability(_previewSelectionReset is not null);
+        DataContext = _mainWindowViewModel;
         Title = StaticData.AppName;
 
         FiltersWindow = new FiltersWindow(
@@ -194,41 +213,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         }
     }
 
-    private void OpenDataFolderClick(object? sender, RoutedEventArgs e)
-    {
-        Process.Start(
-            new ProcessStartInfo { FileName = StaticData.DataFolder, UseShellExecute = true }
-        );
-    }
-
-    private void ClearFloatingWindowSettings(object? sender, RoutedEventArgs e)
-    {
-        _configurationService.ResetFloatingWindowSettings();
-    }
-
-    private void ResetUserSettings(object? sender, RoutedEventArgs e)
-    {
-        _configurationService.ResetUserSettings();
-    }
-
-    private void OpenFiltersWindowClick(object? sender, RoutedEventArgs e)
-    {
-        FiltersWindow.ShowPrefixesTab();
-    }
-
-    private void OpenSettingsWindowClick(object? sender, RoutedEventArgs e)
-    {
-        SettingsWindow.RefreshPendingValues();
-        SettingsWindow.Show();
-    }
-
-    private void OpenKeybindsWindowClick(object? sender, RoutedEventArgs e)
-    {
-        KeybindsWindow.RefreshData();
-        KeybindsWindow.Show();
-    }
-
-    private void OpenAppInfoWindowClick(object? sender, RoutedEventArgs e)
+    private void OpenAppInfoWindow()
     {
         AppInfoWindow.Refresh();
         _ = AppInfoWindow.CheckForUpdatesAsync(force: false, showUpToDateMessage: false);
@@ -245,6 +230,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
         }
 
         AppInfoWindow.Show();
+    }
+
+    private void OpenDataFolder()
+    {
+        Process.Start(
+            new ProcessStartInfo { FileName = StaticData.DataFolder, UseShellExecute = true }
+        );
     }
 
     public void AddToBlacklist(string windowTitle)
@@ -265,11 +257,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
             return;
 
         _previewSelectionReset?.ResetSelection(windowId);
-    }
-
-    private void ResetAllPreviewsClick(object? sender, RoutedEventArgs e)
-    {
-        _previewSelectionReset?.ResetAllSelections();
     }
 
     private void OnSelectionPromptChanged(
@@ -367,21 +354,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private void WindowsConfigsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         _floatingWindowRegistry.SynchronizeWithCollectionChange(e, ViewModel.WindowsConfigs);
-    }
-
-    private void BlacklistMenuItemClick(object? sender, RoutedEventArgs e)
-    {
-        AddToBlacklist(((string)((MenuItem)sender!).Tag!));
-    }
-
-    private void TempBlacklistMenuItemClick(object? sender, RoutedEventArgs e)
-    {
-        AddToTempBlacklist((string)((MenuItem)sender!).Tag!);
-    }
-
-    private async void RenameMenuItemClick(object? sender, RoutedEventArgs e)
-    {
-        await RenameWindowTitleAsync((string)((MenuItem)sender!).Tag!);
     }
 
     public void ApplySettings()

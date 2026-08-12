@@ -28,9 +28,11 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private static readonly Cursor TopRightCornerCursor = new(StandardCursorType.TopRightCorner);
     private static readonly Cursor BottomLeftCornerCursor = new(StandardCursorType.BottomLeftCorner);
     private static readonly Cursor BottomRightCornerCursor = new(StandardCursorType.BottomRightCorner);
-    private static readonly IBrush PendingSelectionBorderBrush = new SolidColorBrush(
+    private const string PendingSelectionBorderBrushKey = "PendingSelectionBorderBrush";
+    private static readonly IBrush DefaultPendingSelectionBorderBrush = new SolidColorBrush(
         Color.FromRgb(255, 185, 0)
     );
+    private readonly IBrush _pendingSelectionBorderBrush;
     private volatile bool _isPointerInside;
     private bool _closeRequestedByHost;
     private bool _isPreviewSelected;
@@ -57,6 +59,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         ArgumentNullException.ThrowIfNull(floatingWindowSettingsService);
 
         InitializeComponent();
+
+        _pendingSelectionBorderBrush = ResolvePendingSelectionBorderBrush();
 
         WindowConfig = windowConfig;
         _winAccessorBase = winAccessorBase;
@@ -392,7 +396,21 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         PreviewBorder.BorderThickness = new Thickness(_isSelectionPending ? 4 : 2);
         PreviewBorder.BorderBrush = _isSelectionPending
-            ? PendingSelectionBorderBrush
+            ? _pendingSelectionBorderBrush
             : WindowLabel.Foreground;
+    }
+
+    private static IBrush ResolvePendingSelectionBorderBrush()
+    {
+        if (
+            Application.Current?.TryFindResource(PendingSelectionBorderBrushKey, out object? resource)
+                == true
+            && resource is IBrush brush
+        )
+        {
+            return brush;
+        }
+
+        return DefaultPendingSelectionBorderBrush;
     }
 }

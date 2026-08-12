@@ -24,14 +24,8 @@ public partial class SettingsWindow : Window
         Closing += OnClosing;
     }
 
-    public void RefreshPendingValues()
-    {
-        _viewModel.ResetPendingValues();
-    }
-
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        _viewModel.ResetPendingValues();
         _windowLifecycle.HandleClosing(this, e, hideWhenCanceled: true, hideWhenAllowed: true);
     }
 

@@ -7,10 +7,18 @@
         <SolidColorBrush x:Key="ErrorTextBrush" Color="Tomato" />
         <SolidColorBrush x:Key="FloatingWindowBackgroundBrush" Color="Black" />
         <SolidColorBrush x:Key="FloatingWindowLabelBrush" Color="Fuchsia" />
+        <SolidColorBrush x:Key="PendingSelectionBorderBrush" Color="#FFB900" />
     </Styles.Resources>
-    
+
     <Style Selector="Window">
         <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+    </Style>
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="Height" Value="22" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="8,2" />
     </Style>
 
     <Style Selector="TextBlock.window-section-title">
