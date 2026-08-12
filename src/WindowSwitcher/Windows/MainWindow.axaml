@@ -14,54 +14,43 @@
         Topmost="True"
         Title="WindowSwitcher"
         ClosingBehavior="OwnerAndChildWindows"
-        x:DataType="viewModels:WindowListViewModel">
+        x:DataType="viewModels:MainWindowViewModel">
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
             <MenuItem Header="_Config" Padding="4">
-                <MenuItem Header="_Filters" Click="OpenFiltersWindowClick" />
-                <MenuItem Header="_Keybinds" Click="OpenKeybindsWindowClick" />
-                <MenuItem Header="_Settings" Click="OpenSettingsWindowClick" />
+                <MenuItem Header="_Filters" Command="{Binding OpenFiltersCommand}" />
+                <MenuItem Header="_Keybinds" Command="{Binding OpenKeybindsCommand}" />
+                <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
                 <Separator />
-                <MenuItem x:Name="ResetAllPreviewsMenuItem"
-                          Header="_Reset all previews"
-                          Click="ResetAllPreviewsClick" />
+                <MenuItem Header="_Reset all previews"
+                          Command="{Binding ResetAllPreviewsCommand}"
+                          IsVisible="{Binding CanResetAllPreviews}" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
-                <MenuItem Header="_Open data folder" Click="OpenDataFolderClick"></MenuItem>
-                <MenuItem Header="_Clean config file" Click="ClearFloatingWindowSettings"></MenuItem>
-                <MenuItem Header="_Generate new config file" Click="ResetUserSettings"></MenuItem>
+                <MenuItem Header="_Open data folder" Command="{Binding OpenDataFolderCommand}" />
+                <MenuItem Header="_Clean config file" Command="{Binding ClearConfigCommand}" />
+                <MenuItem Header="_Generate new config file" Command="{Binding ResetConfigCommand}" />
             </MenuItem>
             <MenuItem Header="_Help" Padding="4">
-                <MenuItem Header="_About" Click="OpenAppInfoWindowClick" />
+                <MenuItem Header="_About" Command="{Binding OpenAboutCommand}" />
             </MenuItem>
         </Menu>
         <StackPanel Orientation="Vertical" Margin="8" Spacing="0">
             <ListBox x:Name="WindowsListBox"
-                     ItemsSource="{Binding WindowsConfigs}"
-                     SelectedItem="{Binding SelectedWindow, Mode=TwoWay}">
+                     ItemsSource="{Binding WindowList.WindowsConfigs}"
+                     SelectedItem="{Binding WindowList.SelectedWindow, Mode=TwoWay}">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Border Background="Transparent"
                                 HorizontalAlignment="Stretch">
-                            <Border.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="Add to blacklist" Click="BlacklistMenuItemClick" Tag="{Binding WindowTitle}"></MenuItem>
-                                    <MenuItem Header="Add to temp blacklist" Click="TempBlacklistMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
-                                    <MenuItem Header="Rename window" Click="RenameMenuItemClick" Tag="{Binding WindowId}"></MenuItem>
-                                </ContextMenu>
-                            </Border.ContextMenu>
-                            <TextBlock Text="{Binding ShortWindowTitle}" FontSize="14" />
+                            <TextBlock Text="{Binding ShortWindowTitle}" />
                         </Border>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
                 <ListBox.Styles>
                     <Style Selector="ListBoxItem">
-                        <Setter Property="Height" Value="22" />
-                        <Setter Property="FontSize" Value="14" />
-                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                         <Setter Property="Name"
                                 Value="{Binding WindowId, RelativeSource={RelativeSource AncestorType=models:WindowConfig}}" />
-                        <Setter Property="Padding" Value="8, 2" />
                     </Style>
                 </ListBox.Styles>
             </ListBox>

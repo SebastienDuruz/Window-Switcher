@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         Width="300"
@@ -9,10 +10,12 @@
         Topmost="True"
         SizeToContent="Height"
         x:Class="WindowSwitcher.Windows.FiltersWindow"
-        Title="Filters">
+        Title="Filters"
+        x:DataType="viewModels:FiltersViewModel">
     <TabControl Name="FiltersTabControl"
                 FontSize="13"
-                Padding="0">
+                Padding="0"
+                SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
         <TabControl.Styles>
             <Style Selector="TabItem">
                 <Setter Property="FontSize" Value="13" />
@@ -27,28 +30,20 @@
                   RowSpacing="2">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">
-                    <TextBox Name="WhitelistTextBox"
-                             Grid.Column="0"
+                    <TextBox Grid.Column="0"
                              HorizontalAlignment="Stretch"
-                             KeyDown="WhitelistTextBoxKeyDown" />
-                    <Button Name="WhitelistButton"
-                            Grid.Column="1"
+                             Text="{Binding Whitelist.NewPrefix, Mode=TwoWay}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Command="{Binding Whitelist.AddCommand}" Gesture="Enter" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1"
                             Content="Add"
-                            Click="AddWhitelistClick" />
+                            Command="{Binding Whitelist.AddCommand}" />
                 </Grid>
                 <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0 8 0 0" Spacing="0">
-                    <ListBox Name="WhitelistListBox"
-                             Grid.Row="1"
-                             SelectionChanged="WhitelistListBoxSelectionChanged">
-                        <ListBox.Styles>
-                            <Style Selector="ListBoxItem">
-                                <Setter Property="Height" Value="22" />
-                                <Setter Property="FontSize" Value="14" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="8, 2" />
-                            </Style>
-                        </ListBox.Styles>
-                    </ListBox>
+                    <ListBox ItemsSource="{Binding Whitelist.Prefixes}"
+                             SelectedItem="{Binding Whitelist.SelectedPrefix, Mode=TwoWay}" />
                 </StackPanel>
             </Grid>
         </TabItem>
@@ -58,28 +53,20 @@
                   RowSpacing="2">
                 <Grid ColumnDefinitions="*,Auto"
                       ColumnSpacing="6">
-                    <TextBox Name="BlacklistTextBox"
-                             Grid.Column="0"
+                    <TextBox Grid.Column="0"
                              HorizontalAlignment="Stretch"
-                             KeyDown="BlacklistTextBoxKeyDown" />
-                    <Button Name="BlacklistButton"
-                            Grid.Column="1"
+                             Text="{Binding Blacklist.NewPrefix, Mode=TwoWay}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Command="{Binding Blacklist.AddCommand}" Gesture="Enter" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1"
                             Content="Add"
-                            Click="AddBlacklistClick" />
+                            Command="{Binding Blacklist.AddCommand}" />
                 </Grid>
                 <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0 8 0 0" Spacing="0">
-                    <ListBox Name="BlacklistListBox"
-                             Grid.Row="1"
-                             SelectionChanged="BlacklistListBoxSelectionChanged">
-                        <ListBox.Styles>
-                            <Style Selector="ListBoxItem">
-                                <Setter Property="Height" Value="22" />
-                                <Setter Property="FontSize" Value="14" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="8, 2" />
-                            </Style>
-                        </ListBox.Styles>
-                    </ListBox>
+                    <ListBox ItemsSource="{Binding Blacklist.Prefixes}"
+                             SelectedItem="{Binding Blacklist.SelectedPrefix, Mode=TwoWay}" />
                 </StackPanel>
             </Grid>
         </TabItem>

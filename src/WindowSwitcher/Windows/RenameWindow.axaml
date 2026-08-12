@@ -3,7 +3,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
-        xmlns:windows="clr-namespace:WindowSwitcher.Windows"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
         CanResize="False"
@@ -14,7 +13,7 @@
         Topmost="True"
         x:Class="WindowSwitcher.Windows.RenameWindow"
         Title="Rename window"
-        x:DataType="windows:RenameWindow">
+        x:DataType="viewModels:RenameViewModel">
         <StackPanel Orientation="Vertical"
                     Margin="10"
                     Spacing="8">
@@ -22,10 +21,10 @@
                            Text="Rename window" />
                 <TextBlock Foreground="{StaticResource MutedTextBrush}"
                            Text="Choose the title shown by Window Switcher." />
-                <TextBox Name="WindowTitleTextBox" Text="{Binding NewWindowTitle, Mode=OneWay}"></TextBox>
+                <TextBox Name="WindowTitleTextBox" Text="{Binding WindowTitle, Mode=TwoWay}"></TextBox>
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                        <Button Click="CancelButtonClick">Cancel</Button>
-                        <Button Click="RenameButtonClick">Rename</Button>
+                        <Button Command="{Binding CancelCommand}">Cancel</Button>
+                        <Button Command="{Binding ConfirmCommand}">Rename</Button>
                 </StackPanel>
         </StackPanel>
 </Window>

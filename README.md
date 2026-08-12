@@ -35,10 +35,12 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 ## Compatibility
 
 - ✅ **Windows**
-- ✅ **Linux** (X11 + Wayland)
+- ✅ **Linux** (X11 + Wayland — XWayland windows only on Wayland)
 - ⏳ **macOS** (not implemented)
 
 ## Limitations
+
+- 🪟 **Wayland native windows** are not detected; only XWayland applications (e.g., games via Wine/Proton) are enumerated and switchable
 
 - 🖵 **Fullscreen applications** not supported
 - ⌨️ **Linux global keybinds** require access to `/dev/input/event*` and `/dev/uinput`; previews still work without that access
@@ -47,7 +49,7 @@ Inspired by [**eve-o-preview**](https://github.com/EveOPlus/eve-o-preview), the 
 
 - **Windows:** native DWM thumbnail previews are used in floating windows, and global shortcuts use a low-level keyboard hook.
 - **Linux (X11):** previews are captured via XComposite/XDamage, and window actions use `wmctrl`.
-- **Linux (Wayland):** PipeWire preview is used when dependencies are available.
+- **Linux (Wayland):** PipeWire preview is used when dependencies are available; **window enumeration relies on `wmctrl` and only sees XWayland windows** (native Wayland windows are not detected)
 - **Linux global keybinds:** evdev devices are read and forwarded back through `uinput`, so matching shortcuts can be intercepted without swallowing unrelated typing.
 
 ## Typical workflow
@@ -250,7 +252,7 @@ Prerequisites:
 
 Make sure your system has:
 
-- [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows)
+- [`wmctrl`](https://linux.die.net/man/1/wmctrl) (list/focus/rename windows) — **on Wayland, only detects XWayland windows; native Wayland windows are not visible to `wmctrl`**
 - [`libpipewire-0.3`](https://pipewire.org/) and an XDG Desktop Portal ScreenCast backend (Wayland previews)
 
 Install examples (depends on your distro):

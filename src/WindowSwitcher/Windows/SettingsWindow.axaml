@@ -84,17 +84,5 @@
                                                           IsAlphaVisible="False" />
                         </Grid>
                 </StackPanel>
-                <Border Padding="10 0 0 0"
-                        BorderBrush="{StaticResource SettingsSectionBorderBrush}"
-                        BorderThickness="0,1,0,0">
-                        <StackPanel Orientation="Horizontal"
-                                    HorizontalAlignment="Right"
-                                    Margin="0 8 0 0"
-                                    Spacing="6">
-                                <Button Command="{Binding ApplyCommand}">
-                                        Apply
-                                </Button>
-                        </StackPanel>
-                </Border>
         </StackPanel>
 </Window>

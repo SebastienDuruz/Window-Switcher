@@ -63,13 +63,6 @@
                         <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Height" Value="22" />
-                        <Setter Property="FontSize" Value="14" />
-                        <Setter Property="Padding" Value="8,2" />
-                    </Style>
-                </ListBox.Styles>
             </ListBox>
 
             <TextBlock Grid.Row="2"
@@ -84,13 +77,6 @@
                         <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Height" Value="22" />
-                        <Setter Property="FontSize" Value="14" />
-                        <Setter Property="Padding" Value="8,2" />
-                    </Style>
-                </ListBox.Styles>
             </ListBox>
 
             <Button Grid.Row="4"
@@ -110,11 +96,6 @@
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Padding" Value="8,2" />
-                    </Style>
-                </ListBox.Styles>
             </ListBox>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                 <Button Content="Add shortcut" Command="{Binding BeginCaptureCommand}" />

@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using WindowSwitcher.Lib.Data;
+using WindowSwitcher.ViewModels.Abstractions;
 
 namespace WindowSwitcher.Windows.Services;
 
-internal sealed class PrefixListService
+internal sealed class PrefixListService : IPrefixListService
 {
     private readonly List<string> _prefixes;
     private readonly StaticData.PrefixWindowType _prefixWindowType;
@@ -17,7 +18,7 @@ internal sealed class PrefixListService
         _prefixWindowType = prefixWindowType;
     }
 
-    public IReadOnlyCollection<string> GetPrefixesSnapshot()
+    public IReadOnlyCollection<string> GetPrefixes()
     {
         return _prefixes.ToArray();
     }

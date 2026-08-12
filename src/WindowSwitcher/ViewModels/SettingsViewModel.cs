@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using WindowSwitcher.Lib.Models;
 using WindowSwitcher.ViewModels.Abstractions;
 
@@ -12,8 +11,6 @@ public class SettingsViewModel : ObservableObject
     private readonly ISettingsRepository _settingsRepository;
     private readonly Action _applyAction;
     private readonly Action<string> _applyPreviewHighlightColorAction;
-    private bool _pendingEnablePreviews;
-    public IRelayCommand ApplyCommand { get; }
 
     public SettingsViewModel(
         ISettingsRepository settingsRepository,
@@ -28,30 +25,19 @@ public class SettingsViewModel : ObservableObject
         _settingsRepository = settingsRepository;
         _applyAction = applyAction;
         _applyPreviewHighlightColorAction = applyPreviewHighlightColorAction;
-        _pendingEnablePreviews = _settingsRepository.Read(config => config.EnablePreviews);
-        ApplyCommand = new RelayCommand(Apply);
     }
 
     public bool EnablePreviews
     {
-        get => _pendingEnablePreviews;
-        set
-        {
-            if (_pendingEnablePreviews == value)
-                return;
-            _pendingEnablePreviews = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public void ResetPendingValues()
-    {
-        bool configuredValue = _settingsRepository.Read(config => config.EnablePreviews);
-        if (_pendingEnablePreviews == configuredValue)
-            return;
-
-        _pendingEnablePreviews = configuredValue;
-        OnPropertyChanged(nameof(EnablePreviews));
+        get => ReadSetting(config => config.EnablePreviews);
+        set =>
+            UpdateSetting(
+                nameof(EnablePreviews),
+                value,
+                config => config.EnablePreviews,
+                (config, currentValue) => config.EnablePreviews = currentValue,
+                applyToWindows: true
+            );
     }
 
     public bool StartMinimized
@@ -74,7 +60,8 @@ public class SettingsViewModel : ObservableObject
                 nameof(ResizeWindows),
                 value,
                 config => config.ResizeWindows,
-                (config, currentValue) => config.ResizeWindows = currentValue
+                (config, currentValue) => config.ResizeWindows = currentValue,
+                applyToWindows: true
             );
     }
 
@@ -113,7 +100,8 @@ public class SettingsViewModel : ObservableObject
                 nameof(UseFixedWindowSize),
                 value,
                 config => config.UseFixedWindowSize,
-                (config, currentValue) => config.UseFixedWindowSize = currentValue
+                (config, currentValue) => config.UseFixedWindowSize = currentValue,
+                applyToWindows: true
             );
             if (updated)
                 OnPropertyChanged(nameof(CanEditResizeWindows));
@@ -128,7 +116,8 @@ public class SettingsViewModel : ObservableObject
                 nameof(WindowWidth),
                 value,
                 config => config.WindowWidth,
-                (config, currentValue) => config.WindowWidth = currentValue
+                (config, currentValue) => config.WindowWidth = currentValue,
+                applyToWindows: true
             );
     }
 
@@ -140,7 +129,8 @@ public class SettingsViewModel : ObservableObject
                 nameof(WindowHeight),
                 value,
                 config => config.WindowHeight,
-                (config, currentValue) => config.WindowHeight = currentValue
+                (config, currentValue) => config.WindowHeight = currentValue,
+                applyToWindows: true
             );
     }
 
@@ -172,15 +162,10 @@ public class SettingsViewModel : ObservableObject
             if (updated)
             {
                 _applyPreviewHighlightColorAction(configValue);
+                _applyAction();
                 OnPropertyChanged();
             }
         }
-    }
-
-    private void Apply()
-    {
-        _settingsRepository.Update(config => config.EnablePreviews = _pendingEnablePreviews);
-        _applyAction();
     }
 
     private T ReadSetting<T>(Func<ConfigFile, T> selector)
@@ -192,7 +177,8 @@ public class SettingsViewModel : ObservableObject
         string propertyName,
         T newValue,
         Func<ConfigFile, T> selector,
-        Action<ConfigFile, T> updater
+        Action<ConfigFile, T> updater,
+        bool applyToWindows = false
     )
     {
         bool updated = false;
@@ -206,7 +192,11 @@ public class SettingsViewModel : ObservableObject
         });
 
         if (updated)
+        {
             OnPropertyChanged(propertyName);
+            if (applyToWindows)
+                _applyAction();
+        }
 
         return updated;
     }
