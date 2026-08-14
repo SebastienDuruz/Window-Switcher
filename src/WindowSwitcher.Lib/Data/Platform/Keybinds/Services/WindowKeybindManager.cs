@@ -114,7 +114,9 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
         KeyCombination normalizedCombination = KeyCombinationParser.Normalize(combination);
         string normalizedDisplayLabel = KeybindCatalogBuilder.NormalizeDisplayLabel(displayLabel);
 
-        KeybindShortcutAddResult result = KeybindShortcutAddResult.Invalid("The shortcut is invalid.");
+        KeybindShortcutAddResult result = KeybindShortcutAddResult.Invalid(
+            "The shortcut is invalid."
+        );
 
         _configAccessor.UpdateConfig(config =>
         {
@@ -129,7 +131,9 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             if (
                 target.Shortcuts.Any(shortcut =>
                     KeyCombinationParser.IsValid(shortcut.Combination)
-                    && KeyCombinationParser.Normalize(shortcut.Combination).Equals(normalizedCombination)
+                    && KeyCombinationParser
+                        .Normalize(shortcut.Combination)
+                        .Equals(normalizedCombination)
                 )
             )
             {
@@ -143,7 +147,10 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             WindowKeybindTargetConfig? conflictTarget =
                 catalog.TryResolveTarget(normalizedCombination, out string conflictTargetId)
                 && !string.Equals(conflictTargetId, targetId, StringComparison.Ordinal)
-                && catalog.TryGetTarget(conflictTargetId, out WindowKeybindTargetConfig? resolvedTarget)
+                && catalog.TryGetTarget(
+                    conflictTargetId,
+                    out WindowKeybindTargetConfig? resolvedTarget
+                )
                     ? resolvedTarget
                     : null;
 
@@ -158,12 +165,7 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
                 return;
             }
 
-            target.Shortcuts.Add(
-                new WindowKeybindShortcut
-                {
-                    Combination = normalizedCombination,
-                }
-            );
+            target.Shortcuts.Add(new WindowKeybindShortcut { Combination = normalizedCombination });
             result = KeybindShortcutAddResult.Added();
         });
 
@@ -195,12 +197,13 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
             if (target is null)
                 return;
 
-            removed = target.Shortcuts.RemoveAll(shortcut =>
+            removed =
+                target.Shortcuts.RemoveAll(shortcut =>
                     KeyCombinationParser.IsValid(shortcut.Combination)
-                    && KeyCombinationParser.Normalize(shortcut.Combination)
+                    && KeyCombinationParser
+                        .Normalize(shortcut.Combination)
                         .Equals(normalizedCombination)
-                )
-                > 0;
+                ) > 0;
 
             if (target.Shortcuts.Count == 0)
                 config.WindowKeybindTargets.Remove(target);
@@ -263,7 +266,8 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
     }
 
     private static WindowKeybindTargetConfig[] CloneTargets(
-        IEnumerable<WindowKeybindTargetConfig>? targets)
+        IEnumerable<WindowKeybindTargetConfig>? targets
+    )
     {
         return BuildCatalog(targets).Targets.Select(KeybindCatalogBuilder.CloneTarget).ToArray();
     }
@@ -276,7 +280,8 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
 
     private static WindowKeybindTargetConfig? FindTarget(
         IEnumerable<WindowKeybindTargetConfig> targets,
-        string targetId)
+        string targetId
+    )
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(targetId);

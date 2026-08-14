@@ -7,7 +7,11 @@ internal static class GlobalKeyboardEventMapper
     private const string LinuxPlatform = "Linux";
     private const string WindowsPlatform = "Windows";
 
-    public static GlobalKeyEventArgs FromLinux(KeyEvent keyEvent, GlobalKeyState state, bool isRepeat)
+    public static GlobalKeyEventArgs FromLinux(
+        KeyEvent keyEvent,
+        GlobalKeyState state,
+        bool isRepeat
+    )
     {
         ArgumentNullException.ThrowIfNull(keyEvent);
 
@@ -27,7 +31,8 @@ internal static class GlobalKeyboardEventMapper
         uint virtualKeyCode,
         string? keyName,
         GlobalKeyState state,
-        bool isRepeat)
+        bool isRepeat
+    )
     {
         return new GlobalKeyEventArgs
         {

@@ -125,7 +125,10 @@ internal static class GlobalKeyEventKeyResolver
         );
     }
 
-    private static bool TryResolveWindowsPrimaryKey(int virtualKeyCode, out KeybindPrimaryKey primaryKey)
+    private static bool TryResolveWindowsPrimaryKey(
+        int virtualKeyCode,
+        out KeybindPrimaryKey primaryKey
+    )
     {
         if (virtualKeyCode is >= 0x41 and <= 0x5A)
         {
@@ -147,8 +150,9 @@ internal static class GlobalKeyEventKeyResolver
 
         if (virtualKeyCode is >= 0x60 and <= 0x69)
         {
-            primaryKey =
-                (KeybindPrimaryKey)((int)KeybindPrimaryKey.NumPad0 + (virtualKeyCode - 0x60));
+            primaryKey = (KeybindPrimaryKey)(
+                (int)KeybindPrimaryKey.NumPad0 + (virtualKeyCode - 0x60)
+            );
             return true;
         }
 

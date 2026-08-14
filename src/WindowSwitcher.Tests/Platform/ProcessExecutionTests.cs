@@ -12,10 +12,7 @@ public sealed class ProcessExecutionTests
     {
         using Process process = CreateShellProcess(WriteToStdoutCommand("hello"));
 
-        CommandResult result = await ProcessExecution.RunAsync(
-            process,
-            TimeSpan.FromSeconds(2)
-        );
+        CommandResult result = await ProcessExecution.RunAsync(process, TimeSpan.FromSeconds(2));
 
         Assert.True(result.IsSuccess);
         Assert.False(result.TimedOut);
@@ -53,10 +50,7 @@ public sealed class ProcessExecutionTests
     {
         using Process process = CreateShellProcess(FailWithStdErrorCommand("boom", exitCode: 7));
 
-        CommandResult result = await ProcessExecution.RunAsync(
-            process,
-            TimeSpan.FromSeconds(2)
-        );
+        CommandResult result = await ProcessExecution.RunAsync(process, TimeSpan.FromSeconds(2));
 
         Assert.False(result.IsSuccess);
         Assert.False(result.TimedOut);
@@ -92,9 +86,7 @@ public sealed class ProcessExecutionTests
 
     private static string WriteToStdoutCommand(string value)
     {
-        return OperatingSystem.IsWindows()
-            ? $"echo {value}"
-            : $"printf '%s' '{value}'";
+        return OperatingSystem.IsWindows() ? $"echo {value}" : $"printf '%s' '{value}'";
     }
 
     private static string GetSleepCommand(int seconds)

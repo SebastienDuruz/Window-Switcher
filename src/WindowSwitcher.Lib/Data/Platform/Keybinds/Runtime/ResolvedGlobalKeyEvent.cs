@@ -6,4 +6,5 @@ internal readonly record struct ResolvedGlobalKeyEvent(
     GlobalKeyState State,
     bool IsRepeat,
     KeybindModifier? Modifier,
-    KeybindPrimaryKey PrimaryKey);
+    KeybindPrimaryKey PrimaryKey
+);

@@ -53,7 +53,9 @@ public sealed class LinuxPreviewFrameProviderFactory(
                 ? new X11PreviewFrameProvider(accessorBase)
                 : new NoOpPreviewFrameProvider();
 
-        if (!LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies, _supportsPipeWire))
+        if (
+            !LinuxPreviewDependencyEvaluator.SupportsPipeWire(_linuxDependencies, _supportsPipeWire)
+        )
             return new NoOpPreviewFrameProvider();
 
         return new PipeWireFrameProvider(accessorBase);

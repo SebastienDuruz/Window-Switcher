@@ -274,7 +274,9 @@ public static class KeyCombinationParser
         {
             if (normalizedTokenUpper.Length == 2 && normalizedTokenUpper[1] is >= '0' and <= '9')
             {
-                key = (KeybindPrimaryKey)((int)KeybindPrimaryKey.D0 + (normalizedTokenUpper[1] - '0'));
+                key = (KeybindPrimaryKey)(
+                    (int)KeybindPrimaryKey.D0 + (normalizedTokenUpper[1] - '0')
+                );
                 return true;
             }
         }
@@ -283,7 +285,9 @@ public static class KeyCombinationParser
         {
             if (normalizedTokenUpper.Length == 6 && normalizedTokenUpper[5] is >= '0' and <= '9')
             {
-                key = (KeybindPrimaryKey)((int)KeybindPrimaryKey.D0 + (normalizedTokenUpper[5] - '0'));
+                key = (KeybindPrimaryKey)(
+                    (int)KeybindPrimaryKey.D0 + (normalizedTokenUpper[5] - '0')
+                );
                 return true;
             }
         }
@@ -394,8 +398,7 @@ public static class KeyCombinationParser
                     Enum.TryParse(condensedToken, ignoreCase: true, out key)
                     && Enum.IsDefined(key)
                     && key != KeybindPrimaryKey.None
-                )
-                || PrimaryKeyAliases.TryGetValue(condensedToken, out key)
+                ) || PrimaryKeyAliases.TryGetValue(condensedToken, out key)
             )
         )
             return true;

@@ -18,5 +18,5 @@ public enum DeviceKind
     /// <summary>
     /// Device does not match keyboard or mouse heuristics.
     /// </summary>
-    Other
+    Other,
 }

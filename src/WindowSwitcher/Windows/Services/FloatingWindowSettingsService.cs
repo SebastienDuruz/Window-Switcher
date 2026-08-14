@@ -15,10 +15,7 @@ internal interface IFloatingWindowSettingsService
     void Save(WindowConfig windowConfig);
 }
 
-internal sealed record FloatingWindowBehaviorSettings(
-    bool MoveWindows,
-    bool FocusOnHover
-);
+internal sealed record FloatingWindowBehaviorSettings(bool MoveWindows, bool FocusOnHover);
 
 internal sealed record FloatingWindowAppearanceSettings(
     bool ResizeWindows,
@@ -39,22 +36,25 @@ internal sealed class ConfigFileFloatingWindowSettingsService : IFloatingWindowS
 
     public FloatingWindowBehaviorSettings GetBehaviorSettings()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            new FloatingWindowBehaviorSettings(config.MoveWindows, config.FocusOnHover)
-        );
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new FloatingWindowBehaviorSettings(
+                config.MoveWindows,
+                config.FocusOnHover
+            ));
     }
 
     public FloatingWindowAppearanceSettings GetAppearanceSettings()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            new FloatingWindowAppearanceSettings(
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new FloatingWindowAppearanceSettings(
                 config.ResizeWindows,
                 config.UseFixedWindowSize,
                 config.WindowWidth,
                 config.WindowHeight,
                 config.PreviewHighlightColor
-            )
-        );
+            ));
     }
 
     public void Save(WindowConfig windowConfig)

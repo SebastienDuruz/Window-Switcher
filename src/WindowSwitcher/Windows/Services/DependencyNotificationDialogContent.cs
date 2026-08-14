@@ -22,7 +22,10 @@ internal static class DependencyNotificationDialogContent
             .ToArray();
 
         if (orderedDependencies.Length == 0)
-            throw new ArgumentException("At least one dependency is required.", nameof(dependencies));
+            throw new ArgumentException(
+                "At least one dependency is required.",
+                nameof(dependencies)
+            );
 
         string label = orderedDependencies.Length == 1 ? "dependency" : "dependencies";
         string installInstruction =

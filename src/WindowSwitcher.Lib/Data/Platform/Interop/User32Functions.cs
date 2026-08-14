@@ -76,10 +76,7 @@ public static class User32Functions
     internal static extern IntPtr GetWindow(IntPtr windowHandle, uint command);
 
     [DllImport("user32.dll", SetLastError = true)]
-    internal static extern uint GetWindowThreadProcessId(
-        IntPtr windowHandle,
-        out uint processId
-    );
+    internal static extern uint GetWindowThreadProcessId(IntPtr windowHandle, out uint processId);
 
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern int GetWindowTextLength(IntPtr windowHandle);

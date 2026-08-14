@@ -43,7 +43,8 @@ public sealed record InputDeviceCapabilities
         IEnumerable<ushort>? eventTypes = null,
         IEnumerable<ushort>? keyCodes = null,
         IEnumerable<ushort>? relativeAxes = null,
-        IEnumerable<ushort>? absoluteAxes = null)
+        IEnumerable<ushort>? absoluteAxes = null
+    )
     {
         // Frozen sets avoid accidental mutation and provide efficient repeated lookups.
         EventTypes = (eventTypes ?? []).ToFrozenSet();

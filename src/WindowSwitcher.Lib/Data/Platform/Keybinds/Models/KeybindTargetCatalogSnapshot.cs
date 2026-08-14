@@ -10,7 +10,8 @@ public sealed class KeybindTargetCatalogSnapshot
     /// </summary>
     public KeybindTargetCatalogSnapshot(
         IReadOnlyList<KeybindTargetDescriptor> actionTargets,
-        IReadOnlyList<KeybindTargetDescriptor> clientTargets)
+        IReadOnlyList<KeybindTargetDescriptor> clientTargets
+    )
     {
         ArgumentNullException.ThrowIfNull(actionTargets);
         ArgumentNullException.ThrowIfNull(clientTargets);

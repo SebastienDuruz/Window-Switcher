@@ -48,7 +48,8 @@ public abstract class CommandBase(string command)
     {
         using Process process = CreateProcess();
         process.StartInfo.Arguments = arguments;
-        return await ExecuteProcessAsync(process, timeoutMs, cancellationToken).ConfigureAwait(false);
+        return await ExecuteProcessAsync(process, timeoutMs, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     protected async Task<string> ExecuteWithArgumentListAsync(
@@ -63,7 +64,8 @@ public abstract class CommandBase(string command)
         foreach (string argument in arguments)
             process.StartInfo.ArgumentList.Add(argument);
 
-        return await ExecuteProcessAsync(process, timeoutMs, cancellationToken).ConfigureAwait(false);
+        return await ExecuteProcessAsync(process, timeoutMs, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static string ExecuteProcess(Process process, int timeoutMs)

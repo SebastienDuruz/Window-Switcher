@@ -64,21 +64,13 @@ internal static class X11FrameConverter
 
         if (image.BitsPerPixel is 24 or 32 && image.ByteOrder == X11Native.LsbFirst)
         {
-            masks = new ColorMasks(
-                Red: 0x00ff0000,
-                Green: 0x0000ff00,
-                Blue: 0x000000ff
-            );
+            masks = new ColorMasks(Red: 0x00ff0000, Green: 0x0000ff00, Blue: 0x000000ff);
             return true;
         }
 
         if (image.BitsPerPixel is 24 or 32)
         {
-            masks = new ColorMasks(
-                Red: 0x000000ff,
-                Green: 0x0000ff00,
-                Blue: 0x00ff0000
-            );
+            masks = new ColorMasks(Red: 0x000000ff, Green: 0x0000ff00, Blue: 0x00ff0000);
             return true;
         }
 

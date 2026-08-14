@@ -21,51 +21,56 @@ public sealed class WindowKeybindTargetCatalogServiceTests
             var manager = new WindowKeybindManager(accessor);
             var service = new WindowKeybindTargetCatalogService(manager);
 
-            accessor.SaveWindowKeybindTargets(
-                [
-                    new WindowKeybindTargetConfig
-                    {
-                        TargetId = KeybindBuiltInTargets.NextClientTargetId,
-                        DisplayLabel = "Next focus",
-                        Shortcuts = [],
-                    },
-                    new WindowKeybindTargetConfig
-                    {
-                        TargetId = "proc|persisted",
-                        DisplayLabel = "Persisted Window",
-                        Shortcuts = [],
-                    },
-                ]
-            );
+            accessor.SaveWindowKeybindTargets([
+                new WindowKeybindTargetConfig
+                {
+                    TargetId = KeybindBuiltInTargets.NextClientTargetId,
+                    DisplayLabel = "Next focus",
+                    Shortcuts = [],
+                },
+                new WindowKeybindTargetConfig
+                {
+                    TargetId = "proc|persisted",
+                    DisplayLabel = "Persisted Window",
+                    Shortcuts = [],
+                },
+            ]);
 
-            KeybindTargetCatalogSnapshot snapshot = service.GetTargets(
-                [
-                    new WindowConfig
-                    {
-                        WindowId = "w-1",
-                        ProcessName = "proc",
-                        WindowTitle = "Editor",
-                    },
-                ]
-            );
+            KeybindTargetCatalogSnapshot snapshot = service.GetTargets([
+                new WindowConfig
+                {
+                    WindowId = "w-1",
+                    ProcessName = "proc",
+                    WindowTitle = "Editor",
+                },
+            ]);
 
-            Assert.Contains(snapshot.ActionTargets, target =>
-                target.TargetId == KeybindBuiltInTargets.NextClientTargetId
-                && target.DisplayName == "Next focus"
+            Assert.Contains(
+                snapshot.ActionTargets,
+                target =>
+                    target.TargetId == KeybindBuiltInTargets.NextClientTargetId
+                    && target.DisplayName == "Next focus"
             );
-            Assert.Contains(snapshot.ActionTargets, target =>
-                target.TargetId == KeybindBuiltInTargets.PreviousClientTargetId
+            Assert.Contains(
+                snapshot.ActionTargets,
+                target => target.TargetId == KeybindBuiltInTargets.PreviousClientTargetId
             );
-            Assert.Contains(snapshot.ActionTargets, target =>
-                target.TargetId == KeybindBuiltInTargets.FocusActiveClientTargetId
-                && target.DisplayName == KeybindBuiltInTargets.FocusActiveClientDisplayName
+            Assert.Contains(
+                snapshot.ActionTargets,
+                target =>
+                    target.TargetId == KeybindBuiltInTargets.FocusActiveClientTargetId
+                    && target.DisplayName == KeybindBuiltInTargets.FocusActiveClientDisplayName
             );
-            Assert.Contains(snapshot.ClientTargets, target =>
-                target.TargetId == WindowTargetKeyFactory.Create("proc", "Editor")
-                && target.DisplayName == "Editor (proc)"
+            Assert.Contains(
+                snapshot.ClientTargets,
+                target =>
+                    target.TargetId == WindowTargetKeyFactory.Create("proc", "Editor")
+                    && target.DisplayName == "Editor (proc)"
             );
-            Assert.Contains(snapshot.ClientTargets, target =>
-                target.TargetId == "proc|persisted" && target.DisplayName == "Persisted Window"
+            Assert.Contains(
+                snapshot.ClientTargets,
+                target =>
+                    target.TargetId == "proc|persisted" && target.DisplayName == "Persisted Window"
             );
         }
         finally

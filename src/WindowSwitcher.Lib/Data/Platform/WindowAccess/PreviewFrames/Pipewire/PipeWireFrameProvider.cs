@@ -121,11 +121,7 @@ public sealed class PipeWireFrameProvider
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            CaptureContext? capture = await EnsureCaptureAsync(
-                    windowId,
-                    request,
-                    cancellationToken
-                )
+            CaptureContext? capture = await EnsureCaptureAsync(windowId, request, cancellationToken)
                 .ConfigureAwait(false);
             if (capture is null)
                 yield break;
@@ -195,9 +191,7 @@ public sealed class PipeWireFrameProvider
         if (string.IsNullOrWhiteSpace(windowId))
             return;
 
-        _restoreTokenCache.ClearRestoreToken(
-            [$"window:{windowId.Trim().ToLowerInvariant()}"]
-        );
+        _restoreTokenCache.ClearRestoreToken([$"window:{windowId.Trim().ToLowerInvariant()}"]);
         ForgetWindow(windowId);
     }
 
@@ -209,8 +203,8 @@ public sealed class PipeWireFrameProvider
         {
             if (_disposed)
                 return;
-            windowIds = _captures.Keys
-                .Concat(_creationTasks.Keys)
+            windowIds = _captures
+                .Keys.Concat(_creationTasks.Keys)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
@@ -427,7 +421,8 @@ public sealed class PipeWireFrameProvider
         bool removed;
         lock (_capturesSync)
         {
-            removed = _captures.TryGetValue(windowId, out CaptureContext? current)
+            removed =
+                _captures.TryGetValue(windowId, out CaptureContext? current)
                 && ReferenceEquals(current, capture)
                 && _captures.Remove(windowId);
             if (removed)
@@ -485,7 +480,9 @@ public sealed class PipeWireFrameProvider
     {
         try
         {
-            await _portalClient.CloseAsync(sessionPath, CancellationToken.None).ConfigureAwait(false);
+            await _portalClient
+                .CloseAsync(sessionPath, CancellationToken.None)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -515,8 +512,39 @@ public sealed class PipeWireFrameProvider
             );
             if (selected is not null)
             {
-                Add($"process_title:{selected.ProcessName}|{selected.WindowTitle}");
-                Add($"title:{selected.WindowTitle}");
+                string normalizedTitle = NormalizeRestoreIdentityPart(selected.WindowTitle);
+                string normalizedProcess = NormalizeRestoreIdentityPart(selected.ProcessName);
+
+                if (!string.IsNullOrWhiteSpace(normalizedTitle))
+                {
+                    int matchingTitleCount = windows.Count(window =>
+                        string.Equals(
+                            NormalizeRestoreIdentityPart(window.WindowTitle),
+                            normalizedTitle,
+                            StringComparison.Ordinal
+                        )
+                    );
+                    if (matchingTitleCount == 1)
+                        Add($"title:{normalizedTitle}");
+
+                    if (!string.IsNullOrWhiteSpace(normalizedProcess))
+                    {
+                        int matchingProcessTitleCount = windows.Count(window =>
+                            string.Equals(
+                                NormalizeRestoreIdentityPart(window.WindowTitle),
+                                normalizedTitle,
+                                StringComparison.Ordinal
+                            )
+                            && string.Equals(
+                                NormalizeRestoreIdentityPart(window.ProcessName),
+                                normalizedProcess,
+                                StringComparison.Ordinal
+                            )
+                        );
+                        if (matchingProcessTitleCount == 1)
+                            Add($"process_title:{normalizedProcess}|{normalizedTitle}");
+                    }
+                }
             }
         }
         catch (Exception exception)
@@ -526,6 +554,11 @@ public sealed class PipeWireFrameProvider
 
         Add($"window:{windowId}");
         return keys;
+    }
+
+    private static string NormalizeRestoreIdentityPart(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
     }
 
     private static int GetWidth(ScreenshotRequest request)
@@ -687,8 +720,7 @@ internal interface IPipeWirePortalClient : IDisposable
     Task CloseAsync(string sessionPath, CancellationToken cancellationToken);
 }
 
-internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
-    : IPipeWirePortalClient
+internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics) : IPipeWirePortalClient
 {
     private const string Destination = "org.freedesktop.portal.Desktop";
     private static readonly ObjectPath DesktopPath = new("/org/freedesktop/portal/desktop");
@@ -702,7 +734,8 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
         CancellationToken cancellationToken
     )
     {
-        Connection? connection = await EnsureConnectionAsync(cancellationToken).ConfigureAwait(false);
+        Connection? connection = await EnsureConnectionAsync(cancellationToken)
+            .ConfigureAwait(false);
         if (connection is null)
             return null;
         diagnostics.Information("portal session bus connected");
@@ -736,7 +769,8 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
                 return null;
             diagnostics.Information("portal session created");
 
-            sessionPath = ExtractObjectPath(create.Value.Results, "session_handle")
+            sessionPath =
+                ExtractObjectPath(create.Value.Results, "session_handle")
                 ?? BuildSessionPath(sessionToken);
             if (string.IsNullOrWhiteSpace(sessionPath))
                 return null;
@@ -845,7 +879,9 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
                 Destination,
                 new ObjectPath(sessionPath)
             );
-            await session.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
+            await session
+                .CloseAsync()
+                .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
@@ -921,13 +957,17 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
         ObjectPath actualPath = await invoke()
             .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken)
             .ConfigureAwait(false);
-        if (!string.Equals(actualPath.ToString(), expectedPath.ToString(), StringComparison.Ordinal))
+        if (
+            !string.Equals(actualPath.ToString(), expectedPath.ToString(), StringComparison.Ordinal)
+        )
             return await WaitForResponseAsync(connection, actualPath, timeout, cancellationToken)
                 .ConfigureAwait(false);
 
         try
         {
-            return await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return await completion
+                .Task.WaitAsync(timeout, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -961,7 +1001,9 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
             .ConfigureAwait(false);
         try
         {
-            return await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            return await completion
+                .Task.WaitAsync(timeout, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -973,7 +1015,8 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
     {
         string localName;
         lock (_syncRoot)
-            localName = _localName ?? throw new InvalidOperationException("D-Bus name unavailable.");
+            localName =
+                _localName ?? throw new InvalidOperationException("D-Bus name unavailable.");
         string sender = localName.TrimStart(':').Replace('.', '_');
         return new ObjectPath($"/org/freedesktop/portal/desktop/request/{sender}/{handleToken}");
     }
@@ -989,10 +1032,7 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
         return $"/org/freedesktop/portal/desktop/session/{sender}/{sessionToken}";
     }
 
-    private static string? ExtractObjectPath(
-        IDictionary<string, object> results,
-        string key
-    )
+    private static string? ExtractObjectPath(IDictionary<string, object> results, string key)
     {
         if (!results.TryGetValue(key, out object? value))
             return null;
@@ -1127,8 +1167,5 @@ internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics)
         connection?.Dispose();
     }
 
-    private readonly record struct PortalResponse(
-        uint Code,
-        IDictionary<string, object> Results
-    );
+    private readonly record struct PortalResponse(uint Code, IDictionary<string, object> Results);
 }

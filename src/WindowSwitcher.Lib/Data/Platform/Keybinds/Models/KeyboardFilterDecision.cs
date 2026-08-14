@@ -8,7 +8,9 @@ public sealed class KeyboardFilterDecision
     private static readonly KeyboardFilterDecision ForwardDecision = new(
         KeyboardEventRouting.Forward
     );
-    private static readonly KeyboardFilterDecision BufferDecision = new(KeyboardEventRouting.Buffer);
+    private static readonly KeyboardFilterDecision BufferDecision = new(
+        KeyboardEventRouting.Buffer
+    );
     private static readonly KeyboardFilterDecision ConsumeDecision = new(
         KeyboardEventRouting.Consume
     );
@@ -19,7 +21,8 @@ public sealed class KeyboardFilterDecision
         bool forwardCurrentEventViaForwarder = false,
         bool discardBufferedEvents = false,
         KeyCombination? matchedCombination = null,
-        string? matchedTargetId = null)
+        string? matchedTargetId = null
+    )
     {
         Routing = routing;
         FlushBufferedEvents = flushBufferedEvents;
@@ -64,7 +67,8 @@ public sealed class KeyboardFilterDecision
     /// </summary>
     public static KeyboardFilterDecision Forward(
         bool flushBufferedEvents = false,
-        bool forwardCurrentEventViaForwarder = false)
+        bool forwardCurrentEventViaForwarder = false
+    )
     {
         if (!flushBufferedEvents && !forwardCurrentEventViaForwarder)
             return ForwardDecision;
@@ -90,9 +94,14 @@ public sealed class KeyboardFilterDecision
     public static KeyboardFilterDecision Consume(
         bool discardBufferedEvents = false,
         KeyCombination? matchedCombination = null,
-        string? matchedTargetId = null)
+        string? matchedTargetId = null
+    )
     {
-        if (!discardBufferedEvents && matchedCombination is null && string.IsNullOrWhiteSpace(matchedTargetId))
+        if (
+            !discardBufferedEvents
+            && matchedCombination is null
+            && string.IsNullOrWhiteSpace(matchedTargetId)
+        )
             return ConsumeDecision;
 
         return new KeyboardFilterDecision(

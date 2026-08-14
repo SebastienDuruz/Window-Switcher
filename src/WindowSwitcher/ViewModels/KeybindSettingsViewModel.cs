@@ -150,8 +150,12 @@ public partial class KeybindSettingsViewModel : ObservableObject
             _selectedClientsProvider()
         );
 
-        ActionTargets = new ObservableCollection<KeybindTargetDescriptor>(targetCatalog.ActionTargets);
-        ClientTargets = new ObservableCollection<KeybindTargetDescriptor>(targetCatalog.ClientTargets);
+        ActionTargets = new ObservableCollection<KeybindTargetDescriptor>(
+            targetCatalog.ActionTargets
+        );
+        ClientTargets = new ObservableCollection<KeybindTargetDescriptor>(
+            targetCatalog.ClientTargets
+        );
 
         SelectTargetById(previousTargetId);
     }

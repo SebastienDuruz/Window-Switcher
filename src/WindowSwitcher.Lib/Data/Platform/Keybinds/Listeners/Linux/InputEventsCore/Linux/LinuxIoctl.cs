@@ -52,7 +52,8 @@ internal static class LinuxIoctl
     /// <summary>
     /// Builds <c>EVIOCGBIT(eventType, len)</c>.
     /// </summary>
-    public static ulong EviocgBit(int eventType, int length) => Ior(EvdevType, 0x20 + eventType, length);
+    public static ulong EviocgBit(int eventType, int length) =>
+        Ior(EvdevType, 0x20 + eventType, length);
 
     /// <summary>
     /// <c>UI_DEV_CREATE</c> request code.
@@ -67,11 +68,7 @@ internal static class LinuxIoctl
     /// <summary>
     /// <c>UI_DEV_SETUP</c> request code.
     /// </summary>
-    public static ulong UiDevSetup { get; } = Iow(
-        UinputType,
-        3,
-        NativeInputEventSize.UinputSetup
-    );
+    public static ulong UiDevSetup { get; } = Iow(UinputType, 3, NativeInputEventSize.UinputSetup);
 
     /// <summary>
     /// <c>UI_SET_EVBIT</c> request code.
@@ -144,7 +141,9 @@ internal static class LinuxIoctl
 
     private static class NativeInputEventSize
     {
-        public static readonly int InputId = System.Runtime.InteropServices.Marshal.SizeOf<NativeInputId>();
-        public static readonly int UinputSetup = System.Runtime.InteropServices.Marshal.SizeOf<NativeUinputSetup>();
+        public static readonly int InputId =
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeInputId>();
+        public static readonly int UinputSetup =
+            System.Runtime.InteropServices.Marshal.SizeOf<NativeUinputSetup>();
     }
 }

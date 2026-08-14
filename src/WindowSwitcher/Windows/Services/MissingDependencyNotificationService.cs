@@ -70,10 +70,13 @@ internal sealed class MissingDependencyNotificationService : IDisposable
             _dialog = CreateDialog();
 
         Window dialog =
-            _dialog ?? throw new InvalidOperationException("The dependency dialog was not created.");
+            _dialog
+            ?? throw new InvalidOperationException("The dependency dialog was not created.");
         TextBlock textBlock =
             _textBlock
-            ?? throw new InvalidOperationException("The dependency dialog content was not created.");
+            ?? throw new InvalidOperationException(
+                "The dependency dialog content was not created."
+            );
 
         dialog.Title = DependencyNotificationDialogContent.CreateTitle(_missingDependencies.Count);
         textBlock.Text = DependencyNotificationDialogContent.CreateMessage(_missingDependencies);

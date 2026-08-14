@@ -26,7 +26,11 @@ public sealed class KeybindSettingsViewModelTests
 
         Assert.True(sut.ShowGlobalKeyboardSetupBanner);
         Assert.Equal("Linux input access required", sut.GlobalKeyboardSetupTitle);
-        Assert.Contains("/dev/input/event*", sut.GlobalKeyboardSetupMessage, StringComparison.Ordinal);
+        Assert.Contains(
+            "/dev/input/event*",
+            sut.GlobalKeyboardSetupMessage,
+            StringComparison.Ordinal
+        );
         Assert.Equal("sudo usermod -aG input \"$USER\"", sut.GlobalKeyboardSetupCommand);
         Assert.True(sut.ShowGlobalKeyboardSetupCommand);
         Assert.Contains("Sign out", sut.GlobalKeyboardSetupGuidance, StringComparison.Ordinal);
@@ -60,13 +64,7 @@ public sealed class KeybindSettingsViewModelTests
             keybindManager,
             new FakeWindowKeybindTargetCatalogService(
                 new KeybindTargetCatalogSnapshot(
-                    [
-                        new KeybindTargetDescriptor(
-                            "show-next",
-                            "Show next",
-                            isBuiltIn: true
-                        ),
-                    ],
+                    [new KeybindTargetDescriptor("show-next", "Show next", isBuiltIn: true)],
                     []
                 )
             ),
@@ -79,11 +77,7 @@ public sealed class KeybindSettingsViewModelTests
 
         bool handled = sut.TryCaptureKey(
             KeybindCaptureResult.Success(
-                new KeyCombination
-                {
-                    Ctrl = true,
-                    Key = KeybindPrimaryKey.A,
-                }
+                new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.A }
             )
         );
         sut.ConfirmCaptureCommand.Execute(null);
@@ -142,10 +136,12 @@ public sealed class KeybindSettingsViewModelTests
     }
 
     private sealed class FakeWindowKeybindTargetCatalogService(
-        KeybindTargetCatalogSnapshot? snapshot = null)
-        : IWindowKeybindTargetCatalogService
+        KeybindTargetCatalogSnapshot? snapshot = null
+    ) : IWindowKeybindTargetCatalogService
     {
-        public KeybindTargetCatalogSnapshot GetTargets(IReadOnlyCollection<WindowConfig> runtimeWindows)
+        public KeybindTargetCatalogSnapshot GetTargets(
+            IReadOnlyCollection<WindowConfig> runtimeWindows
+        )
         {
             return snapshot ?? new KeybindTargetCatalogSnapshot([], []);
         }

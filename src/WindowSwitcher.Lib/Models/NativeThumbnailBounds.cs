@@ -7,9 +7,4 @@ namespace WindowSwitcher.Lib.Models;
 /// <param name="Top">Top coordinate in physical pixels.</param>
 /// <param name="Right">Right coordinate in physical pixels.</param>
 /// <param name="Bottom">Bottom coordinate in physical pixels.</param>
-public readonly record struct NativeThumbnailBounds(
-    int Left,
-    int Top,
-    int Right,
-    int Bottom
-);
+public readonly record struct NativeThumbnailBounds(int Left, int Top, int Right, int Bottom);

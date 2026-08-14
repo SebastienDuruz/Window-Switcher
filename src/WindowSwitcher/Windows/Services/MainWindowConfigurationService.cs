@@ -23,16 +23,16 @@ internal sealed class ConfigFileMainWindowConfigurationService : IMainWindowConf
 {
     public IReadOnlyList<string> GetWhitelistPrefixes()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            config.WhitelistPrefixes.ToList()
-        );
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => config.WhitelistPrefixes.ToList());
     }
 
     public IReadOnlyList<string> GetBlacklistPrefixes()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            config.BlacklistPrefixes.ToList()
-        );
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => config.BlacklistPrefixes.ToList());
     }
 
     public bool ShouldStartMinimized()

@@ -49,6 +49,5 @@ public sealed record UpdateCheckResult
     /// Indicates whether at least one launch target is available.
     /// </summary>
     public bool CanStartUpdate =>
-        !string.IsNullOrWhiteSpace(AssetDownloadUrl)
-        || !string.IsNullOrWhiteSpace(ReleasePageUrl);
+        !string.IsNullOrWhiteSpace(AssetDownloadUrl) || !string.IsNullOrWhiteSpace(ReleasePageUrl);
 }

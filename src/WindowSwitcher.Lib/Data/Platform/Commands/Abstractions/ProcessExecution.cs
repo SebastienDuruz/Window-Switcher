@@ -13,7 +13,10 @@ internal static class ProcessExecution
     {
         ArgumentNullException.ThrowIfNull(process);
         if (timeout <= TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be greater than zero.");
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                "Timeout must be greater than zero."
+            );
 
         if (!process.Start())
         {

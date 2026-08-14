@@ -54,7 +54,10 @@ public sealed class KeybindPressedStateTrackerTests
             CreateLinuxEvent("LeftShift", GlobalKeyState.Down),
             out _
         );
-        _ = tracker.TryGetTriggeredCombination(CreateLinuxEvent("LeftAlt", GlobalKeyState.Down), out _);
+        _ = tracker.TryGetTriggeredCombination(
+            CreateLinuxEvent("LeftAlt", GlobalKeyState.Down),
+            out _
+        );
         bool triggered = tracker.TryGetTriggeredCombination(
             CreateLinuxEvent("F2", GlobalKeyState.Down),
             out KeyCombination combination
@@ -117,7 +120,8 @@ public sealed class KeybindPressedStateTrackerTests
     private static GlobalKeyEventArgs CreateWindowsEvent(
         string keyCode,
         GlobalKeyState state,
-        bool isRepeat = false)
+        bool isRepeat = false
+    )
     {
         return new GlobalKeyEventArgs
         {
