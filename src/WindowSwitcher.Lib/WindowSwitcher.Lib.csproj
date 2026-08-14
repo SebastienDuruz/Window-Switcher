@@ -16,7 +16,10 @@
 
     <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
         <PipeWireNativeSource>$(MSBuildProjectDirectory)/Data/Platform/WindowAccess/PreviewFrames/Pipewire/Native/window_switcher_pipewire.c</PipeWireNativeSource>
-        <PipeWireNativeOutput>$(MSBuildProjectDirectory)/obj/$(Configuration)/$(TargetFramework)/libwindowswitcher-pipewire.so</PipeWireNativeOutput>
+        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</PipeWireNativeRuntimeIdentifier>
+        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PipeWireNativeRuntimeIdentifier>
+        <PipeWireNativeIntermediateDirectory>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(PipeWireNativeRuntimeIdentifier)/native</PipeWireNativeIntermediateDirectory>
+        <PipeWireNativeOutput>$(PipeWireNativeIntermediateDirectory)/libwindowswitcher-pipewire.so</PipeWireNativeOutput>
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);GetPipeWireNativeBuildOutput</TargetsForTfmSpecificBuildOutput>
     </PropertyGroup>
 
@@ -31,13 +34,25 @@
     </ItemGroup>
 
     <Target
+        Name="ValidateLinuxRuntimeIdentifier"
+        BeforeTargets="PrepareForBuild"
+        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+    >
+        <Error
+            Condition="'$(PipeWireNativeRuntimeIdentifier)' != 'linux-x64'"
+            Text="Unsupported Linux runtime '$(PipeWireNativeRuntimeIdentifier)'. Window Switcher supports linux-x64 only."
+        />
+    </Target>
+
+    <Target
         Name="BuildPipeWireNative"
         BeforeTargets="PrepareForBuild"
+        DependsOnTargets="ValidateLinuxRuntimeIdentifier"
         Inputs="$(PipeWireNativeSource)"
         Outputs="$(PipeWireNativeOutput)"
         Condition="$([MSBuild]::IsOSPlatform('Linux'))"
     >
-        <MakeDir Directories="$(IntermediateOutputPath)" />
+        <MakeDir Directories="$(PipeWireNativeIntermediateDirectory)" />
         <Exec Command="cc -std=c17 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror -shared `pkg-config --cflags libpipewire-0.3` &quot;$(PipeWireNativeSource)&quot; -o &quot;$(PipeWireNativeOutput)&quot; `pkg-config --libs libpipewire-0.3` -pthread" />
         <Copy SourceFiles="$(PipeWireNativeOutput)" DestinationFolder="$(TargetDir)" />
     </Target>
