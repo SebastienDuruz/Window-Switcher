@@ -102,31 +102,47 @@ public sealed class PipeWireInteropTests
         }
     }
 
-    [Fact]
-    public void BgraFrameCopier_ConvertsRgbaToBgra()
+    [Theory]
+    [InlineData(0u, 1, 2, 3, 4, 1, 2, 3, 4)]
+    [InlineData(1u, 1, 2, 3, 4, 1, 2, 3, 255)]
+    [InlineData(2u, 3, 2, 1, 4, 1, 2, 3, 4)]
+    [InlineData(3u, 3, 2, 1, 4, 1, 2, 3, 255)]
+    public void BgraFrameCopier_UsesDirectPathForEveryAcceptedFormat(
+        uint formatValue,
+        byte input0,
+        byte input1,
+        byte input2,
+        byte input3,
+        byte expected0,
+        byte expected1,
+        byte expected2,
+        byte expected3
+    )
     {
-        byte[] rgba = [10, 20, 30, 40];
-        IntPtr source = Marshal.AllocHGlobal(rgba.Length);
-        IntPtr destination = Marshal.AllocHGlobal(rgba.Length);
+        var format = (WindowSwitcherPipeWireNative.PixelFormat)formatValue;
+        byte[] sourceBytes = [input0, input1, input2, input3];
+        IntPtr source = Marshal.AllocHGlobal(sourceBytes.Length);
+        IntPtr destination = Marshal.AllocHGlobal(sourceBytes.Length);
         try
         {
-            Marshal.Copy(rgba, 0, source, rgba.Length);
+            Marshal.Copy(sourceBytes, 0, source, sourceBytes.Length);
+
             Assert.True(
                 BgraFrameCopier.TryCopyOrScale(
                     source,
-                    rgba.Length,
-                    4,
-                    1,
-                    1,
-                    ObsPipeWireNative.PixelFormat.Rgba,
+                    sourceBytes.Length,
+                    sourceStride: 4,
+                    sourceWidth: 1,
+                    sourceHeight: 1,
+                    format,
                     destination,
-                    1,
-                    1
+                    destinationWidth: 1,
+                    destinationHeight: 1
                 )
             );
-            byte[] bgra = new byte[4];
-            Marshal.Copy(destination, bgra, 0, bgra.Length);
-            Assert.Equal(new byte[] { 30, 20, 10, 40 }, bgra);
+            var actual = new byte[4];
+            Marshal.Copy(destination, actual, 0, actual.Length);
+            Assert.Equal([expected0, expected1, expected2, expected3], actual);
         }
         finally
         {
@@ -150,6 +166,61 @@ public sealed class PipeWireInteropTests
         );
 
         Assert.False(copied);
+    }
+
+    [Fact]
+    public void BgraFrameCopier_ReusesPrecomputedBilinearCoordinates()
+    {
+        byte[] sourceBytes =
+        [
+            1, 2, 3, 255,
+            4, 5, 6, 255,
+            7, 8, 9, 255,
+            10, 11, 12, 255,
+        ];
+        IntPtr source = Marshal.AllocHGlobal(sourceBytes.Length);
+        IntPtr destination = Marshal.AllocHGlobal(3 * 3 * 4);
+        BgraScalePlan? plan = null;
+        try
+        {
+            Marshal.Copy(sourceBytes, 0, source, sourceBytes.Length);
+            Assert.True(
+                BgraFrameCopier.TryCopyOrScale(
+                    source,
+                    sourceBytes.Length,
+                    sourceStride: 8,
+                    sourceWidth: 2,
+                    sourceHeight: 2,
+                    WindowSwitcherPipeWireNative.PixelFormat.Bgra,
+                    destination,
+                    destinationWidth: 3,
+                    destinationHeight: 3,
+                    ref plan
+                )
+            );
+            BgraScalePlan first = Assert.IsType<BgraScalePlan>(plan);
+
+            Assert.True(
+                BgraFrameCopier.TryCopyOrScale(
+                    source,
+                    sourceBytes.Length,
+                    sourceStride: 8,
+                    sourceWidth: 2,
+                    sourceHeight: 2,
+                    WindowSwitcherPipeWireNative.PixelFormat.Bgra,
+                    destination,
+                    destinationWidth: 3,
+                    destinationHeight: 3,
+                    ref plan
+                )
+            );
+            Assert.Same(first, plan);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(destination);
+            Marshal.FreeHGlobal(source);
+        }
     }
 
     [Fact]
@@ -214,5 +285,18 @@ public sealed class PipeWireInteropTests
 
         Assert.Equal("token-2", cache.TakeRestoreToken([aliases[1]]));
         Assert.Null(cache.TakeRestoreToken(aliases));
+    }
+
+    [Fact]
+    public void RestoreTokenCache_ClearRemovesEveryTokenAndAlias()
+    {
+        using var cache = new WaylandScreenCastMemoryCache();
+        cache.SetRestoreToken(["title:first", "window:1"], "token-1");
+        cache.SetRestoreToken(["title:second", "window:2"], "token-2");
+
+        cache.Clear();
+
+        Assert.Null(cache.TakeRestoreToken(["title:first", "window:1"]));
+        Assert.Null(cache.TakeRestoreToken(["title:second", "window:2"]));
     }
 }

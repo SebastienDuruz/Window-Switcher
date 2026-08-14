@@ -9,7 +9,6 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
 internal interface IPipeWireNativeStream : IDisposable
 {
-    bool IsFaulted { get; }
     void UpdateTargetDimensions(int width, int height);
     void SetActive(bool active);
     IAsyncEnumerable<NativeBgraPreviewFrame> ReadFramesAsync(CancellationToken cancellationToken);
@@ -63,8 +62,8 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private readonly LatestFrameChannel _frames = new();
     private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
     private readonly IPlatformDiagnostics _diagnostics;
-    private readonly ObsPipeWireNative.FrameCallback _frameCallback;
-    private readonly ObsPipeWireNative.StateCallback _stateCallback;
+    private readonly WindowSwitcherPipeWireNative.FrameCallback _frameCallback;
+    private readonly WindowSwitcherPipeWireNative.StateCallback _stateCallback;
     private GCHandle _selfHandle;
     private IntPtr _nativeStream;
     private int _targetWidth;
@@ -72,6 +71,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private bool _faulted;
     private bool _disposed;
     private bool _framePublishedReported;
+    private BgraScalePlan? _scalePlan;
 
     private PipeWireNativeStream(int width, int height, IPlatformDiagnostics diagnostics)
     {
@@ -80,15 +80,6 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         _diagnostics = diagnostics;
         _frameCallback = OnFrame;
         _stateCallback = OnStateChanged;
-    }
-
-    public bool IsFaulted
-    {
-        get
-        {
-            lock (_syncRoot)
-                return _faulted || _disposed;
-        }
     }
 
     internal static Task<IPipeWireNativeStream?> CreateAsync(
@@ -130,8 +121,8 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 return null;
 
             created._selfHandle = GCHandle.Alloc(created, GCHandleType.Normal);
-            diagnostics.Information("initialisation du backend PipeWire natif OBS");
-            created._nativeStream = ObsPipeWireNative.CreateStream(
+            diagnostics.Information("initialisation du backend PipeWire natif");
+            created._nativeStream = WindowSwitcherPipeWireNative.CreateStream(
                 fileDescriptor,
                 pipeWireNodeId,
                 checked((uint)width),
@@ -142,7 +133,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 GCHandle.ToIntPtr(created._selfHandle)
             );
             remoteHandle.Dispose();
-            if (created._nativeStream == IntPtr.Zero || created.IsFaulted)
+            if (created._nativeStream == IntPtr.Zero)
                 return null;
             return created;
         }
@@ -152,13 +143,13 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         }
         catch (Exception exception)
         {
-            diagnostics.Error("native OBS PipeWire stream initialization failed", exception);
+            diagnostics.Error("native PipeWire stream initialization failed", exception);
             return null;
         }
         finally
         {
             remoteHandle.Dispose();
-            if (created._nativeStream == IntPtr.Zero || created.IsFaulted)
+            if (created._nativeStream == IntPtr.Zero)
                 created.Dispose();
         }
     }
@@ -180,7 +171,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
         if (
             stream != IntPtr.Zero
-            && ObsPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height))
+            && WindowSwitcherPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height))
                 < 0
         )
             MarkFaulted("PipeWire format renegotiation failed");
@@ -196,7 +187,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             stream = _nativeStream;
         }
 
-        if (stream != IntPtr.Zero && ObsPipeWireNative.SetActive(stream, active ? 1 : 0) < 0)
+        if (stream != IntPtr.Zero && WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0) < 0)
             MarkFaulted("PipeWire could not change stream activity");
         if (!active)
             _frames.Drain();
@@ -221,7 +212,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         int sourceStride,
         uint sourceWidth,
         uint sourceHeight,
-        ObsPipeWireNative.PixelFormat pixelFormat
+        WindowSwitcherPipeWireNative.PixelFormat pixelFormat
     )
     {
         try
@@ -237,12 +228,14 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
             int targetWidth;
             int targetHeight;
+            BgraScalePlan? scalePlan;
             lock (_syncRoot)
             {
                 if (_disposed)
                     return;
                 targetWidth = _targetWidth;
                 targetHeight = _targetHeight;
+                scalePlan = _scalePlan;
             }
 
             if (
@@ -267,12 +260,19 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 pixelFormat,
                 lease.Pointer,
                 targetWidth,
-                targetHeight
+                targetHeight,
+                ref scalePlan
             );
             if (!copied)
             {
                 lease.Dispose();
                 return;
+            }
+
+            lock (_syncRoot)
+            {
+                if (!_disposed)
+                    _scalePlan = scalePlan;
             }
 
             _frames.Publish(
@@ -291,7 +291,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                     return;
                 _framePublishedReported = true;
             }
-            _diagnostics.Information("première frame CPU publiée par le backend OBS");
+            _diagnostics.Information("première frame CPU publiée par le backend PipeWire");
         }
         catch (Exception exception)
         {
@@ -387,11 +387,11 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         {
             try
             {
-                ObsPipeWireNative.DestroyStream(stream);
+                WindowSwitcherPipeWireNative.DestroyStream(stream);
             }
             catch (Exception exception)
             {
-                _diagnostics.Error("native OBS PipeWire stream cleanup failed", exception);
+                _diagnostics.Error("native PipeWire stream cleanup failed", exception);
             }
         }
         if (_selfHandle.IsAllocated)
@@ -439,148 +439,5 @@ internal sealed class LatestFrameChannel
     internal void Complete()
     {
         _channel.Writer.TryComplete();
-    }
-}
-
-internal static class BgraFrameCopier
-{
-    private const int MaximumFrameBytes = 16 * 1024 * 1024;
-
-    internal static bool TryCopyOrScale(
-        IntPtr source,
-        int sourceLength,
-        int sourceStride,
-        int sourceWidth,
-        int sourceHeight,
-        IntPtr destination,
-        int destinationWidth,
-        int destinationHeight
-    ) =>
-        TryCopyOrScale(
-            source,
-            sourceLength,
-            sourceStride,
-            sourceWidth,
-            sourceHeight,
-            ObsPipeWireNative.PixelFormat.Bgra,
-            destination,
-            destinationWidth,
-            destinationHeight
-        );
-
-    internal static unsafe bool TryCopyOrScale(
-        IntPtr source,
-        int sourceLength,
-        int sourceStride,
-        int sourceWidth,
-        int sourceHeight,
-        ObsPipeWireNative.PixelFormat pixelFormat,
-        IntPtr destination,
-        int destinationWidth,
-        int destinationHeight
-    )
-    {
-        if (
-            source == IntPtr.Zero
-            || destination == IntPtr.Zero
-            || sourceLength <= 0
-            || sourceWidth <= 0
-            || sourceHeight <= 0
-            || destinationWidth <= 0
-            || destinationHeight <= 0
-            || !Enum.IsDefined(pixelFormat)
-        )
-            return false;
-
-        int absoluteStride;
-        int requiredSourceBytes;
-        int destinationStride;
-        try
-        {
-            absoluteStride = Math.Abs(sourceStride);
-            if (absoluteStride < checked(sourceWidth * 4))
-                return false;
-            requiredSourceBytes = checked(
-                checked(absoluteStride * (sourceHeight - 1)) + checked(sourceWidth * 4)
-            );
-            destinationStride = checked(destinationWidth * 4);
-            if (checked(destinationStride * destinationHeight) > MaximumFrameBytes)
-                return false;
-        }
-        catch (OverflowException)
-        {
-            return false;
-        }
-        if (requiredSourceBytes > sourceLength)
-            return false;
-
-        byte* sourceStart = (byte*)source;
-        if (sourceStride < 0)
-            sourceStart += checked(absoluteStride * (sourceHeight - 1));
-        byte* destinationStart = (byte*)destination;
-
-        for (int destinationY = 0; destinationY < destinationHeight; destinationY++)
-        {
-            double sourceY =
-                destinationHeight == 1
-                    ? 0
-                    : (double)destinationY * (sourceHeight - 1) / (destinationHeight - 1);
-            int y0 = (int)sourceY;
-            int y1 = Math.Min(y0 + 1, sourceHeight - 1);
-            double yWeight = sourceY - y0;
-            byte* row0 = sourceStart + y0 * sourceStride;
-            byte* row1 = sourceStart + y1 * sourceStride;
-            byte* destinationRow = destinationStart + destinationY * destinationStride;
-
-            for (int destinationX = 0; destinationX < destinationWidth; destinationX++)
-            {
-                double sourceX =
-                    destinationWidth == 1
-                        ? 0
-                        : (double)destinationX * (sourceWidth - 1) / (destinationWidth - 1);
-                int x0 = (int)sourceX;
-                int x1 = Math.Min(x0 + 1, sourceWidth - 1);
-                double xWeight = sourceX - x0;
-                byte* destinationPixel = destinationRow + destinationX * 4;
-
-                for (int outputChannel = 0; outputChannel < 4; outputChannel++)
-                {
-                    int inputChannel = MapInputChannel(pixelFormat, outputChannel);
-                    if (inputChannel < 0)
-                    {
-                        destinationPixel[outputChannel] = 255;
-                        continue;
-                    }
-                    double top =
-                        row0[x0 * 4 + inputChannel] * (1 - xWeight)
-                        + row0[x1 * 4 + inputChannel] * xWeight;
-                    double bottom =
-                        row1[x0 * 4 + inputChannel] * (1 - xWeight)
-                        + row1[x1 * 4 + inputChannel] * xWeight;
-                    destinationPixel[outputChannel] = (byte)
-                        Math.Clamp((int)Math.Round(top * (1 - yWeight) + bottom * yWeight), 0, 255);
-                }
-            }
-        }
-        return true;
-    }
-
-    private static int MapInputChannel(ObsPipeWireNative.PixelFormat format, int outputChannel)
-    {
-        if (
-            outputChannel == 3
-            && format is ObsPipeWireNative.PixelFormat.Bgrx or ObsPipeWireNative.PixelFormat.Rgbx
-        )
-            return -1;
-        if (format is ObsPipeWireNative.PixelFormat.Bgra or ObsPipeWireNative.PixelFormat.Bgrx)
-            return outputChannel;
-        return outputChannel switch
-        {
-            0 => 2,
-            1 => 1,
-            2 => 0,
-            3 => 3,
-            _ => -1,
-        };
     }
 }

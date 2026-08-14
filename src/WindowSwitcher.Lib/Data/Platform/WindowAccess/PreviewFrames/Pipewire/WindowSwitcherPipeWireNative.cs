@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
-internal static class ObsPipeWireNative
+internal static class WindowSwitcherPipeWireNative
 {
     internal const string LibraryName = "libwindowswitcher-pipewire.so";
 
@@ -31,6 +31,23 @@ internal static class ObsPipeWireNative
         int state,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? message
     );
+
+    internal static bool IsAvailable()
+    {
+        if (!OperatingSystem.IsLinux())
+            return false;
+        if (
+            !NativeLibrary.TryLoad(
+                LibraryName,
+                typeof(WindowSwitcherPipeWireNative).Assembly,
+                DllImportSearchPath.AssemblyDirectory,
+                out IntPtr handle
+            )
+        )
+            return false;
+        NativeLibrary.Free(handle);
+        return true;
+    }
 
     [DllImport(
         LibraryName,
@@ -61,13 +78,6 @@ internal static class ObsPipeWireNative
         EntryPoint = "ws_pipewire_stream_update_target"
     )]
     internal static extern int UpdateTarget(IntPtr stream, uint width, uint height);
-
-    [DllImport(
-        LibraryName,
-        CallingConvention = CallingConvention.Cdecl,
-        EntryPoint = "ws_pipewire_stream_is_faulted"
-    )]
-    internal static extern int IsFaulted(IntPtr stream);
 
     [DllImport(
         LibraryName,

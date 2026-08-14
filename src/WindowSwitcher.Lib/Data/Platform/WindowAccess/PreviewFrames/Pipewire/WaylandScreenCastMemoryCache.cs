@@ -1,12 +1,10 @@
-using Microsoft.Extensions.Caching.Memory;
-
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
 internal sealed class WaylandScreenCastMemoryCache : IDisposable
 {
     private const string RestoreTokenPrefix = "wayland_restore_token:";
-    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
     private readonly object _syncRoot = new();
+    private readonly Dictionary<string, string> _tokensByAlias = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _aliasesByToken = new(
         StringComparer.Ordinal
     );
@@ -25,7 +23,7 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
                 string cacheKey = BuildCacheKey(restoreKeys[index]);
                 if (
                     value is null
-                    && _cache.TryGetValue(cacheKey, out string? candidate)
+                    && _tokensByAlias.TryGetValue(cacheKey, out string? candidate)
                     && !string.IsNullOrWhiteSpace(candidate)
                 )
                 {
@@ -38,7 +36,7 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
             if (value is not null && _aliasesByToken.Remove(value, out HashSet<string>? aliases))
             {
                 foreach (string alias in aliases)
-                    _cache.Remove(alias);
+                    _tokensByAlias.Remove(alias);
             }
             return value;
         }
@@ -57,14 +55,14 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
             {
                 string cacheKey = BuildCacheKey(restoreKeys[index]);
                 if (
-                    !_cache.TryGetValue(cacheKey, out string? existing)
+                    !_tokensByAlias.TryGetValue(cacheKey, out string? existing)
                     || !string.Equals(existing, normalizedToken, StringComparison.Ordinal)
                 )
                     changed = true;
 
                 if (!string.IsNullOrWhiteSpace(existing))
                     RemoveAlias(existing, cacheKey);
-                _cache.Set(cacheKey, normalizedToken);
+                _tokensByAlias[cacheKey] = normalizedToken;
                 if (!_aliasesByToken.TryGetValue(normalizedToken, out HashSet<string>? aliases))
                 {
                     aliases = new HashSet<string>(StringComparer.Ordinal);
@@ -89,7 +87,7 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
             {
                 string cacheKey = BuildCacheKey(restoreKeys[index]);
                 if (
-                    _cache.TryGetValue(cacheKey, out string? token)
+                    _tokensByAlias.TryGetValue(cacheKey, out string? token)
                     && !string.IsNullOrWhiteSpace(token)
                 )
                 {
@@ -98,7 +96,7 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
                 }
                 else
                 {
-                    _cache.Remove(cacheKey);
+                    _tokensByAlias.Remove(cacheKey);
                 }
             }
 
@@ -108,7 +106,7 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
                     continue;
 
                 foreach (string alias in aliases)
-                    _cache.Remove(alias);
+                    _tokensByAlias.Remove(alias);
             }
         }
 
@@ -119,14 +117,14 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
     {
         lock (_syncRoot)
         {
-            _cache.Compact(1.0);
+            _tokensByAlias.Clear();
             _aliasesByToken.Clear();
         }
     }
 
     public void Dispose()
     {
-        _cache.Dispose();
+        Clear();
     }
 
     private static string BuildCacheKey(string restoreKey)
@@ -137,9 +135,12 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
 
     private void RemoveCacheKey(string cacheKey)
     {
-        if (_cache.TryGetValue(cacheKey, out string? token) && !string.IsNullOrWhiteSpace(token))
+        if (
+            _tokensByAlias.TryGetValue(cacheKey, out string? token)
+            && !string.IsNullOrWhiteSpace(token)
+        )
             RemoveAlias(token, cacheKey);
-        _cache.Remove(cacheKey);
+        _tokensByAlias.Remove(cacheKey);
     }
 
     private void RemoveAlias(string token, string cacheKey)
