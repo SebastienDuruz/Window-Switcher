@@ -7,7 +7,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// Discovers Linux evdev devices and probes metadata/capabilities via ioctl calls.
 /// </summary>
-public sealed class InputDeviceDiscovery : ILinuxInputDeviceDiscovery
+internal sealed class InputDeviceDiscovery : ILinuxInputDeviceDiscovery
 {
     private const string InputDirectory = "/dev/input";
 

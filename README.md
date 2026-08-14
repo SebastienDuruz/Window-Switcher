@@ -188,6 +188,12 @@ Open `Help > About` to view:
 - the active preview mode; and
 - Linux dependency status.
 
+On Linux, the capability diagnostic distinguishes the detected session, the selected preview
+backend, and its availability. For Wayland it reports separately whether the system PipeWire
+runtime (`libpipewire-0.3.so.0`) or the bundled Window Switcher adapter
+(`libwindowswitcher-pipewire.so`) is missing. Diagnostics never cause an X11/Wayland backend
+fallback.
+
 Source and directly distributed builds use the GitHub release updater. Builds labelled for Microsoft Store report that updates are managed by the store instead.
 
 ## Linux setup
@@ -455,7 +461,7 @@ Useful options:
 - `--distribution-channel <name>` and `--package-kind <name>` label packaged builds.
 - `--makensis-path <path>` selects a specific NSIS compiler.
 
-The installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. The AppImage target finds `appimagetool` on `PATH` or downloads it to `build/artifacts/tools/`.
+On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target finds `appimagetool` on `PATH` or downloads it to `build/artifacts/tools/`.
 
 Build-labelled `windows_store` packages use store-managed updates instead of the GitHub release updater. Packaging resources live under `build/assets/installer/` and `build/assets/packaging/linux/`; generated artifacts remain under `build/artifacts/`.
 

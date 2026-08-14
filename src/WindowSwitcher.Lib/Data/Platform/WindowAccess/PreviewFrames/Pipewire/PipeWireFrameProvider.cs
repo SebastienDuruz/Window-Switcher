@@ -13,7 +13,7 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 /// <summary>
 /// Captures Wayland window previews through the ScreenCast portal and libpipewire.
 /// </summary>
-public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSelectionReset
+internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSelectionReset
 {
     private const int DefaultWidth = 640;
     private const int DefaultHeight = 360;

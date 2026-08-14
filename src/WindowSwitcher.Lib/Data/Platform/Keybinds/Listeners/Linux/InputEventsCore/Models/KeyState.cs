@@ -3,7 +3,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// Normalized key state derived from Linux <c>EV_KEY</c> event values.
 /// </summary>
-public enum KeyState
+internal enum KeyState
 {
     /// <summary>
     /// Value is not recognized by this decoder.

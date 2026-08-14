@@ -5,7 +5,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// Immutable capability snapshot read from evdev ioctl bitsets for one input device.
 /// </summary>
-public sealed record InputDeviceCapabilities
+internal sealed record InputDeviceCapabilities
 {
     /// <summary>
     /// Empty capability instance used when probing fails or data is unavailable.

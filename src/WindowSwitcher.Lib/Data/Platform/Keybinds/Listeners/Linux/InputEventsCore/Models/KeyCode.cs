@@ -6,7 +6,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <remarks>
 /// Values align with Linux input-event codes (<c>KEY_*</c>, <c>BTN_*</c>).
 /// </remarks>
-public enum KeyCode : ushort
+internal enum KeyCode : ushort
 {
     Reserved = 0,
     Esc = 1,
