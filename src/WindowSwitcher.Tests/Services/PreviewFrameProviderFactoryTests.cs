@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
@@ -31,7 +30,8 @@ public sealed class PreviewFrameProviderFactoryTests
         var factory = new LinuxPreviewFrameProviderFactory(
             dependencies,
             supportsX11PreviewCapture: () => false,
-            supportsPipeWire: () => false
+            supportsPipeWire: () => false,
+            sessionTypeResolver: () => "wayland"
         );
         var provider = factory.Create(new FakeWinAccessor());
 
@@ -47,7 +47,8 @@ public sealed class PreviewFrameProviderFactoryTests
         var factory = new RuntimePreviewFrameProviderFactory(
             dependencies,
             supportsX11PreviewCapture: () => false,
-            supportsPipeWire: () => false
+            supportsPipeWire: () => false,
+            sessionTypeResolver: () => "wayland"
         );
         var provider = factory.Create(new FakeWinAccessor());
 
@@ -69,9 +70,11 @@ public sealed class PreviewFrameProviderFactoryTests
 
         var factory = new LinuxPreviewFrameProviderFactory(
             dependencies,
-            supportsX11PreviewCapture: () => true
+            supportsX11PreviewCapture: () => true,
+            sessionTypeResolver: () => "x11"
         );
-        var provider = factory.Create(new X11WinAccessor());
+        using var accessor = new X11EwmhWindowAccessor(new FakeX11EwmhClient());
+        var provider = factory.Create(accessor);
 
         Assert.IsType<X11PreviewFrameProvider>(provider);
         Assert.Empty(dependencies.ReportedMissing);
@@ -84,9 +87,11 @@ public sealed class PreviewFrameProviderFactoryTests
 
         var factory = new LinuxPreviewFrameProviderFactory(
             dependencies,
-            supportsX11PreviewCapture: () => false
+            supportsX11PreviewCapture: () => false,
+            sessionTypeResolver: () => "x11"
         );
-        var provider = factory.Create(new X11WinAccessor());
+        using var accessor = new X11EwmhWindowAccessor(new FakeX11EwmhClient());
+        var provider = factory.Create(accessor);
 
         Assert.IsType<NoOpPreviewFrameProvider>(provider);
         Assert.Empty(dependencies.ReportedMissing);
@@ -94,7 +99,6 @@ public sealed class PreviewFrameProviderFactoryTests
 
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry
     {
-        public bool IsWmctrlAvailable { get; init; }
         public HashSet<string> ReportedMissing { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public void ReportMissingOnce(string dependency)
@@ -103,20 +107,32 @@ public sealed class PreviewFrameProviderFactoryTests
         }
     }
 
+    private sealed class FakeX11EwmhClient : IX11EwmhClient
+    {
+        public IReadOnlyList<X11EwmhWindow> GetWindows() => [];
+
+        public bool TryActivateWindow(uint windowId) => true;
+
+        public bool TryRenameWindow(uint windowId, string title) => true;
+
+        public void Dispose() { }
+    }
+
     private sealed class FakeWinAccessor : WinAccessorBase
     {
-        public override ObservableCollection<WindowConfig> GetWindows()
-        {
-            return [];
-        }
+        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>([]);
 
-        public override void RaiseWindow(string windowId) { }
+        public override Task<bool> TryActivateWindowAsync(
+            string windowId,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
 
-        public override Bitmap? TakeScreenshot(string windowId)
-        {
-            return null;
-        }
-
-        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+        public override Task<bool> TryRenameWindowAsync(
+            string windowId,
+            string windowTitle,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
     }
 }

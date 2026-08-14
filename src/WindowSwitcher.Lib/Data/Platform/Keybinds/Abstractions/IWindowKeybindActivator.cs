@@ -12,13 +12,6 @@ public interface IWindowKeybindActivator
     event EventHandler<string>? WindowActivated;
 
     /// <summary>
-    /// Tries to activate a matching runtime window for the target id.
-    /// </summary>
-    /// <param name="targetId">Stable target id to activate.</param>
-    /// <returns><see langword="true" /> when a matching target was activated.</returns>
-    bool TryActivateTarget(string targetId);
-
-    /// <summary>
     /// Asynchronously tries to activate a matching runtime window for the target id.
     /// </summary>
     /// <param name="targetId">Stable target id to activate.</param>

@@ -281,7 +281,9 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     {
         try
         {
-            await _winAccessorBase.RaiseWindowAsync(WindowConfig.WindowId);
+            bool activated = await _winAccessorBase.TryActivateWindowAsync(WindowConfig.WindowId);
+            if (!activated)
+                return;
             _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
         }
         catch (Exception)

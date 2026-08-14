@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
@@ -119,18 +118,19 @@ public sealed class StaticFactoriesTests
 
     private sealed class FakeWinAccessor : WinAccessorBase
     {
-        public override ObservableCollection<WindowConfig> GetWindows()
-        {
-            return [];
-        }
+        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>([]);
 
-        public override void RaiseWindow(string windowId) { }
+        public override Task<bool> TryActivateWindowAsync(
+            string windowId,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
 
-        public override Bitmap? TakeScreenshot(string windowId)
-        {
-            return null;
-        }
-
-        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+        public override Task<bool> TryRenameWindowAsync(
+            string windowId,
+            string windowTitle,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
     }
 }

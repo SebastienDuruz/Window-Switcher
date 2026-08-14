@@ -234,19 +234,14 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
 
         public List<string> ActivatedTargetIds { get; } = [];
 
-        public bool TryActivateTarget(string targetId)
-        {
-            ActivatedTargetIds.Add(targetId);
-            WindowActivated?.Invoke(this, targetId);
-            return true;
-        }
-
         public Task<bool> TryActivateTargetAsync(
             string targetId,
             CancellationToken cancellationToken = default
         )
         {
-            return Task.FromResult(TryActivateTarget(targetId));
+            ActivatedTargetIds.Add(targetId);
+            WindowActivated?.Invoke(this, targetId);
+            return Task.FromResult(true);
         }
 
         public void NotifyWindowActivated(string windowId) { }

@@ -94,11 +94,6 @@ public sealed class FloatingPreviewCoordinatorTests
 
         public string LastNotifiedWindowId { get; private set; } = string.Empty;
 
-        public bool TryActivateTarget(string targetId)
-        {
-            return true;
-        }
-
         public Task<bool> TryActivateTargetAsync(
             string targetId,
             CancellationToken cancellationToken = default

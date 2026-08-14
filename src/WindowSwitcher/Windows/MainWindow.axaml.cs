@@ -35,6 +35,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private RenameWindow RenameWindow { get; }
     private WindowListViewModel ViewModel { get; }
     private readonly MainWindowViewModel _mainWindowViewModel;
+    private readonly IWindowKeybindActivator _windowKeybindActivator;
     private readonly FloatingPreviewCoordinator _previewCoordinator;
     private readonly WindowBlacklistCoordinator _blacklistCoordinator;
     private readonly MissingDependencyNotificationService _missingDependencyNotificationService;
@@ -105,8 +106,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
             Title = $"About {StaticData.AppName}",
         };
         RenameWindow = new RenameWindow();
+        _windowKeybindActivator =
+            AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _previewCoordinator = new FloatingPreviewCoordinator(
-            AppServiceProvider.GetRequiredService<IWindowKeybindActivator>(),
+            _windowKeybindActivator,
             dispatcher,
             SetActivePreviewByWindowId
         );
@@ -155,6 +158,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _missingDependencyNotificationService.Dispose();
         _floatingWindowRegistry.CloseAll();
         PreviewFrameProvider.Dispose();
+        WinAccessorBase.Dispose();
+        if (_windowKeybindActivator is IDisposable disposableWindowKeybindActivator)
+            disposableWindowKeybindActivator.Dispose();
         _updateNotificationCts.Dispose();
         _configurationService.PersistUserSettings();
         ViewModel.Dispose();
@@ -314,7 +320,9 @@ public partial class MainWindow : Window, IFloatingWindowHost
             return;
 
         string renamedTitle = RenameWindow.NewWindowTitle;
-        await WinAccessorBase.RenameWindowTitleAsync(windowId, renamedTitle);
+        bool renamed = await WinAccessorBase.TryRenameWindowAsync(windowId, renamedTitle);
+        if (!renamed)
+            return;
 
         windowConfig.WindowTitle = renamedTitle;
 

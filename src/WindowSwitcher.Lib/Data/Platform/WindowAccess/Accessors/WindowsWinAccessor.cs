@@ -1,11 +1,9 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 using WindowSwitcher.Lib.Data.Platform.Interop;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
-using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
@@ -16,9 +14,9 @@ public class WindowsWinAccessor : WinAccessorBase
     private const int SwRestore = 9;
     private const int SwShow = 5;
 
-    public override ObservableCollection<WindowConfig> GetWindows()
+    private static IReadOnlyCollection<WindowConfig> GetWindows()
     {
-        var windows = new ObservableCollection<WindowConfig>();
+        var windows = new List<WindowConfig>();
         int currentProcessId = Process.GetCurrentProcess().Id;
         var processNameByPid = new Dictionary<uint, string>();
 
@@ -132,17 +130,7 @@ public class WindowsWinAccessor : WinAccessorBase
         return processName;
     }
 
-    public override void RaiseWindow(string windowId)
-    {
-        try
-        {
-            IntPtr windowHandle = IntPtr.Parse(windowId);
-            BringWindowToFront(windowHandle);
-        }
-        catch (Exception) { }
-    }
-
-    public override Task RaiseWindowAsync(
+    public override Task<bool> TryActivateWindowAsync(
         string windowId,
         CancellationToken cancellationToken = default
     )
@@ -151,30 +139,14 @@ public class WindowsWinAccessor : WinAccessorBase
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                RaiseWindow(windowId);
+                if (!IntPtr.TryParse(windowId, out IntPtr windowHandle) || windowHandle == IntPtr.Zero)
+                    return false;
+
+                BringWindowToFront(windowHandle);
+                return true;
             },
             cancellationToken
         );
-    }
-
-    public override Bitmap? TakeScreenshot(string windowId)
-    {
-        return null;
-    }
-
-    public override Bitmap? TakeScreenshot(string windowId, ScreenshotRequest request)
-    {
-        return null;
-    }
-
-    public override Task<Bitmap?> TakeScreenshotAsync(
-        string windowId,
-        ScreenshotRequest request,
-        CancellationToken cancellationToken = default
-    )
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult<Bitmap?>(null);
     }
 
     private static void BringWindowToFront(IntPtr windowHandle)
@@ -236,28 +208,20 @@ public class WindowsWinAccessor : WinAccessorBase
         }
     }
 
-    public override void RenameWindowTitle(string windowId, string windowTitle)
-    {
-        try
-        {
-            User32Functions.SetWindowText(IntPtr.Parse(windowId), windowTitle);
-        }
-        catch (FormatException) { }
-        catch (OverflowException) { }
-        catch (Exception) { }
-    }
-
-    public override Task RenameWindowTitleAsync(
+    public override Task<bool> TryRenameWindowAsync(
         string windowId,
         string windowTitle,
         CancellationToken cancellationToken = default
     )
     {
+        ArgumentNullException.ThrowIfNull(windowTitle);
         return Task.Run(
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                RenameWindowTitle(windowId, windowTitle);
+                return IntPtr.TryParse(windowId, out IntPtr windowHandle)
+                    && windowHandle != IntPtr.Zero
+                    && User32Functions.SetWindowText(windowHandle, windowTitle);
             },
             cancellationToken
         );

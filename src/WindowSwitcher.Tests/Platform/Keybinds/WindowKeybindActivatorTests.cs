@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
@@ -11,7 +10,7 @@ namespace WindowSwitcher.Tests.Platform.Keybinds;
 public sealed class WindowKeybindActivatorTests
 {
     [Fact]
-    public void TryActivateTarget_NextClient_CyclesForward()
+    public async Task TryActivateTarget_NextClient_CyclesForward()
     {
         var accessor = new FakeWinAccessor(
             CreateWindow("w-1", "Editor", "code"),
@@ -20,16 +19,16 @@ public sealed class WindowKeybindActivatorTests
         );
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
 
         Assert.Equal(new[] { "w-1", "w-2", "w-3", "w-1" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_PreviousClient_CyclesBackward()
+    public async Task TryActivateTarget_PreviousClient_CyclesBackward()
     {
         var accessor = new FakeWinAccessor(
             CreateWindow("w-1", "Editor", "code"),
@@ -38,14 +37,14 @@ public sealed class WindowKeybindActivatorTests
         );
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.PreviousClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.PreviousClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.PreviousClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.PreviousClientTargetId));
 
         Assert.Equal(new[] { "w-3", "w-2" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_WindowTarget_StillRaisesMatchingWindow()
+    public async Task TryActivateTarget_WindowTarget_StillRaisesMatchingWindow()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
@@ -53,14 +52,14 @@ public sealed class WindowKeybindActivatorTests
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
         string editorTargetId = WindowTargetKeyFactory.Create(editor);
-        bool activated = sut.TryActivateTarget(editorTargetId);
+        bool activated = await sut.TryActivateTargetAsync(editorTargetId);
 
         Assert.True(activated);
         Assert.Equal(new[] { "w-1" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_WindowTarget_RaisesWindowActivatedEvent()
+    public async Task TryActivateTarget_WindowTarget_RaisesWindowActivatedEvent()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         var accessor = new FakeWinAccessor(editor);
@@ -68,14 +67,30 @@ public sealed class WindowKeybindActivatorTests
         string? activatedWindowId = null;
         sut.WindowActivated += (_, windowId) => activatedWindowId = windowId;
 
-        bool activated = sut.TryActivateTarget(WindowTargetKeyFactory.Create(editor));
+        bool activated = await sut.TryActivateTargetAsync(WindowTargetKeyFactory.Create(editor));
 
         Assert.True(activated);
         Assert.Equal("w-1", activatedWindowId);
     }
 
     [Fact]
-    public void TryActivateTarget_BuiltInAction_RaisesWindowActivatedEvent()
+    public async Task TryActivateTarget_ReturnsFalseWhenAccessorRejectsActivation()
+    {
+        WindowConfig editor = CreateWindow("w-1", "Editor", "code");
+        var accessor = new FakeWinAccessor(editor) { CanActivate = false };
+        var sut = new WindowKeybindActivator(accessor, SelectAll);
+        string? activatedWindowId = null;
+        sut.WindowActivated += (_, windowId) => activatedWindowId = windowId;
+
+        bool activated = await sut.TryActivateTargetAsync(WindowTargetKeyFactory.Create(editor));
+
+        Assert.False(activated);
+        Assert.Null(activatedWindowId);
+        Assert.Empty(accessor.RaisedWindowIds);
+    }
+
+    [Fact]
+    public async Task TryActivateTarget_BuiltInAction_RaisesWindowActivatedEvent()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
@@ -84,43 +99,43 @@ public sealed class WindowKeybindActivatorTests
         string? activatedWindowId = null;
         sut.WindowActivated += (_, windowId) => activatedWindowId = windowId;
 
-        bool activated = sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId);
+        bool activated = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId);
 
         Assert.True(activated);
         Assert.Equal("w-1", activatedWindowId);
     }
 
     [Fact]
-    public void TryActivateTarget_FocusActiveClient_RaisesLastActivatedWindow()
+    public async Task TryActivateTarget_FocusActiveClient_RaisesLastActivatedWindow()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
         var accessor = new FakeWinAccessor(editor, terminal);
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        _ = sut.TryActivateTarget(WindowTargetKeyFactory.Create(terminal));
+        _ = await sut.TryActivateTargetAsync(WindowTargetKeyFactory.Create(terminal));
 
-        bool activated = sut.TryActivateTarget(KeybindBuiltInTargets.FocusActiveClientTargetId);
+        bool activated = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.FocusActiveClientTargetId);
 
         Assert.True(activated);
         Assert.Equal(new[] { "w-2", "w-2" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_FocusActiveClient_ReturnsFalseWhenNoActiveClient()
+    public async Task TryActivateTarget_FocusActiveClient_ReturnsFalseWhenNoActiveClient()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         var accessor = new FakeWinAccessor(editor);
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        bool activated = sut.TryActivateTarget(KeybindBuiltInTargets.FocusActiveClientTargetId);
+        bool activated = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.FocusActiveClientTargetId);
 
         Assert.False(activated);
         Assert.Empty(accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_NextClient_UsesLastActivatedWindowAsAnchor()
+    public async Task TryActivateTarget_NextClient_UsesLastActivatedWindowAsAnchor()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
@@ -128,14 +143,14 @@ public sealed class WindowKeybindActivatorTests
         var accessor = new FakeWinAccessor(editor, terminal, browser);
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        _ = sut.TryActivateTarget(WindowTargetKeyFactory.Create(terminal));
-        _ = sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId);
+        _ = await sut.TryActivateTargetAsync(WindowTargetKeyFactory.Create(terminal));
+        _ = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId);
 
         Assert.Equal(new[] { "w-2", "w-3" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void NotifyWindowActivated_UpdatesAnchorForNextClient()
+    public async Task NotifyWindowActivated_UpdatesAnchorForNextClient()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
@@ -145,23 +160,23 @@ public sealed class WindowKeybindActivatorTests
 
         sut.NotifyWindowActivated("w-2");
 
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
         Assert.Equal(new[] { "w-3" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_BuiltInActions_ReturnFalseWhenNoClientsAvailable()
+    public async Task TryActivateTarget_BuiltInActions_ReturnFalseWhenNoClientsAvailable()
     {
         var accessor = new FakeWinAccessor();
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        Assert.False(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.False(sut.TryActivateTarget(KeybindBuiltInTargets.PreviousClientTargetId));
+        Assert.False(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.False(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.PreviousClientTargetId));
         Assert.Empty(accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_NextClient_UsesOnlySelectedClients()
+    public async Task TryActivateTarget_NextClient_UsesOnlySelectedClients()
     {
         WindowConfig editor = CreateWindow("w-1", "Editor", "code");
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
@@ -172,15 +187,15 @@ public sealed class WindowKeybindActivatorTests
             windows => windows.Where(window => window.WindowId is "w-1" or "w-3").ToArray()
         );
 
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
 
         Assert.Equal(new[] { "w-1", "w-3", "w-1" }, accessor.RaisedWindowIds);
     }
 
     [Fact]
-    public void TryActivateTarget_NextClient_KeepsStableOrderWhenAccessorReordersRaisedWindowFirst()
+    public async Task TryActivateTarget_NextClient_KeepsStableOrderWhenAccessorReordersRaisedWindowFirst()
     {
         var accessor = new ReorderingFakeWinAccessor(
             CreateWindow("w-1", "Editor", "code"),
@@ -189,10 +204,10 @@ public sealed class WindowKeybindActivatorTests
         );
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
+        Assert.True(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
 
         Assert.Equal(new[] { "w-1", "w-2", "w-3", "w-1" }, accessor.RaisedWindowIds);
     }
@@ -212,23 +227,29 @@ public sealed class WindowKeybindActivatorTests
         private readonly ObservableCollection<WindowConfig> _windows = new(windows);
 
         public List<string> RaisedWindowIds { get; } = [];
+        public bool CanActivate { get; init; } = true;
 
-        public override ObservableCollection<WindowConfig> GetWindows()
-        {
-            return _windows;
-        }
+        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>(_windows);
 
-        public override void RaiseWindow(string windowId)
+        public override Task<bool> TryActivateWindowAsync(
+            string windowId,
+            CancellationToken cancellationToken = default
+        )
         {
+            if (!CanActivate)
+                return Task.FromResult(false);
+
             RaisedWindowIds.Add(windowId);
+            return Task.FromResult(true);
         }
 
-        public override Bitmap? TakeScreenshot(string windowId)
-        {
-            return null;
-        }
-
-        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+        public override Task<bool> TryRenameWindowAsync(
+            string windowId,
+            string windowTitle,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
     }
 
     private sealed class ReorderingFakeWinAccessor(params WindowConfig[] windows) : WinAccessorBase
@@ -237,12 +258,14 @@ public sealed class WindowKeybindActivatorTests
 
         public List<string> RaisedWindowIds { get; } = [];
 
-        public override ObservableCollection<WindowConfig> GetWindows()
-        {
-            return _windows;
-        }
+        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>(_windows);
 
-        public override void RaiseWindow(string windowId)
+        public override Task<bool> TryActivateWindowAsync(
+            string windowId,
+            CancellationToken cancellationToken = default
+        )
         {
             RaisedWindowIds.Add(windowId);
 
@@ -250,18 +273,18 @@ public sealed class WindowKeybindActivatorTests
                 string.Equals(window.WindowId, windowId, StringComparison.Ordinal)
             );
             if (target is null)
-                return;
+                return Task.FromResult(true);
 
             _windows.Remove(target);
             _windows.Insert(0, target);
+            return Task.FromResult(true);
         }
 
-        public override Bitmap? TakeScreenshot(string windowId)
-        {
-            return null;
-        }
-
-        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+        public override Task<bool> TryRenameWindowAsync(
+            string windowId,
+            string windowTitle,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
     }
 
     private static IReadOnlyList<WindowConfig> SelectAll(IReadOnlyCollection<WindowConfig> windows)

@@ -9,7 +9,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 /// <summary>
 /// Activates runtime windows from a configured target id.
 /// </summary>
-public sealed class WindowKeybindActivator : IWindowKeybindActivator
+public sealed class WindowKeybindActivator : IWindowKeybindActivator, IDisposable
 {
     private readonly object _syncRoot = new();
     private readonly WinAccessorBase _accessor;
@@ -18,6 +18,7 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         IReadOnlyList<WindowConfig>
     > _cycleCandidatesResolver;
     private readonly List<string> _cycleOrderWindowIds = [];
+    private readonly bool _ownsAccessor;
     private string _lastActivatedClientId = string.Empty;
 
     /// <inheritdoc />
@@ -27,14 +28,21 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
     /// Creates an activator from the current runtime accessor factory.
     /// </summary>
     public WindowKeybindActivator()
-        : this(AccessorFactory.GetAccessor(), ResolveSelectedCycleCandidates) { }
+        : this(AccessorFactory.GetAccessor(), ResolveSelectedCycleCandidates, ownsAccessor: true) { }
 
     internal WindowKeybindActivator(WinAccessorBase accessor)
-        : this(accessor, ResolveSelectedCycleCandidates) { }
+        : this(accessor, ResolveSelectedCycleCandidates, ownsAccessor: false) { }
 
     internal WindowKeybindActivator(
         WinAccessorBase accessor,
         Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> cycleCandidatesResolver
+    )
+        : this(accessor, cycleCandidatesResolver, ownsAccessor: false) { }
+
+    private WindowKeybindActivator(
+        WinAccessorBase accessor,
+        Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> cycleCandidatesResolver,
+        bool ownsAccessor
     )
     {
         ArgumentNullException.ThrowIfNull(accessor);
@@ -42,62 +50,7 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
 
         _accessor = accessor;
         _cycleCandidatesResolver = cycleCandidatesResolver;
-    }
-
-    /// <inheritdoc />
-    public bool TryActivateTarget(string targetId)
-    {
-        if (string.IsNullOrWhiteSpace(targetId))
-            return false;
-
-        string normalizedTargetId = targetId.Trim().ToLowerInvariant();
-        if (
-            string.Equals(
-                normalizedTargetId,
-                KeybindBuiltInTargets.NextClientTargetId,
-                StringComparison.Ordinal
-            )
-        )
-            return TryActivateRelativeClient(step: 1);
-
-        if (
-            string.Equals(
-                normalizedTargetId,
-                KeybindBuiltInTargets.PreviousClientTargetId,
-                StringComparison.Ordinal
-            )
-        )
-            return TryActivateRelativeClient(step: -1);
-
-        if (
-            string.Equals(
-                normalizedTargetId,
-                KeybindBuiltInTargets.FocusActiveClientTargetId,
-                StringComparison.Ordinal
-            )
-        )
-            return TryFocusActiveClient();
-
-        IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
-
-        WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
-            string.Equals(
-                WindowTargetKeyFactory.Create(window),
-                normalizedTargetId,
-                StringComparison.Ordinal
-            )
-        );
-        if (matchingWindow is null)
-            return false;
-
-        _accessor.RaiseWindow(matchingWindow.WindowId);
-        lock (_syncRoot)
-        {
-            _lastActivatedClientId = matchingWindow.WindowId;
-        }
-
-        WindowActivated?.Invoke(this, matchingWindow.WindowId);
-        return true;
+        _ownsAccessor = ownsAccessor;
     }
 
     /// <inheritdoc />
@@ -153,9 +106,10 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        await _accessor
-            .RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
-            .ConfigureAwait(false);
+        if (!await _accessor
+                .TryActivateWindowAsync(matchingWindow.WindowId, cancellationToken)
+                .ConfigureAwait(false))
+            return false;
         lock (_syncRoot)
         {
             _lastActivatedClientId = matchingWindow.WindowId;
@@ -177,38 +131,13 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         }
     }
 
-    private bool TryActivateRelativeClient(int step)
+    /// <summary>
+    /// Releases the runtime accessor created by the default constructor.
+    /// </summary>
+    public void Dispose()
     {
-        if (step is not (1 or -1))
-            throw new ArgumentOutOfRangeException(nameof(step));
-
-        IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
-        IReadOnlyList<WindowConfig> candidates = _cycleCandidatesResolver(windows);
-        if (candidates.Count == 0)
-            return false;
-
-        WindowConfig target;
-        lock (_syncRoot)
-        {
-            IReadOnlyList<WindowConfig> orderedCandidates = StabilizeCycleOrder(candidates);
-            int currentIndex = FindIndexByWindowId(orderedCandidates, _lastActivatedClientId);
-
-            int nextIndex;
-            if (currentIndex < 0)
-                nextIndex = step > 0 ? 0 : orderedCandidates.Count - 1;
-            else
-                nextIndex =
-                    step > 0
-                        ? (currentIndex + 1) % orderedCandidates.Count
-                        : (currentIndex - 1 + orderedCandidates.Count) % orderedCandidates.Count;
-
-            target = orderedCandidates[nextIndex];
-            _lastActivatedClientId = target.WindowId;
-        }
-
-        _accessor.RaiseWindow(target.WindowId);
-        WindowActivated?.Invoke(this, target.WindowId);
-        return true;
+        if (_ownsAccessor)
+            _accessor.Dispose();
     }
 
     private async Task<bool> TryActivateRelativeClientAsync(
@@ -242,39 +171,17 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
                         : (currentIndex - 1 + orderedCandidates.Count) % orderedCandidates.Count;
 
             target = orderedCandidates[nextIndex];
+        }
+
+        if (!await _accessor
+                .TryActivateWindowAsync(target.WindowId, cancellationToken)
+                .ConfigureAwait(false))
+            return false;
+        lock (_syncRoot)
+        {
             _lastActivatedClientId = target.WindowId;
         }
-
-        await _accessor.RaiseWindowAsync(target.WindowId, cancellationToken).ConfigureAwait(false);
         WindowActivated?.Invoke(this, target.WindowId);
-        return true;
-    }
-
-    private bool TryFocusActiveClient()
-    {
-        string activeWindowId;
-        lock (_syncRoot)
-        {
-            activeWindowId = _lastActivatedClientId;
-        }
-
-        if (string.IsNullOrWhiteSpace(activeWindowId))
-            return false;
-
-        IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
-        WindowConfig? matchingWindow = windows.FirstOrDefault(window =>
-            string.Equals(window.WindowId, activeWindowId, StringComparison.Ordinal)
-        );
-        if (matchingWindow is null)
-            return false;
-
-        _accessor.RaiseWindow(matchingWindow.WindowId);
-        lock (_syncRoot)
-        {
-            _lastActivatedClientId = matchingWindow.WindowId;
-        }
-
-        WindowActivated?.Invoke(this, matchingWindow.WindowId);
         return true;
     }
 
@@ -298,9 +205,10 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        await _accessor
-            .RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
-            .ConfigureAwait(false);
+        if (!await _accessor
+                .TryActivateWindowAsync(matchingWindow.WindowId, cancellationToken)
+                .ConfigureAwait(false))
+            return false;
         lock (_syncRoot)
         {
             _lastActivatedClientId = matchingWindow.WindowId;

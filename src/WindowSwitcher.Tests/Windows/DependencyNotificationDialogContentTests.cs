@@ -17,7 +17,7 @@ public sealed class DependencyNotificationDialogContentTests
     {
         string message = DependencyNotificationDialogContent.CreateMessage([
             "libpipewire-0.3.so.0",
-            "wmctrl",
+            "xdg-desktop-portal",
             "LIBPIPEWIRE-0.3.SO.0",
         ]);
 
@@ -25,7 +25,7 @@ public sealed class DependencyNotificationDialogContentTests
             """
             Missing dependencies:
             - libpipewire-0.3.so.0
-            - wmctrl
+            - xdg-desktop-portal
 
             Install them and restart the app.
             """,
