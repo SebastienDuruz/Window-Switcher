@@ -5,42 +5,43 @@ namespace WindowSwitcher.Tests.Platform;
 
 public sealed class LinuxSessionDetectorTests
 {
-    [Fact]
-    public void GetSessionType_ReturnsNormalizedEnvironmentValue_OnLinux()
+    [Theory]
+    [InlineData("x11", null, null, LinuxSessionKind.X11)]
+    [InlineData(" WayLand ", null, null, LinuxSessionKind.Wayland)]
+    [InlineData("unknown", "wayland-0", ":1", LinuxSessionKind.Wayland)]
+    [InlineData(null, "wayland-0", ":1", LinuxSessionKind.Wayland)]
+    [InlineData(null, null, ":1", LinuxSessionKind.X11)]
+    [InlineData("unknown", null, null, LinuxSessionKind.Unsupported)]
+    public void Detect_UsesDeclaredSessionThenDisplayVariables(
+        string? sessionType,
+        string? waylandDisplay,
+        string? xDisplay,
+        LinuxSessionKind expected
+    )
     {
-        string? previous = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
-        try
+        var environment = new Dictionary<string, string?>
         {
-            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", " WayLand ");
+            ["XDG_SESSION_TYPE"] = sessionType,
+            ["WAYLAND_DISPLAY"] = waylandDisplay,
+            ["DISPLAY"] = xDisplay,
+        };
 
-            string? sessionType = LinuxSessionDetector.GetSessionType();
+        LinuxSessionKind actual = LinuxSessionDetector.Detect(
+            variable => environment.GetValueOrDefault(variable),
+            isLinux: true
+        );
 
-            if (OperatingSystem.IsLinux())
-                Assert.Equal("wayland", sessionType);
-            else
-                Assert.Null(sessionType);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", previous);
-        }
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
-    public void GetSessionType_ReturnsNull_WhenEnvironmentValueIsWhitespace()
+    public void Detect_ReturnsUnsupportedOutsideLinux()
     {
-        string? previous = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
-        try
-        {
-            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", "   ");
+        LinuxSessionKind actual = LinuxSessionDetector.Detect(
+            _ => throw new InvalidOperationException(),
+            isLinux: false
+        );
 
-            string? sessionType = LinuxSessionDetector.GetSessionType();
-
-            Assert.Null(sessionType);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", previous);
-        }
+        Assert.Equal(LinuxSessionKind.Unsupported, actual);
     }
 }

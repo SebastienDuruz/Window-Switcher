@@ -1,9 +1,9 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
@@ -30,11 +30,11 @@ internal interface IPipeWireNativeStreamFactory
     );
 }
 
-internal sealed class PipeWireNativeStreamFactory(IPipeWireDiagnostics? diagnostics = null)
+internal sealed class PipeWireNativeStreamFactory(IPlatformDiagnostics? diagnostics = null)
     : IPipeWireNativeStreamFactory
 {
-    private readonly IPipeWireDiagnostics _diagnostics =
-        diagnostics ?? TracePipeWireDiagnostics.Instance;
+    private readonly IPlatformDiagnostics _diagnostics =
+        diagnostics ?? TracePlatformDiagnostics.Instance;
 
     public Task<IPipeWireNativeStream?> CreateAsync(
         CloseSafeHandle remoteHandle,
@@ -56,86 +56,6 @@ internal sealed class PipeWireNativeStreamFactory(IPipeWireDiagnostics? diagnost
     }
 }
 
-internal interface IPipeWireDiagnostics
-{
-    void Information(string message);
-    void Warning(string message);
-    void Error(string message, Exception? exception = null);
-}
-
-internal sealed class TracePipeWireDiagnostics : IPipeWireDiagnostics
-{
-    private static readonly TimeSpan RepetitionWindow = TimeSpan.FromSeconds(30);
-    private readonly object _syncRoot = new();
-    private readonly Dictionary<string, DateTimeOffset> _lastReports = new(StringComparer.Ordinal);
-
-    internal static TracePipeWireDiagnostics Instance { get; } = new();
-
-    public void Information(string message)
-    {
-        if (!ShouldReport($"information:{message}"))
-            return;
-        Trace.TraceInformation("PipeWire: {0}", message);
-        WriteDebugConsole("info", message);
-    }
-
-    public void Warning(string message)
-    {
-        if (!ShouldReport($"warning:{message}"))
-            return;
-        Trace.TraceWarning("PipeWire: {0}", message);
-        WriteDebugConsole("warning", message);
-    }
-
-    public void Error(string message, Exception? exception = null)
-    {
-        string key = $"error:{message}:{exception?.GetType().FullName}";
-        if (!ShouldReport(key))
-            return;
-        Trace.TraceError(
-            exception is null ? "PipeWire: {0}" : "PipeWire: {0} ({1})",
-            message,
-            exception?.GetType().Name ?? string.Empty
-        );
-        WriteDebugConsole(
-            "error",
-            exception is null ? message : $"{message} ({exception.GetType().Name})"
-        );
-    }
-
-    [Conditional("DEBUG")]
-    private static void WriteDebugConsole(string level, string message)
-    {
-        Console.Error.WriteLine($"PipeWire [{level}]: {message}");
-    }
-
-    private bool ShouldReport(string key)
-    {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        lock (_syncRoot)
-        {
-            if (
-                _lastReports.TryGetValue(key, out DateTimeOffset previous)
-                && now - previous < RepetitionWindow
-            )
-                return false;
-
-            _lastReports[key] = now;
-            if (_lastReports.Count > 64)
-            {
-                foreach (
-                    string expired in _lastReports
-                        .Where(pair => now - pair.Value >= RepetitionWindow)
-                        .Select(pair => pair.Key)
-                        .ToArray()
-                )
-                    _lastReports.Remove(expired);
-            }
-            return true;
-        }
-    }
-}
-
 internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 {
     private const int BufferPoolSize = 3;
@@ -146,7 +66,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private readonly object _syncRoot = new();
     private readonly LatestFrameChannel _frames = new();
     private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
-    private readonly IPipeWireDiagnostics _diagnostics;
+    private readonly IPlatformDiagnostics _diagnostics;
     private readonly ObsPipeWireNative.FrameCallback _frameCallback;
     private readonly ObsPipeWireNative.StateCallback _stateCallback;
     private GCHandle _selfHandle;
@@ -157,7 +77,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private bool _disposed;
     private bool _framePublishedReported;
 
-    private PipeWireNativeStream(int width, int height, IPipeWireDiagnostics diagnostics)
+    private PipeWireNativeStream(int width, int height, IPlatformDiagnostics diagnostics)
     {
         _targetWidth = width;
         _targetHeight = height;
@@ -180,7 +100,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         uint pipeWireNodeId,
         int width,
         int height,
-        IPipeWireDiagnostics diagnostics,
+        IPlatformDiagnostics diagnostics,
         CancellationToken cancellationToken
     )
     {
@@ -198,7 +118,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         uint pipeWireNodeId,
         int width,
         int height,
-        IPipeWireDiagnostics diagnostics,
+        IPlatformDiagnostics diagnostics,
         CancellationToken cancellationToken
     )
     {

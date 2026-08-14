@@ -1,6 +1,6 @@
-using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
@@ -13,88 +13,108 @@ namespace WindowSwitcher.Tests.Services;
 public sealed class PreviewFrameProviderFactoryTests
 {
     [Fact]
-    public void WindowsFactory_ReturnsNoOpProvider()
+    public void Create_SelectsX11ProviderWithoutPipeWireFallback()
     {
-        var factory = new WindowsPreviewFrameProviderFactory();
+        if (!OperatingSystem.IsLinux())
+            return;
 
-        var provider = factory.Create(new FakeWinAccessor());
+        var capabilities = new PlatformCapabilityStatus();
+        var factory = CreateFactory(
+            LinuxSessionKind.X11,
+            supportsX11: true,
+            supportsPipeWire: false,
+            capabilities: capabilities
+        );
 
-        Assert.IsType<NoOpPreviewFrameProvider>(provider);
+        using var provider = factory.Create(new FakeWinAccessor());
+
+        Assert.IsType<X11PreviewFrameProvider>(provider);
+        Assert.Equal("XComposite", capabilities.Current.PreviewBackend);
+        Assert.True(capabilities.Current.PreviewAvailable);
     }
 
     [Fact]
-    public void LinuxFactory_ReturnsNoOpProvider_WhenPipeWireDependenciesAreMissing()
+    public void Create_DoesNotUsePipeWireWhenX11CaptureIsUnavailable()
     {
-        var dependencies = new FakeLinuxDependencyRegistry();
+        if (!OperatingSystem.IsLinux())
+            return;
 
-        var factory = new LinuxPreviewFrameProviderFactory(
-            dependencies,
-            supportsX11PreviewCapture: () => false,
-            supportsPipeWire: () => false,
-            sessionTypeResolver: () => "wayland"
+        var capabilities = new PlatformCapabilityStatus();
+        var factory = CreateFactory(
+            LinuxSessionKind.X11,
+            supportsX11: false,
+            supportsPipeWire: true,
+            capabilities: capabilities
         );
-        var provider = factory.Create(new FakeWinAccessor());
+
+        using var provider = factory.Create(new FakeWinAccessor());
+
+        Assert.IsType<NoOpPreviewFrameProvider>(provider);
+        Assert.False(capabilities.Current.PreviewAvailable);
+        Assert.Contains("XComposite", capabilities.Current.LastFailure);
+    }
+
+    [Fact]
+    public void Create_DoesNotUseX11WhenPipeWireIsUnavailableOnWayland()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var dependencies = new FakeLinuxDependencyRegistry();
+        var capabilities = new PlatformCapabilityStatus();
+        var factory = CreateFactory(
+            LinuxSessionKind.Wayland,
+            supportsX11: true,
+            supportsPipeWire: false,
+            capabilities: capabilities,
+            dependencies: dependencies
+        );
+
+        using var provider = factory.Create(new FakeWinAccessor());
 
         Assert.IsType<NoOpPreviewFrameProvider>(provider);
         Assert.Contains("libpipewire-0.3.so.0", dependencies.ReportedMissing);
+        Assert.Equal("EWMH (XWayland)", capabilities.Current.WindowBackend);
+        Assert.False(capabilities.Current.PreviewAvailable);
     }
 
     [Fact]
-    public void RuntimeFactory_ReturnsNoOpProvider_WhenPipeWireDependenciesAreMissing()
+    public void Create_ReturnsNoOpForUnsupportedSession()
     {
-        var dependencies = new FakeLinuxDependencyRegistry();
+        if (!OperatingSystem.IsLinux())
+            return;
 
-        var factory = new RuntimePreviewFrameProviderFactory(
-            dependencies,
-            supportsX11PreviewCapture: () => false,
-            supportsPipeWire: () => false,
-            sessionTypeResolver: () => "wayland"
+        var capabilities = new PlatformCapabilityStatus();
+        var factory = CreateFactory(
+            LinuxSessionKind.Unsupported,
+            supportsX11: true,
+            supportsPipeWire: true,
+            capabilities: capabilities
         );
-        var provider = factory.Create(new FakeWinAccessor());
 
-        if (OperatingSystem.IsLinux())
-        {
-            Assert.IsType<NoOpPreviewFrameProvider>(provider);
-            Assert.Contains("libpipewire-0.3.so.0", dependencies.ReportedMissing);
-        }
-        else
-        {
-            Assert.IsType<NoOpPreviewFrameProvider>(provider);
-        }
-    }
-
-    [Fact]
-    public void LinuxFactory_ReturnsX11Provider_WhenAccessorIsX11AndNativeCaptureIsSupported()
-    {
-        var dependencies = new FakeLinuxDependencyRegistry();
-
-        var factory = new LinuxPreviewFrameProviderFactory(
-            dependencies,
-            supportsX11PreviewCapture: () => true,
-            sessionTypeResolver: () => "x11"
-        );
-        using var accessor = new X11EwmhWindowAccessor(new FakeX11EwmhClient());
-        var provider = factory.Create(accessor);
-
-        Assert.IsType<X11PreviewFrameProvider>(provider);
-        Assert.Empty(dependencies.ReportedMissing);
-    }
-
-    [Fact]
-    public void LinuxFactory_ReturnsNoOpProvider_WhenX11CaptureIsUnavailable()
-    {
-        var dependencies = new FakeLinuxDependencyRegistry();
-
-        var factory = new LinuxPreviewFrameProviderFactory(
-            dependencies,
-            supportsX11PreviewCapture: () => false,
-            sessionTypeResolver: () => "x11"
-        );
-        using var accessor = new X11EwmhWindowAccessor(new FakeX11EwmhClient());
-        var provider = factory.Create(accessor);
+        using var provider = factory.Create(new FakeWinAccessor());
 
         Assert.IsType<NoOpPreviewFrameProvider>(provider);
-        Assert.Empty(dependencies.ReportedMissing);
+        Assert.Equal("Unavailable", capabilities.Current.WindowBackend);
+        Assert.False(capabilities.Current.PreviewAvailable);
+    }
+
+    private static RuntimePreviewFrameProviderFactory CreateFactory(
+        LinuxSessionKind session,
+        bool supportsX11,
+        bool supportsPipeWire,
+        PlatformCapabilityStatus capabilities,
+        ILinuxDependencyRegistry? dependencies = null
+    )
+    {
+        return new RuntimePreviewFrameProviderFactory(
+            dependencies,
+            () => supportsX11,
+            () => supportsPipeWire,
+            () => session,
+            variable => variable == "DISPLAY" ? ":1" : null,
+            capabilities
+        );
     }
 
     private sealed class FakeLinuxDependencyRegistry : ILinuxDependencyRegistry
@@ -105,17 +125,6 @@ public sealed class PreviewFrameProviderFactoryTests
         {
             _ = ReportedMissing.Add(dependency);
         }
-    }
-
-    private sealed class FakeX11EwmhClient : IX11EwmhClient
-    {
-        public IReadOnlyList<X11EwmhWindow> GetWindows() => [];
-
-        public bool TryActivateWindow(uint windowId) => true;
-
-        public bool TryRenameWindow(uint windowId, string title) => true;
-
-        public void Dispose() { }
     }
 
     private sealed class FakeWinAccessor : WinAccessorBase

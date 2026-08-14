@@ -13,7 +13,9 @@ using WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 using WindowSwitcher.Lib.Data.Platform.Policies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Updates;
 using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.ViewModels.Abstractions;
@@ -32,8 +34,6 @@ public static class PlatformServiceCollectionExtensions
 
         if (OperatingSystem.IsWindows())
         {
-            AccessorFactory.Current = new WindowsWinAccessorFactory();
-            PreviewFactory.Current = new WindowsPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, WindowsCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, WindowsFloatingPreviewPolicy>();
             services.AddSingleton<INativeThumbnailRenderer, WindowsDwmNativeThumbnailRenderer>();
@@ -45,8 +45,6 @@ public static class PlatformServiceCollectionExtensions
         }
         else if (OperatingSystem.IsLinux())
         {
-            AccessorFactory.Current = new LinuxWinAccessorFactory();
-            PreviewFactory.Current = new LinuxPreviewFrameProviderFactory();
             services.AddSingleton<ICommandRunner, LinuxCommandRunner>();
             services.AddSingleton<IFloatingPreviewPolicy, LinuxFloatingPreviewPolicy>();
             services.AddSingleton<INativeThumbnailRenderer, NoOpNativeThumbnailRenderer>();
@@ -56,12 +54,21 @@ public static class PlatformServiceCollectionExtensions
             >();
             services.AddSingleton<IPlatformAppInfoProvider, LinuxPlatformAppInfoProvider>();
         }
+
         else
         {
             throw new PlatformNotSupportedException(
                 "Only Windows and Linux are currently supported."
             );
         }
+
+        services.AddSingleton<PlatformCapabilityStatus>();
+        services.AddSingleton<WinAccessorBase>(_ => new RuntimeWinAccessorFactory().Create());
+        services.AddSingleton<IPreviewFrameProvider>(serviceProvider =>
+            new RuntimePreviewFrameProviderFactory(
+                capabilityStatus: serviceProvider.GetRequiredService<PlatformCapabilityStatus>()
+            ).Create(serviceProvider.GetRequiredService<WinAccessorBase>())
+        );
 
         services.AddSingleton<
             IGlobalKeyboardListenerFactory,

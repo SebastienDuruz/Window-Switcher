@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
@@ -39,7 +39,9 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 {
                     if (!_ewmhUnavailableReported)
                     {
-                        Trace.TraceWarning("X11 EWMH unavailable: _NET_CLIENT_LIST is missing.");
+                        TracePlatformDiagnostics.Instance.Warning(
+                            "X11 EWMH unavailable: _NET_CLIENT_LIST is missing."
+                        );
                         _ewmhUnavailableReported = true;
                     }
                     return [];
@@ -81,7 +83,10 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                     or OverflowException
             )
             {
-                Trace.TraceError($"X11 EWMH window discovery failed: {exception.GetType().Name}");
+                TracePlatformDiagnostics.Instance.Error(
+                    "X11 EWMH window discovery failed",
+                    exception
+                );
                 Disconnect();
                 return [];
             }
@@ -199,7 +204,9 @@ internal sealed class X11EwmhClient : IX11EwmhClient
             {
                 if (!_connectionUnavailableReported)
                 {
-                    Trace.TraceWarning("X11 EWMH unavailable: the X display cannot be opened.");
+                    TracePlatformDiagnostics.Instance.Warning(
+                        "X11 EWMH unavailable: the X display cannot be opened."
+                    );
                     _connectionUnavailableReported = true;
                 }
                 return false;
@@ -218,7 +225,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 or BadImageFormatException
         )
         {
-            Trace.TraceError($"X11 EWMH connection failed: {exception.GetType().Name}");
+            TracePlatformDiagnostics.Instance.Error("X11 EWMH connection failed", exception);
         }
 
         Disconnect();

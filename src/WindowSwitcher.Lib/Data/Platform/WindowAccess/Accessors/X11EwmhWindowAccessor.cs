@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -84,7 +84,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         }
         catch (Exception exception)
         {
-            Trace.TraceError($"X11 EWMH discovery failed: {exception.GetType().Name}");
+            TracePlatformDiagnostics.Instance.Error("X11 EWMH discovery failed", exception);
             return [];
         }
         finally
@@ -171,7 +171,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         }
         catch (Exception exception)
         {
-            Trace.TraceError($"X11 EWMH operation failed: {exception.GetType().Name}");
+            TracePlatformDiagnostics.Instance.Error("X11 EWMH operation failed", exception);
             return false;
         }
         finally

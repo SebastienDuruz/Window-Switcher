@@ -13,7 +13,6 @@ using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.Windows.Abstractions;
@@ -24,7 +23,7 @@ namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window, IFloatingWindowHost
 {
-    private WinAccessorBase WinAccessorBase { get; } = AccessorFactory.GetAccessor();
+    private WinAccessorBase WinAccessorBase { get; }
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private readonly IPreviewSelectionReset? _previewSelectionReset;
     private readonly FloatingWindowRegistry _floatingWindowRegistry;
@@ -51,7 +50,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
         PropertyChanged += OnWindowPropertyChanged;
 
-        PreviewFrameProvider = PreviewFactory.Create(WinAccessorBase);
+        WinAccessorBase = AppServiceProvider.GetRequiredService<WinAccessorBase>();
+        PreviewFrameProvider = AppServiceProvider.GetRequiredService<IPreviewFrameProvider>();
         _previewSelectionReset = PreviewFrameProvider as IPreviewSelectionReset;
         if (_previewSelectionReset is not null)
             _previewSelectionReset.SelectionPromptChanged += OnSelectionPromptChanged;
@@ -157,10 +157,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
         RenameWindow.Close();
         _missingDependencyNotificationService.Dispose();
         _floatingWindowRegistry.CloseAll();
-        PreviewFrameProvider.Dispose();
-        WinAccessorBase.Dispose();
-        if (_windowKeybindActivator is IDisposable disposableWindowKeybindActivator)
-            disposableWindowKeybindActivator.Dispose();
         _updateNotificationCts.Dispose();
         _configurationService.PersistUserSettings();
         ViewModel.Dispose();

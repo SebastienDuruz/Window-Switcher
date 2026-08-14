@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace WindowSwitcher.Hosting;
@@ -27,5 +29,12 @@ internal static class AppServiceProvider
             );
 
         return _serviceProvider.GetRequiredService<T>();
+    }
+
+    public static async ValueTask DisposeAsync()
+    {
+        ServiceProvider? serviceProvider = Interlocked.Exchange(ref _serviceProvider, null);
+        if (serviceProvider is not null)
+            await serviceProvider.DisposeAsync().ConfigureAwait(false);
     }
 }

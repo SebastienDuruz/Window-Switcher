@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Tmds.DBus;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -258,7 +259,7 @@ public sealed class PipeWireFrameProviderTests
         }
     }
 
-    private sealed class RecordingDiagnostics : IPipeWireDiagnostics
+    private sealed class RecordingDiagnostics : IPlatformDiagnostics
     {
         public void Information(string message) { }
 

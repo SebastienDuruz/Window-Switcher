@@ -1,9 +1,7 @@
 using System.Runtime.InteropServices;
-using Avalonia.Controls.ApplicationLifetimes;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
@@ -11,60 +9,64 @@ namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 /// <summary>
 /// Linux diagnostics provider for application info view.
 /// </summary>
-public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
+public sealed class LinuxPlatformAppInfoProvider
+    : IPlatformAppInfoProvider
 {
+    private readonly PlatformCapabilityStatus _capabilityStatus;
+
+    /// <summary>
+    /// Creates a diagnostics provider from the selected runtime capabilities.
+    /// </summary>
+    public LinuxPlatformAppInfoProvider(
+        PlatformCapabilityStatus capabilityStatus,
+        IPreviewFrameProvider previewFrameProvider
+    )
+    {
+        ArgumentNullException.ThrowIfNull(capabilityStatus);
+        ArgumentNullException.ThrowIfNull(previewFrameProvider);
+        _capabilityStatus = capabilityStatus;
+    }
+
     /// <inheritdoc />
     public PlatformAppInfoSnapshot GetSnapshot()
     {
-        string[] statuses =
-        [
-            "window-control: EWMH",
-            $"xcomposite: {(X11PreviewFrameProvider.IsSupported() ? "OK" : "missing")}",
-            $"libpipewire: {(LibPipeWireNative.IsAvailable() ? "OK" : "missing")}",
-        ];
+        PlatformCapabilitySnapshot capability = _capabilityStatus.Current;
+        var statuses = new List<string>
+        {
+            $"session: {FormatSession(capability.Session)}",
+            $"window-control: {capability.WindowBackend}",
+            $"preview: {capability.PreviewBackend}",
+        };
+        if (!string.IsNullOrWhiteSpace(capability.LastFailure))
+            statuses.Add($"last-failure: {capability.LastFailure}");
 
-        var reported = LinuxDependencies.GetReportedMissing().ToArray();
-        string dependencies =
-            reported.Length == 0
-                ? string.Join(Environment.NewLine, statuses)
-                : $"{string.Join(Environment.NewLine, statuses)}{Environment.NewLine}Reported missing:{Environment.NewLine}{string.Join(Environment.NewLine, reported)}";
+        IReadOnlyCollection<string> reported = LinuxDependencies.GetReportedMissing();
+        if (reported.Count > 0)
+        {
+            statuses.Add("reported-missing:");
+            statuses.AddRange(reported.Order(StringComparer.OrdinalIgnoreCase));
+        }
 
         return new PlatformAppInfoSnapshot(
             OsDescription: RuntimeInformation.OSDescription,
             FrameworkDescription: RuntimeInformation.FrameworkDescription,
             ProcessArchitecture: RuntimeInformation.ProcessArchitecture.ToString(),
-            UiBackend: GetLinuxBackend(),
+            UiBackend: FormatSession(capability.Session),
             ConfigPath: ConfigFileAccessor.GetInstance().GetFilePath(),
-            PreviewMode: GetPreviewMode(),
-            DependencyStatus: dependencies
+            PreviewMode: capability.PreviewAvailable
+                ? capability.PreviewBackend
+                : "Unavailable",
+            DependencyStatus: string.Join(Environment.NewLine, statuses)
         );
     }
 
-    private static string GetPreviewMode()
+    private static string FormatSession(LinuxSessionKind session)
     {
-        string? sessionType = LinuxSessionDetector.GetSessionType();
-        if (string.Equals(sessionType, "x11", StringComparison.OrdinalIgnoreCase))
-            return X11PreviewFrameProvider.IsSupported() ? "XComposite" : "Unavailable";
-
-        bool pipeWireReady = LibPipeWireNative.IsAvailable();
-        if (string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase))
-            return pipeWireReady ? "PipeWire" : "Unavailable";
-
-        if (X11PreviewFrameProvider.IsSupported())
-            return "XComposite";
-
-        return pipeWireReady ? "PipeWire" : "Unavailable";
-    }
-
-    private static string GetLinuxBackend()
-    {
-        if (
-            Avalonia.Application.Current?.ApplicationLifetime
-            is not IClassicDesktopStyleApplicationLifetime
-        )
-            return "Unknown";
-
-        string? sessionType = LinuxSessionDetector.GetSessionType();
-        return sessionType is null ? "Unknown" : sessionType.ToUpperInvariant();
+        return session switch
+        {
+            LinuxSessionKind.X11 => "X11",
+            LinuxSessionKind.Wayland => "Wayland",
+            _ => "Unsupported",
+        };
     }
 }
