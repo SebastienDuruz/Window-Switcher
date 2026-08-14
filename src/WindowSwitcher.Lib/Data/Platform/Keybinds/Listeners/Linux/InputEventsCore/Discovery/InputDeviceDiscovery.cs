@@ -7,7 +7,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// Discovers Linux evdev devices and probes metadata/capabilities via ioctl calls.
 /// </summary>
-public sealed class InputDeviceDiscovery
+public sealed class InputDeviceDiscovery : ILinuxInputDeviceDiscovery
 {
     private const string InputDirectory = "/dev/input";
 
@@ -25,10 +25,15 @@ public sealed class InputDeviceDiscovery
     /// </returns>
     public Task<IReadOnlyList<InputDeviceInfo>> DiscoverAsync(CancellationToken ct = default)
     {
+        return Task.Run(() => Discover(ct), ct);
+    }
+
+    private static IReadOnlyList<InputDeviceInfo> Discover(CancellationToken ct)
+    {
         var devices = new List<InputDeviceInfo>();
 
         if (!Directory.Exists(InputDirectory))
-            return Task.FromResult<IReadOnlyList<InputDeviceInfo>>(devices);
+            return devices;
 
         // Numeric sort keeps event10 after event9 rather than lexicographic event1/event10/event2 ordering.
         foreach (
@@ -46,7 +51,7 @@ public sealed class InputDeviceDiscovery
             }
         }
 
-        return Task.FromResult<IReadOnlyList<InputDeviceInfo>>(devices);
+        return devices;
     }
 
     /// <summary>
@@ -61,10 +66,10 @@ public sealed class InputDeviceDiscovery
     public Task<InputDeviceInfo?> ProbeAsync(string path, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        return Task.FromResult(Probe(path));
+        return Task.Run(() => Probe(path), ct);
     }
 
-    private InputDeviceInfo? Probe(string path)
+    private static InputDeviceInfo? Probe(string path)
     {
         var fd = LinuxNative.OpenReadOnlyNonBlocking(path);
         if (fd < 0)

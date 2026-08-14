@@ -7,6 +7,7 @@ using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 
@@ -16,18 +17,58 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 [SupportedOSPlatform("linux")]
 public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 {
+    private static readonly TimeSpan DefaultReconciliationInterval = TimeSpan.FromSeconds(2);
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
-    private readonly InputDeviceDiscovery _discovery = new();
+    private readonly SemaphoreSlim _deviceGate = new(1, 1);
+    private readonly ILinuxInputDeviceDiscovery _discovery;
+    private readonly ILinuxKeyboardForwarderFactory _forwarderFactory;
+    private readonly IPlatformDiagnostics _diagnostics;
+    private readonly TimeSpan _reconciliationInterval;
     private readonly EventDecoder _decoder = new();
-    private readonly List<NativeInputEvent> _bufferedEvents = [];
+    private readonly Dictionary<string, DeviceRoutingState> _routingByDevice = (
+        new(StringComparer.Ordinal)
+    );
     private CancellationTokenSource? _runCts;
+    private CancellationTokenSource? _readerCts;
     private Channel<LinuxCaptureEvent>? _channel;
     private Task[] _readerTasks = [];
     private Task? _processorTask;
-    private LinuxUinputKeyboardForwarder? _forwarder;
-    private bool _currentFrameHasBufferedEvents;
-    private bool _currentFrameShouldForwardSync;
+    private Task? _reconciliationTask;
+    private ILinuxKeyboardForwarder? _forwarder;
+    private string? _deviceSignature;
+    private int _forwardingFailed;
     private bool _isDisposed;
+
+    /// <summary>
+    /// Creates the Linux evdev/uinput keyboard listener.
+    /// </summary>
+    public LinuxGlobalKeyboardListener()
+        : this(
+            new InputDeviceDiscovery(),
+            new LinuxKeyboardForwarderFactory(),
+            TracePlatformDiagnostics.Instance,
+            DefaultReconciliationInterval
+        )
+    { }
+
+    internal LinuxGlobalKeyboardListener(
+        ILinuxInputDeviceDiscovery discovery,
+        ILinuxKeyboardForwarderFactory forwarderFactory,
+        IPlatformDiagnostics diagnostics,
+        TimeSpan reconciliationInterval
+    )
+    {
+        ArgumentNullException.ThrowIfNull(discovery);
+        ArgumentNullException.ThrowIfNull(forwarderFactory);
+        ArgumentNullException.ThrowIfNull(diagnostics);
+        if (reconciliationInterval <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(reconciliationInterval));
+
+        _discovery = discovery;
+        _forwarderFactory = forwarderFactory;
+        _diagnostics = diagnostics;
+        _reconciliationInterval = reconciliationInterval;
+    }
 
     /// <inheritdoc />
     public IKeyboardInputFilter? InputFilter { get; set; }
@@ -52,10 +93,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 .DiscoverAsync(cancellationToken)
                 .ConfigureAwait(false);
             EnsureKeyboardAccess(devices);
-
-            InputDeviceInfo[] keyboardDevices = devices
-                .Where(device => device.Kind == DeviceKind.Keyboard && device.IsAccessible)
-                .ToArray();
+            InputDeviceInfo[] keyboardDevices = SelectKeyboardDevices(devices);
 
             var runCts = new CancellationTokenSource();
             _runCts = runCts;
@@ -68,25 +106,20 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 }
             );
 
-            if (keyboardDevices.Length > 0)
-                _forwarder = new LinuxUinputKeyboardForwarder(keyboardDevices);
-
             _processorTask = Task.Run(
                 () => ProcessEventsAsync(_channel.Reader),
                 CancellationToken.None
             );
-            _readerTasks = keyboardDevices
-                .Select(device =>
-                    Task.Run(
-                        () => ReadDeviceLoopAsync(device.Path, _channel.Writer, runCts.Token),
-                        CancellationToken.None
-                    )
-                )
-                .ToArray();
+            await StartDeviceGenerationAsync(keyboardDevices, runCts.Token, cancellationToken)
+                .ConfigureAwait(false);
+            _reconciliationTask = Task.Run(
+                () => RunReconciliationLoopAsync(runCts.Token),
+                CancellationToken.None
+            );
 
             IsRunning = true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch
         {
             await CleanupAfterFailedStartAsync().ConfigureAwait(false);
             throw;
@@ -108,29 +141,35 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
             CancellationTokenSource? runCts = _runCts;
             Channel<LinuxCaptureEvent>? channel = _channel;
-            Task[] readerTasks = _readerTasks;
             Task? processorTask = _processorTask;
-            LinuxUinputKeyboardForwarder? forwarder = _forwarder;
+            Task? reconciliationTask = _reconciliationTask;
 
-            _runCts = null;
-            _channel = null;
-            _readerTasks = [];
-            _processorTask = null;
-            _forwarder = null;
             IsRunning = false;
 
             runCts?.Cancel();
-
-            if (readerTasks.Length > 0)
-                await Task.WhenAll(readerTasks).ConfigureAwait(false);
+            if (reconciliationTask is not null)
+                await reconciliationTask.ConfigureAwait(false);
+            await StopDeviceGenerationAsync(CancellationToken.None).ConfigureAwait(false);
 
             channel?.Writer.TryComplete();
 
             if (processorTask is not null)
-                await processorTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            {
+                try
+                {
+                    await processorTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    _diagnostics.Error("Linux keyboard processor stopped unexpectedly", exception);
+                }
+            }
 
+            _runCts = null;
+            _channel = null;
+            _processorTask = null;
+            _reconciliationTask = null;
             runCts?.Dispose();
-            forwarder?.Dispose();
             ResetBufferedState();
         }
         finally
@@ -157,11 +196,15 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            _diagnostics.Error("Linux keyboard listener shutdown failed", exception);
+        }
 
         KeyEvent = null;
         InputFilter = null;
         _lifecycleGate.Dispose();
+        _deviceGate.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -170,7 +213,9 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         ArgumentNullException.ThrowIfNull(devices);
 
         bool hasAccessibleKeyboard = devices.Any(device =>
-            device.Kind == DeviceKind.Keyboard && device.IsAccessible
+            device.Kind == DeviceKind.Keyboard
+            && device.IsAccessible
+            && !IsProjectVirtualKeyboard(device)
         );
         if (hasAccessibleKeyboard)
             return;
@@ -182,9 +227,236 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         throw new LinuxInputAccessException(deniedDevices.Select(device => device.Path).ToArray());
     }
 
+    internal static InputDeviceInfo[] SelectKeyboardDevices(
+        IReadOnlyList<InputDeviceInfo> devices
+    )
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        return devices
+            .Where(device =>
+                device.Kind == DeviceKind.Keyboard
+                && device.IsAccessible
+                && !IsProjectVirtualKeyboard(device)
+            )
+            .OrderBy(device => device.Path, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    internal static string BuildDeviceSignature(IReadOnlyCollection<InputDeviceInfo> devices)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        return string.Join(
+            ';',
+            devices
+                .OrderBy(device => device.Path, StringComparer.Ordinal)
+                .Select(device =>
+                    $"{device.Path}|{device.VendorId:x4}|{device.ProductId:x4}|{string.Join(',', device.Caps.EventTypes.Order())}|{string.Join(',', device.Caps.KeyCodes.Order())}"
+                )
+        );
+    }
+
+    private static bool IsProjectVirtualKeyboard(InputDeviceInfo device) =>
+        device.VendorId == LinuxUinputKeyboardForwarder.VendorId
+        && device.ProductId == LinuxUinputKeyboardForwarder.ProductId
+        && string.Equals(
+            device.Name,
+            LinuxUinputKeyboardForwarder.DeviceName,
+            StringComparison.Ordinal
+        );
+
+    private async Task RunReconciliationLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(_reconciliationInterval, cancellationToken)
+                    .ConfigureAwait(false);
+                IReadOnlyList<InputDeviceInfo> devices = await _discovery
+                    .DiscoverAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                await ReconcileDevicesAsync(devices, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (LinuxInputAccessException exception)
+            {
+                _diagnostics.Warning(exception.Message);
+                await StopGenerationForUnavailableInputAsync().ConfigureAwait(false);
+            }
+            catch (LinuxUinputAccessException exception)
+            {
+                _diagnostics.Warning(exception.Message);
+                await StopGenerationForUnavailableInputAsync().ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _diagnostics.Error("Linux keyboard reconciliation failed", exception);
+            }
+        }
+    }
+
+    private async Task ReconcileDevicesAsync(
+        IReadOnlyList<InputDeviceInfo> devices,
+        CancellationToken cancellationToken
+    )
+    {
+        EnsureKeyboardAccess(devices);
+        InputDeviceInfo[] keyboards = SelectKeyboardDevices(devices);
+        string signature = BuildDeviceSignature(keyboards);
+
+        await _deviceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (
+                string.Equals(_deviceSignature, signature, StringComparison.Ordinal)
+                && _readerCts is not { IsCancellationRequested: true }
+            )
+                return;
+
+            await StopDeviceGenerationCoreAsync(CancellationToken.None).ConfigureAwait(false);
+            await StartDeviceGenerationAsync(keyboards, _runCts?.Token ?? cancellationToken, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _deviceGate.Release();
+        }
+    }
+
+    private async Task StopGenerationForUnavailableInputAsync()
+    {
+        await _deviceGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            await StopDeviceGenerationCoreAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _deviceGate.Release();
+        }
+    }
+
+    private async Task StartDeviceGenerationAsync(
+        IReadOnlyCollection<InputDeviceInfo> keyboardDevices,
+        CancellationToken runToken,
+        CancellationToken startupToken
+    )
+    {
+        _deviceSignature = BuildDeviceSignature(keyboardDevices);
+        if (keyboardDevices.Count == 0)
+        {
+            _diagnostics.Information("No physical Linux keyboard is currently available");
+            return;
+        }
+
+        ILinuxKeyboardForwarder? forwarder = await _forwarderFactory
+            .CreateAsync(keyboardDevices, startupToken)
+            .ConfigureAwait(false);
+        CancellationTokenSource? readerCts = CancellationTokenSource.CreateLinkedTokenSource(
+            runToken
+        );
+        try
+        {
+            ChannelWriter<LinuxCaptureEvent> writer =
+                _channel?.Writer
+                ?? throw new InvalidOperationException("Linux keyboard event channel is unavailable.");
+            _forwarder = forwarder;
+            Volatile.Write(ref _forwardingFailed, 0);
+            _readerCts = readerCts;
+            CancellationTokenSource activeReaderCts = readerCts;
+            _readerTasks = keyboardDevices
+                .Select(device =>
+                    Task.Run(
+                        () =>
+                            ReadDeviceLoopAsync(
+                                device.Path,
+                                writer,
+                                activeReaderCts,
+                                activeReaderCts.Token
+                            ),
+                        CancellationToken.None
+                    )
+                )
+                .ToArray();
+            forwarder = null;
+            readerCts = null;
+        }
+        finally
+        {
+            forwarder?.Dispose();
+            readerCts?.Dispose();
+        }
+    }
+
+    private async Task StopDeviceGenerationAsync(CancellationToken cancellationToken)
+    {
+        await _deviceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await StopDeviceGenerationCoreAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _deviceGate.Release();
+        }
+    }
+
+    private async Task StopDeviceGenerationCoreAsync(CancellationToken cancellationToken)
+    {
+        CancellationTokenSource? readerCts = _readerCts;
+        Task[] readerTasks = _readerTasks;
+        ILinuxKeyboardForwarder? forwarder = _forwarder;
+        _readerCts = null;
+        _readerTasks = [];
+        _deviceSignature = null;
+
+        readerCts?.Cancel();
+        try
+        {
+            if (readerTasks.Length > 0)
+            {
+                try
+                {
+                    await Task.WhenAll(readerTasks).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    _diagnostics.Error("Linux evdev readers stopped unexpectedly", exception);
+                }
+            }
+            await DrainCapturedEventsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _forwarder = null;
+            readerCts?.Dispose();
+            forwarder?.Dispose();
+            ResetBufferedState();
+        }
+    }
+
+    private async Task DrainCapturedEventsAsync(CancellationToken cancellationToken)
+    {
+        Channel<LinuxCaptureEvent>? channel = _channel;
+        if (channel is null || _processorTask is null || _processorTask.IsCompleted)
+            return;
+
+        var completion = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        await channel.Writer
+            .WriteAsync(LinuxCaptureEvent.CreateBarrier(completion), cancellationToken)
+            .ConfigureAwait(false);
+        await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task ReadDeviceLoopAsync(
         string devicePath,
         ChannelWriter<LinuxCaptureEvent> writer,
+        CancellationTokenSource generationCancellation,
         CancellationToken cancellationToken
     )
     {
@@ -199,6 +471,8 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 int openErrno = LinuxNative.GetLastErrno();
                 if (LinuxNative.IsPermissionError(openErrno))
                 {
+                    _diagnostics.Warning("Reading a Linux evdev keyboard was refused");
+                    generationCancellation.Cancel();
                     return;
                 }
 
@@ -212,6 +486,12 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 if (LinuxNative.Ioctl(fd, LinuxIoctl.EviocGrab, 1) < 0)
                 {
                     int grabErrno = LinuxNative.GetLastErrno();
+                    if (LinuxNative.IsPermissionError(grabErrno))
+                    {
+                        _diagnostics.Warning("Grabbing a Linux evdev keyboard was refused");
+                        generationCancellation.Cancel();
+                        return;
+                    }
                     throw new IOException($"EVIOCGRAB({devicePath}) failed (errno={grabErrno}).");
                 }
 
@@ -232,12 +512,17 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                             NativeInputEvent nativeEvent = MemoryMarshal.Read<NativeInputEvent>(
                                 parseBuffer.AsSpan(offset, NativeInputEvent.Size)
                             );
-                            await writer
-                                .WriteAsync(
-                                    new LinuxCaptureEvent(devicePath, nativeEvent),
+                            bool written = await WriteCaptureEventAsync(
+                                    writer,
+                                    LinuxCaptureEvent.CreateNative(devicePath, nativeEvent),
                                     cancellationToken
                                 )
                                 .ConfigureAwait(false);
+                            if (!written)
+                            {
+                                generationCancellation.Cancel();
+                                break;
+                            }
                             offset += NativeInputEvent.Size;
                         }
 
@@ -274,7 +559,10 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             {
                 break;
             }
-            catch (Exception) { }
+            catch (Exception exception)
+            {
+                _diagnostics.Error("Linux evdev reader failed", exception);
+            }
             finally
             {
                 if (grabbed)
@@ -287,13 +575,58 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
     }
 
+    private async Task<bool> WriteCaptureEventAsync(
+        ChannelWriter<LinuxCaptureEvent> writer,
+        LinuxCaptureEvent captureEvent,
+        CancellationToken cancellationToken
+    )
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMilliseconds(250));
+        try
+        {
+            await writer.WriteAsync(captureEvent, timeout.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _diagnostics.Error("Linux keyboard event queue remained saturated");
+            return false;
+        }
+        catch (ChannelClosedException)
+        {
+            return false;
+        }
+    }
+
     private async Task ProcessEventsAsync(ChannelReader<LinuxCaptureEvent> reader)
     {
         while (await reader.WaitToReadAsync(CancellationToken.None).ConfigureAwait(false))
         {
             while (reader.TryRead(out LinuxCaptureEvent captureEvent))
             {
-                ProcessNativeEvent(captureEvent);
+                if (captureEvent.BarrierCompletion is not null)
+                {
+                    captureEvent.BarrierCompletion.TrySetResult();
+                    continue;
+                }
+                if (Volatile.Read(ref _forwardingFailed) != 0)
+                    continue;
+
+                try
+                {
+                    ProcessNativeEvent(captureEvent);
+                }
+                catch (LinuxUinputAccessException exception)
+                {
+                    _diagnostics.Warning(exception.Message);
+                    ReleaseGrabsAfterForwardingFailure();
+                }
+                catch (Exception exception)
+                {
+                    _diagnostics.Error("Linux keyboard event processing failed", exception);
+                    ReleaseGrabsAfterForwardingFailure();
+                }
             }
         }
     }
@@ -301,10 +634,11 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
     private void ProcessNativeEvent(LinuxCaptureEvent captureEvent)
     {
         InputEvent decoded = _decoder.Decode(captureEvent.DevicePath, captureEvent.NativeEvent);
+        DeviceRoutingState routingState = GetRoutingState(captureEvent.DevicePath);
 
         if (decoded is SyncEvent)
         {
-            HandleSync(captureEvent.NativeEvent);
+            HandleSync(captureEvent.NativeEvent, routingState);
             return;
         }
 
@@ -313,7 +647,7 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
         if (keyEvent.State == KeyState.Unknown)
         {
-            ForwardCurrentEvent(captureEvent.NativeEvent);
+            ForwardCurrentEvent(captureEvent.NativeEvent, routingState);
             return;
         }
 
@@ -324,8 +658,16 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         );
 
         KeyboardFilterDecision decision = EvaluateFilter(eventArgs);
-        ApplyDecision(decision, captureEvent.NativeEvent);
+        ApplyDecision(decision, captureEvent.NativeEvent, routingState);
         Emit(eventArgs);
+    }
+
+    internal void ProcessNativeEventForTesting(
+        string devicePath,
+        NativeInputEvent nativeEvent
+    )
+    {
+        ProcessNativeEvent(LinuxCaptureEvent.CreateNative(devicePath, nativeEvent));
     }
 
     private KeyboardFilterDecision EvaluateFilter(GlobalKeyEventArgs eventArgs)
@@ -338,61 +680,72 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             return filter.ProcessEvent(eventArgs);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _diagnostics.Error("Linux keyboard filter failed", exception);
             return KeyboardFilterDecision.Forward();
         }
     }
 
-    private void ApplyDecision(KeyboardFilterDecision decision, NativeInputEvent nativeEvent)
+    private void ApplyDecision(
+        KeyboardFilterDecision decision,
+        NativeInputEvent nativeEvent,
+        DeviceRoutingState routingState
+    )
     {
         if (decision.DiscardBufferedEvents)
         {
-            _bufferedEvents.Clear();
-            _currentFrameHasBufferedEvents = false;
+            routingState.BufferedEvents.Clear();
+            routingState.HasBufferedEvents = false;
         }
 
         if (decision.FlushBufferedEvents)
         {
-            if (_bufferedEvents.Count > 0)
-                _forwarder?.Forward(_bufferedEvents);
+            if (routingState.BufferedEvents.Count > 0)
+            {
+                _forwarder?.Forward(routingState.BufferedEvents);
+                routingState.ShouldForwardSync = true;
+            }
 
-            _bufferedEvents.Clear();
-            _currentFrameHasBufferedEvents = false;
+            routingState.BufferedEvents.Clear();
+            routingState.HasBufferedEvents = false;
         }
 
         switch (decision.Routing)
         {
             case KeyboardEventRouting.Buffer:
-                _bufferedEvents.Add(nativeEvent);
-                _currentFrameHasBufferedEvents = true;
+                routingState.BufferedEvents.Add(nativeEvent);
+                routingState.HasBufferedEvents = true;
                 break;
 
             case KeyboardEventRouting.Consume:
                 break;
 
             case KeyboardEventRouting.Forward:
-                ForwardCurrentEvent(nativeEvent);
+                ForwardCurrentEvent(nativeEvent, routingState);
                 break;
         }
     }
 
-    private void ForwardCurrentEvent(NativeInputEvent nativeEvent)
+    private void ForwardCurrentEvent(
+        NativeInputEvent nativeEvent,
+        DeviceRoutingState routingState
+    )
     {
         _forwarder?.Forward(nativeEvent);
-        _currentFrameShouldForwardSync = true;
+        routingState.ShouldForwardSync = true;
     }
 
-    private void HandleSync(NativeInputEvent nativeEvent)
+    private void HandleSync(NativeInputEvent nativeEvent, DeviceRoutingState routingState)
     {
-        if (_currentFrameHasBufferedEvents)
-            _bufferedEvents.Add(nativeEvent);
+        if (routingState.HasBufferedEvents)
+            routingState.BufferedEvents.Add(nativeEvent);
 
-        if (_currentFrameShouldForwardSync)
+        if (routingState.ShouldForwardSync)
             _forwarder?.Forward(nativeEvent);
 
-        _currentFrameHasBufferedEvents = false;
-        _currentFrameShouldForwardSync = false;
+        routingState.HasBufferedEvents = false;
+        routingState.ShouldForwardSync = false;
     }
 
     private void Emit(GlobalKeyEventArgs eventArgs)
@@ -404,15 +757,37 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             {
                 ((EventHandler<GlobalKeyEventArgs>)subscriber).Invoke(this, eventArgs);
             }
-            catch (Exception) { }
+            catch (Exception exception)
+            {
+                _diagnostics.Error("Linux keyboard event subscriber failed", exception);
+            }
         }
     }
 
     private void ResetBufferedState()
     {
-        _bufferedEvents.Clear();
-        _currentFrameHasBufferedEvents = false;
-        _currentFrameShouldForwardSync = false;
+        _routingByDevice.Clear();
+        Volatile.Write(ref _forwardingFailed, 0);
+    }
+
+    private DeviceRoutingState GetRoutingState(string devicePath)
+    {
+        if (!_routingByDevice.TryGetValue(devicePath, out DeviceRoutingState? state))
+        {
+            state = new DeviceRoutingState();
+            _routingByDevice[devicePath] = state;
+        }
+        return state;
+    }
+
+    private void ReleaseGrabsAfterForwardingFailure()
+    {
+        Volatile.Write(ref _forwardingFailed, 1);
+        try
+        {
+            _readerCts?.Cancel();
+        }
+        catch (ObjectDisposedException) { }
     }
 
     private static async Task DelayReconnectAsync(CancellationToken cancellationToken)
@@ -432,32 +807,31 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
     {
         CancellationTokenSource? runCts = _runCts;
         Channel<LinuxCaptureEvent>? channel = _channel;
-        Task[] readerTasks = _readerTasks;
         Task? processorTask = _processorTask;
-        LinuxUinputKeyboardForwarder? forwarder = _forwarder;
-
-        _runCts = null;
-        _channel = null;
-        _readerTasks = [];
-        _processorTask = null;
-        _forwarder = null;
+        Task? reconciliationTask = _reconciliationTask;
         IsRunning = false;
 
         try
         {
             runCts?.Cancel();
-            if (readerTasks.Length > 0)
-                await Task.WhenAll(readerTasks).ConfigureAwait(false);
-
+            if (reconciliationTask is not null)
+                await reconciliationTask.ConfigureAwait(false);
+            await StopDeviceGenerationAsync(CancellationToken.None).ConfigureAwait(false);
             channel?.Writer.TryComplete();
             if (processorTask is not null)
                 await processorTask.ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            _diagnostics.Error("Linux keyboard startup cleanup failed", exception);
+        }
         finally
         {
+            _runCts = null;
+            _channel = null;
+            _processorTask = null;
+            _reconciliationTask = null;
             runCts?.Dispose();
-            forwarder?.Dispose();
             ResetBufferedState();
         }
     }
@@ -468,10 +842,38 @@ public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             throw new ObjectDisposedException(nameof(LinuxGlobalKeyboardListener));
     }
 
-    private readonly record struct LinuxCaptureEvent(
-        string DevicePath,
-        NativeInputEvent NativeEvent
-    );
+    private readonly record struct LinuxCaptureEvent
+    {
+        private LinuxCaptureEvent(
+            string devicePath,
+            NativeInputEvent nativeEvent,
+            TaskCompletionSource? barrierCompletion
+        )
+        {
+            DevicePath = devicePath;
+            NativeEvent = nativeEvent;
+            BarrierCompletion = barrierCompletion;
+        }
+
+        internal string DevicePath { get; }
+        internal NativeInputEvent NativeEvent { get; }
+        internal TaskCompletionSource? BarrierCompletion { get; }
+
+        internal static LinuxCaptureEvent CreateNative(
+            string devicePath,
+            NativeInputEvent nativeEvent
+        ) => new(devicePath, nativeEvent, null);
+
+        internal static LinuxCaptureEvent CreateBarrier(TaskCompletionSource completion) =>
+            new(string.Empty, default, completion);
+    }
+
+    private sealed class DeviceRoutingState
+    {
+        internal List<NativeInputEvent> BufferedEvents { get; } = [];
+        internal bool HasBufferedEvents { get; set; }
+        internal bool ShouldForwardSync { get; set; }
+    }
 
     private sealed class DeviceDisconnectedException : Exception;
 }

@@ -32,7 +32,11 @@ internal static class LinuxNative
     private static extern nint ReadInternal(int fd, byte[] buffer, nuint count);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "write")]
-    private static extern nint WriteInternal(int fd, byte[] buffer, nuint count);
+    private static extern nint WriteInternal(
+        int fd,
+        in NativeInputEvent buffer,
+        nuint count
+    );
 
     [DllImport("libc", SetLastError = true, EntryPoint = "close")]
     private static extern int CloseInternal(int fd);
@@ -80,9 +84,9 @@ internal static class LinuxNative
     /// <summary>
     /// Writes raw bytes to the file descriptor.
     /// </summary>
-    public static nint Write(int fd, byte[] buffer, int count)
+    public static nint Write(int fd, in NativeInputEvent nativeEvent)
     {
-        return WriteInternal(fd, buffer, (nuint)count);
+        return WriteInternal(fd, in nativeEvent, (nuint)NativeInputEvent.Size);
     }
 
     /// <summary>
