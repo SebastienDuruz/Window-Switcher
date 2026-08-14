@@ -27,35 +27,34 @@ internal sealed class EventDecoder
                 native.Code,
                 native.Value,
                 (KeyCode)native.Code,
-                ToKeyState(native.Value)),
+                ToKeyState(native.Value)
+            ),
 
             LinuxInputConstants.EvRel => new RelativeAxisEvent(
                 timestamp,
                 devicePath,
                 native.Type,
                 native.Code,
-                native.Value),
+                native.Value
+            ),
 
             LinuxInputConstants.EvAbs => new AbsoluteAxisEvent(
                 timestamp,
                 devicePath,
                 native.Type,
                 native.Code,
-                native.Value),
+                native.Value
+            ),
 
             LinuxInputConstants.EvSyn => new SyncEvent(
                 timestamp,
                 devicePath,
                 native.Type,
                 native.Code,
-                native.Value),
+                native.Value
+            ),
 
-            _ => new RawInputEvent(
-                timestamp,
-                devicePath,
-                native.Type,
-                native.Code,
-                native.Value)
+            _ => new RawInputEvent(timestamp, devicePath, native.Type, native.Code, native.Value),
         };
     }
 
@@ -80,7 +79,7 @@ internal sealed class EventDecoder
             0 => KeyState.Up,
             1 => KeyState.Down,
             2 => KeyState.Repeat,
-            _ => KeyState.Unknown
+            _ => KeyState.Unknown,
         };
     }
 }

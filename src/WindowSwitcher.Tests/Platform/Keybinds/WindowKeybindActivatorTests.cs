@@ -167,8 +167,9 @@ public sealed class WindowKeybindActivatorTests
         WindowConfig terminal = CreateWindow("w-2", "Terminal", "wezterm");
         WindowConfig browser = CreateWindow("w-3", "Browser", "firefox");
         var accessor = new FakeWinAccessor(editor, terminal, browser);
-        var sut = new WindowKeybindActivator(accessor, windows =>
-            windows.Where(window => window.WindowId is "w-1" or "w-3").ToArray()
+        var sut = new WindowKeybindActivator(
+            accessor,
+            windows => windows.Where(window => window.WindowId is "w-1" or "w-3").ToArray()
         );
 
         Assert.True(sut.TryActivateTarget(KeybindBuiltInTargets.NextClientTargetId));

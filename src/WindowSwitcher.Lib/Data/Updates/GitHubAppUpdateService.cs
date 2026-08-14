@@ -61,7 +61,9 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await _httpClient
+                .SendAsync(request, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -87,8 +89,8 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
                 };
             }
 
-            string json = await response.Content
-                .ReadAsStringAsync(cancellationToken)
+            string json = await response
+                .Content.ReadAsStringAsync(cancellationToken)
                 .ConfigureAwait(false);
 
             JObject payload;
@@ -155,10 +157,9 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         ArgumentNullException.ThrowIfNull(updateCheckResult);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? launchTarget =
-            !string.IsNullOrWhiteSpace(updateCheckResult.AssetDownloadUrl)
-                ? updateCheckResult.AssetDownloadUrl
-                : updateCheckResult.ReleasePageUrl;
+        string? launchTarget = !string.IsNullOrWhiteSpace(updateCheckResult.AssetDownloadUrl)
+            ? updateCheckResult.AssetDownloadUrl
+            : updateCheckResult.ReleasePageUrl;
         if (string.IsNullOrWhiteSpace(launchTarget))
         {
             return Task.FromResult(
@@ -306,11 +307,7 @@ internal sealed class ProcessUpdateLinkLauncher : IUpdateLinkLauncher
         try
         {
             Process? process = Process.Start(
-                new ProcessStartInfo
-                {
-                    FileName = launchTarget,
-                    UseShellExecute = true,
-                }
+                new ProcessStartInfo { FileName = launchTarget, UseShellExecute = true }
             );
             if (process is null)
             {

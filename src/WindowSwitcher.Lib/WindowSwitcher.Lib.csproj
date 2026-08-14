@@ -26,7 +26,8 @@
             Link="libwindowswitcher-pipewire.so"
             CopyToOutputDirectory="PreserveNewest"
             CopyToPublishDirectory="PreserveNewest"
-            Visible="false" />
+            Visible="false"
+        />
     </ItemGroup>
 
     <Target
@@ -34,7 +35,8 @@
         BeforeTargets="PrepareForBuild"
         Inputs="$(PipeWireNativeSource)"
         Outputs="$(PipeWireNativeOutput)"
-        Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+    >
         <MakeDir Directories="$(IntermediateOutputPath)" />
         <Exec Command="cc -std=c17 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror -shared `pkg-config --cflags libpipewire-0.3` &quot;$(PipeWireNativeSource)&quot; -o &quot;$(PipeWireNativeOutput)&quot; `pkg-config --libs libpipewire-0.3` -pthread" />
         <Copy SourceFiles="$(PipeWireNativeOutput)" DestinationFolder="$(TargetDir)" />
@@ -44,7 +46,8 @@
         Name="GetPipeWireNativeBuildOutput"
         DependsOnTargets="BuildPipeWireNative"
         Returns="@(BuildOutput)"
-        Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+    >
         <ItemGroup>
             <BuildOutput Include="$(PipeWireNativeOutput)">
                 <TargetPath>libwindowswitcher-pipewire.so</TargetPath>

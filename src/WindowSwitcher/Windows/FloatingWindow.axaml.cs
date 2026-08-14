@@ -26,8 +26,12 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private static readonly Cursor RightSideCursor = new(StandardCursorType.RightSide);
     private static readonly Cursor TopLeftCornerCursor = new(StandardCursorType.TopLeftCorner);
     private static readonly Cursor TopRightCornerCursor = new(StandardCursorType.TopRightCorner);
-    private static readonly Cursor BottomLeftCornerCursor = new(StandardCursorType.BottomLeftCorner);
-    private static readonly Cursor BottomRightCornerCursor = new(StandardCursorType.BottomRightCorner);
+    private static readonly Cursor BottomLeftCornerCursor = new(
+        StandardCursorType.BottomLeftCorner
+    );
+    private static readonly Cursor BottomRightCornerCursor = new(
+        StandardCursorType.BottomRightCorner
+    );
     private const string PendingSelectionBorderBrushKey = "PendingSelectionBorderBrush";
     private static readonly IBrush DefaultPendingSelectionBorderBrush = new SolidColorBrush(
         Color.FromRgb(255, 185, 0)
@@ -67,8 +71,10 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _floatingWindowHost = floatingWindowHost;
         _floatingWindowSettingsService = floatingWindowSettingsService;
         _floatingPreviewPolicy = AppServiceProvider.GetRequiredService<IFloatingPreviewPolicy>();
-        var nativeThumbnailRenderer = AppServiceProvider.GetRequiredService<INativeThumbnailRenderer>();
-        var floatingWindowHandleConfigurator = AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
+        var nativeThumbnailRenderer =
+            AppServiceProvider.GetRequiredService<INativeThumbnailRenderer>();
+        var floatingWindowHandleConfigurator =
+            AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
         SetInitialWindowSettings();
 
@@ -403,8 +409,10 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private static IBrush ResolvePendingSelectionBorderBrush()
     {
         if (
-            Application.Current?.TryFindResource(PendingSelectionBorderBrushKey, out object? resource)
-                == true
+            Application.Current?.TryFindResource(
+                PendingSelectionBorderBrushKey,
+                out object? resource
+            ) == true
             && resource is IBrush brush
         )
         {

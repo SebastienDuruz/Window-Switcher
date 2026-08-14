@@ -58,12 +58,7 @@ public sealed class PipeWireFrameProviderTests
 
         var portal = new RecordingPortalClient();
         using var cache = new WaylandScreenCastMemoryCache();
-        string[] aliases =
-        [
-            "process_title:editor|document",
-            "title:document",
-            "window:42",
-        ];
+        string[] aliases = ["process_title:editor|document", "title:document", "window:42"];
         cache.SetRestoreToken(aliases, "restore-1");
         await using var provider = CreateProvider(portal, cache);
 
@@ -71,6 +66,54 @@ public sealed class PipeWireFrameProviderTests
 
         Assert.Equal("restore-1", portal.RestoreToken);
         Assert.Null(cache.TakeRestoreToken(aliases));
+    }
+
+    [Theory]
+    [InlineData("EDITOR")]
+    [InlineData("Browser")]
+    public async Task DuplicatedTitle_DoesNotReuseAnotherWindowRestoreToken(
+        string secondProcessName
+    )
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var portal = new RecordingPortalClient();
+        var accessor = new FakeWinAccessor(
+            new WindowConfig
+            {
+                WindowId = "42",
+                ProcessName = "Editor",
+                WindowTitle = "Document",
+            },
+            new WindowConfig
+            {
+                WindowId = "84",
+                ProcessName = secondProcessName,
+                WindowTitle = " document ",
+            }
+        );
+        using var cache = new WaylandScreenCastMemoryCache();
+        cache.SetRestoreToken(
+            ["process_title:editor|document", "title:document", "window:42"],
+            "restore-first"
+        );
+        await using var provider = CreateProvider(accessor, portal, cache);
+        var notifications = new List<PreviewSelectionPromptEventArgs>();
+        provider.SelectionPromptChanged += (_, eventArgs) => notifications.Add(eventArgs);
+
+        _ = await provider.RequestAsync("84", new ScreenshotRequest());
+
+        Assert.Null(portal.RestoreToken);
+        Assert.Equal("84", accessor.RaisedWindowId);
+        Assert.True(accessor.WasRaisedBefore(() => portal.OpenSequence));
+        Assert.Equal(
+            [
+                new PreviewSelectionPromptEventArgs("84", IsPending: true),
+                new PreviewSelectionPromptEventArgs("84", IsPending: false),
+            ],
+            notifications
+        );
     }
 
     [Fact]
@@ -156,12 +199,10 @@ public sealed class PipeWireFrameProviderTests
     {
         private int _openCount;
 
-        internal TaskCompletionSource Started { get; } = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        internal TaskCompletionSource Release { get; } = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        internal TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int OpenCount => Volatile.Read(ref _openCount);
 
         public async Task<PortalCapture?> OpenAsync(
@@ -212,7 +253,9 @@ public sealed class PipeWireFrameProviderTests
             CancellationToken cancellationToken
         )
         {
-            throw new InvalidOperationException("No portal capture should reach the stream factory.");
+            throw new InvalidOperationException(
+                "No portal capture should reach the stream factory."
+            );
         }
     }
 
@@ -227,7 +270,24 @@ public sealed class PipeWireFrameProviderTests
 
     private sealed class FakeWinAccessor : WinAccessorBase
     {
+        private readonly IReadOnlyCollection<WindowConfig> _windows;
         private long _raiseSequence;
+
+        internal FakeWinAccessor(params WindowConfig[] windows)
+        {
+            _windows =
+                windows.Length > 0
+                    ? windows
+                    :
+                    [
+                        new WindowConfig
+                        {
+                            WindowId = "42",
+                            ProcessName = "Editor",
+                            WindowTitle = "Document",
+                        },
+                    ];
+        }
 
         internal string? RaisedWindowId { get; private set; }
 
@@ -238,15 +298,7 @@ public sealed class PipeWireFrameProviderTests
 
         public override ObservableCollection<WindowConfig> GetWindows()
         {
-            return
-            [
-                new WindowConfig
-                {
-                    WindowId = "42",
-                    ProcessName = "Editor",
-                    WindowTitle = "Document",
-                },
-            ];
+            return new ObservableCollection<WindowConfig>(_windows);
         }
 
         public override void RaiseWindow(string windowId)

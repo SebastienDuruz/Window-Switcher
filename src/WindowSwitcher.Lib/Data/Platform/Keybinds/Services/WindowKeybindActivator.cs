@@ -13,7 +13,10 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
 {
     private readonly object _syncRoot = new();
     private readonly WinAccessorBase _accessor;
-    private readonly Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> _cycleCandidatesResolver;
+    private readonly Func<
+        IReadOnlyCollection<WindowConfig>,
+        IReadOnlyList<WindowConfig>
+    > _cycleCandidatesResolver;
     private readonly List<string> _cycleOrderWindowIds = [];
     private string _lastActivatedClientId = string.Empty;
 
@@ -150,7 +153,8 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        await _accessor.RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
+        await _accessor
+            .RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
             .ConfigureAwait(false);
         lock (_syncRoot)
         {
@@ -294,7 +298,8 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        await _accessor.RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
+        await _accessor
+            .RaiseWindowAsync(matchingWindow.WindowId, cancellationToken)
             .ConfigureAwait(false);
         lock (_syncRoot)
         {
@@ -358,14 +363,14 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
     {
         ArgumentNullException.ThrowIfNull(windows);
 
-        SelectionSnapshot snapshot = ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            new SelectionSnapshot(
+        SelectionSnapshot snapshot = ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new SelectionSnapshot(
                 config.BlacklistPrefixes.ToHashSet(StringComparer.OrdinalIgnoreCase),
-                config.WhitelistPrefixes
-                    .Where(prefix => !string.IsNullOrWhiteSpace(prefix))
+                config
+                    .WhitelistPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix))
                     .ToArray()
-            )
-        );
+            ));
 
         var selected = new List<WindowConfig>(capacity: windows.Count);
         foreach (WindowConfig window in windows)
@@ -388,8 +393,5 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         return selected;
     }
 
-    private sealed record SelectionSnapshot(
-        HashSet<string> Blacklist,
-        string[] Whitelist
-    );
+    private sealed record SelectionSnapshot(HashSet<string> Blacklist, string[] Whitelist);
 }

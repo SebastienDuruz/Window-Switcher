@@ -11,9 +11,17 @@ internal static class AvaloniaKeybindCaptureMapper
         Key key,
         PhysicalKey physicalKey,
         string? keySymbol,
-        KeyModifiers modifiers)
+        KeyModifiers modifiers
+    )
     {
-        return TryCreate(key, physicalKey, keySymbol, modifiers, out KeyCombination combination, out string message)
+        return TryCreate(
+            key,
+            physicalKey,
+            keySymbol,
+            modifiers,
+            out KeyCombination combination,
+            out string message
+        )
             ? KeybindCaptureResult.Success(combination)
             : KeybindCaptureResult.Failure(message);
     }
@@ -84,7 +92,8 @@ internal static class AvaloniaKeybindCaptureMapper
         PhysicalKey physicalKey,
         Key logicalKey,
         string? keySymbol,
-        out KeybindPrimaryKey primaryKey)
+        out KeybindPrimaryKey primaryKey
+    )
     {
         if (
             physicalKey != PhysicalKey.None

@@ -1,10 +1,10 @@
 <Solution>
-  <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="src/WindowSwitcher.Lib/WindowSwitcher.Lib.csproj" />
-  <Project Path="src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj" />
-  <Project Path="src/WindowSwitcher/WindowSwitcher.csproj" />
+    <Configurations>
+        <Platform Name="Any CPU" />
+        <Platform Name="x64" />
+        <Platform Name="x86" />
+    </Configurations>
+    <Project Path="src/WindowSwitcher.Lib/WindowSwitcher.Lib.csproj" />
+    <Project Path="src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj" />
+    <Project Path="src/WindowSwitcher/WindowSwitcher.csproj" />
 </Solution>

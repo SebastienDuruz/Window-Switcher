@@ -58,8 +58,8 @@ internal sealed class SentrySdkAdapter : ISentrySdkAdapter
             return;
         }
 
-        IEnumerable<KeyValuePair<string, object>> metricAttributes = attributes.Select(entry =>
-            new KeyValuePair<string, object>(entry.Key, entry.Value)
+        IEnumerable<KeyValuePair<string, object>> metricAttributes = attributes.Select(
+            entry => new KeyValuePair<string, object>(entry.Key, entry.Value)
         );
         SentrySdk.Metrics.EmitCounter(name, value, metricAttributes);
     }

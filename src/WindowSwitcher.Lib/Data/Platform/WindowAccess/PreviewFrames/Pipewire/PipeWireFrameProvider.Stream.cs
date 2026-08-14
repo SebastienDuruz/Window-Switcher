@@ -30,9 +30,8 @@ internal interface IPipeWireNativeStreamFactory
     );
 }
 
-internal sealed class PipeWireNativeStreamFactory(
-    IPipeWireDiagnostics? diagnostics = null
-) : IPipeWireNativeStreamFactory
+internal sealed class PipeWireNativeStreamFactory(IPipeWireDiagnostics? diagnostics = null)
+    : IPipeWireNativeStreamFactory
 {
     private readonly IPipeWireDiagnostics _diagnostics =
         diagnostics ?? TracePipeWireDiagnostics.Instance;
@@ -188,7 +187,8 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         ArgumentNullException.ThrowIfNull(remoteHandle);
         ArgumentNullException.ThrowIfNull(diagnostics);
         return Task.Run<IPipeWireNativeStream?>(
-            () => Create(remoteHandle, pipeWireNodeId, width, height, diagnostics, cancellationToken),
+            () =>
+                Create(remoteHandle, pipeWireNodeId, width, height, diagnostics, cancellationToken),
             cancellationToken
         );
     }
@@ -264,7 +264,8 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
         if (
             stream != IntPtr.Zero
-            && ObsPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height)) < 0
+            && ObsPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height))
+                < 0
         )
             MarkFaulted("PipeWire format renegotiation failed");
     }
@@ -303,7 +304,9 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     )
     {
         SetActive(true);
-        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
         timeoutSource.CancelAfter(timeout);
         try
         {
@@ -350,7 +353,14 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 targetHeight = _targetHeight;
             }
 
-            if (!TryComputeFrameLayout(targetWidth, targetHeight, MaximumOutputFrameBytes, out int length))
+            if (
+                !TryComputeFrameLayout(
+                    targetWidth,
+                    targetHeight,
+                    MaximumOutputFrameBytes,
+                    out int length
+                )
+            )
                 return;
             NativeFrameBufferPool.Lease? lease = _bufferPool.TryRent(length);
             if (lease is null)
@@ -499,15 +509,16 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
 internal sealed class LatestFrameChannel
 {
-    private readonly Channel<NativeBgraPreviewFrame> _channel = Channel.CreateBounded<NativeBgraPreviewFrame>(
-        new BoundedChannelOptions(1)
-        {
-            FullMode = BoundedChannelFullMode.Wait,
-            SingleReader = false,
-            SingleWriter = true,
-            AllowSynchronousContinuations = false,
-        }
-    );
+    private readonly Channel<NativeBgraPreviewFrame> _channel =
+        Channel.CreateBounded<NativeBgraPreviewFrame>(
+            new BoundedChannelOptions(1)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = false,
+                SingleWriter = true,
+                AllowSynchronousContinuations = false,
+            }
+        );
 
     internal ChannelReader<NativeBgraPreviewFrame> Reader => _channel.Reader;
 
@@ -647,17 +658,18 @@ internal static class BgraFrameCopier
         IntPtr destination,
         int destinationWidth,
         int destinationHeight
-    ) => TryCopyOrScale(
-        source,
-        sourceLength,
-        sourceStride,
-        sourceWidth,
-        sourceHeight,
-        ObsPipeWireNative.PixelFormat.Bgra,
-        destination,
-        destinationWidth,
-        destinationHeight
-    );
+    ) =>
+        TryCopyOrScale(
+            source,
+            sourceLength,
+            sourceStride,
+            sourceWidth,
+            sourceHeight,
+            ObsPipeWireNative.PixelFormat.Bgra,
+            destination,
+            destinationWidth,
+            destinationHeight
+        );
 
     internal static unsafe bool TryCopyOrScale(
         IntPtr source,
@@ -672,9 +684,14 @@ internal static class BgraFrameCopier
     )
     {
         if (
-            source == IntPtr.Zero || destination == IntPtr.Zero || sourceLength <= 0 ||
-            sourceWidth <= 0 || sourceHeight <= 0 || destinationWidth <= 0 || destinationHeight <= 0 ||
-            !Enum.IsDefined(pixelFormat)
+            source == IntPtr.Zero
+            || destination == IntPtr.Zero
+            || sourceLength <= 0
+            || sourceWidth <= 0
+            || sourceHeight <= 0
+            || destinationWidth <= 0
+            || destinationHeight <= 0
+            || !Enum.IsDefined(pixelFormat)
         )
             return false;
 
@@ -686,7 +703,9 @@ internal static class BgraFrameCopier
             absoluteStride = Math.Abs(sourceStride);
             if (absoluteStride < checked(sourceWidth * 4))
                 return false;
-            requiredSourceBytes = checked(checked(absoluteStride * (sourceHeight - 1)) + checked(sourceWidth * 4));
+            requiredSourceBytes = checked(
+                checked(absoluteStride * (sourceHeight - 1)) + checked(sourceWidth * 4)
+            );
             destinationStride = checked(destinationWidth * 4);
             if (checked(destinationStride * destinationHeight) > MaximumFrameBytes)
                 return false;
@@ -705,9 +724,10 @@ internal static class BgraFrameCopier
 
         for (int destinationY = 0; destinationY < destinationHeight; destinationY++)
         {
-            double sourceY = destinationHeight == 1
-                ? 0
-                : (double)destinationY * (sourceHeight - 1) / (destinationHeight - 1);
+            double sourceY =
+                destinationHeight == 1
+                    ? 0
+                    : (double)destinationY * (sourceHeight - 1) / (destinationHeight - 1);
             int y0 = (int)sourceY;
             int y1 = Math.Min(y0 + 1, sourceHeight - 1);
             double yWeight = sourceY - y0;
@@ -717,9 +737,10 @@ internal static class BgraFrameCopier
 
             for (int destinationX = 0; destinationX < destinationWidth; destinationX++)
             {
-                double sourceX = destinationWidth == 1
-                    ? 0
-                    : (double)destinationX * (sourceWidth - 1) / (destinationWidth - 1);
+                double sourceX =
+                    destinationWidth == 1
+                        ? 0
+                        : (double)destinationX * (sourceWidth - 1) / (destinationWidth - 1);
                 int x0 = (int)sourceX;
                 int x1 = Math.Min(x0 + 1, sourceWidth - 1);
                 double xWeight = sourceX - x0;
@@ -733,13 +754,14 @@ internal static class BgraFrameCopier
                         destinationPixel[outputChannel] = 255;
                         continue;
                     }
-                    double top = row0[x0 * 4 + inputChannel] * (1 - xWeight)
+                    double top =
+                        row0[x0 * 4 + inputChannel] * (1 - xWeight)
                         + row0[x1 * 4 + inputChannel] * xWeight;
-                    double bottom = row1[x0 * 4 + inputChannel] * (1 - xWeight)
+                    double bottom =
+                        row1[x0 * 4 + inputChannel] * (1 - xWeight)
                         + row1[x1 * 4 + inputChannel] * xWeight;
-                    destinationPixel[outputChannel] = (byte)Math.Clamp(
-                        (int)Math.Round(top * (1 - yWeight) + bottom * yWeight), 0, 255
-                    );
+                    destinationPixel[outputChannel] = (byte)
+                        Math.Clamp((int)Math.Round(top * (1 - yWeight) + bottom * yWeight), 0, 255);
                 }
             }
         }
@@ -748,7 +770,10 @@ internal static class BgraFrameCopier
 
     private static int MapInputChannel(ObsPipeWireNative.PixelFormat format, int outputChannel)
     {
-        if (outputChannel == 3 && format is ObsPipeWireNative.PixelFormat.Bgrx or ObsPipeWireNative.PixelFormat.Rgbx)
+        if (
+            outputChannel == 3
+            && format is ObsPipeWireNative.PixelFormat.Bgrx or ObsPipeWireNative.PixelFormat.Rgbx
+        )
             return -1;
         if (format is ObsPipeWireNative.PixelFormat.Bgra or ObsPipeWireNative.PixelFormat.Bgrx)
             return outputChannel;

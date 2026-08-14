@@ -19,11 +19,7 @@ public sealed class WindowKeybindManagerTests
             var sut = new WindowKeybindManager(accessor);
 
             var ctrlA = new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.A };
-            KeybindShortcutAddResult firstResult = sut.AddShortcut(
-                "proc|editor",
-                "Editor",
-                ctrlA
-            );
+            KeybindShortcutAddResult firstResult = sut.AddShortcut("proc|editor", "Editor", ctrlA);
             KeybindShortcutAddResult duplicateResult = sut.AddShortcut(
                 "proc|editor",
                 "Editor",
@@ -38,7 +34,11 @@ public sealed class WindowKeybindManagerTests
             Assert.Equal(KeybindRegistrationResult.Added, firstResult.Status);
             Assert.Equal(string.Empty, firstResult.Message);
             Assert.Equal(KeybindRegistrationResult.Duplicate, duplicateResult.Status);
-            Assert.Contains("already assigned", duplicateResult.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                "already assigned",
+                duplicateResult.Message,
+                StringComparison.OrdinalIgnoreCase
+            );
             Assert.Equal(KeybindRegistrationResult.Conflict, conflictResult.Status);
             Assert.Contains("conflict", conflictResult.Message, StringComparison.OrdinalIgnoreCase);
         }
@@ -64,11 +64,7 @@ public sealed class WindowKeybindManagerTests
                 Key = KeybindPrimaryKey.F2,
             };
 
-            KeybindShortcutAddResult added = sut.AddShortcut(
-                "proc|editor",
-                "Editor",
-                combination
-            );
+            KeybindShortcutAddResult added = sut.AddShortcut("proc|editor", "Editor", combination);
             bool resolved = sut.TryResolveTarget(combination, out string targetId);
 
             Assert.Equal(KeybindRegistrationResult.Added, added.Status);

@@ -23,12 +23,14 @@ internal sealed class InputRouter
         _includeDevicePaths = ToSet(options.IncludeDevicePaths);
         _excludeDevicePaths = ToSet(options.ExcludeDevicePaths);
         _includeKinds = options.IncludeKinds.Length == 0 ? null : [.. options.IncludeKinds];
-        _includeEventTypes = options.IncludeEventTypes is null || options.IncludeEventTypes.Length == 0
-            ? null
-            : [.. options.IncludeEventTypes];
-        _includeKeys = options.IncludeKeys is null || options.IncludeKeys.Length == 0
-            ? null
-            : [.. options.IncludeKeys];
+        _includeEventTypes =
+            options.IncludeEventTypes is null || options.IncludeEventTypes.Length == 0
+                ? null
+                : [.. options.IncludeEventTypes];
+        _includeKeys =
+            options.IncludeKeys is null || options.IncludeKeys.Length == 0
+                ? null
+                : [.. options.IncludeKeys];
     }
 
     /// <summary>
@@ -73,7 +75,11 @@ internal sealed class InputRouter
             return false;
         }
 
-        if (inputEvent is KeyEvent keyEvent && _includeKeys is not null && !_includeKeys.Contains(keyEvent.Key))
+        if (
+            inputEvent is KeyEvent keyEvent
+            && _includeKeys is not null
+            && !_includeKeys.Contains(keyEvent.Key)
+        )
         {
             return false;
         }

@@ -25,11 +25,7 @@ public sealed class SettingsViewModelTests
     {
         var repository = new FakeSettingsRepository();
         int applyActionInvocationCount = 0;
-        var sut = new SettingsViewModel(
-            repository,
-            () => applyActionInvocationCount++,
-            _ => { }
-        );
+        var sut = new SettingsViewModel(repository, () => applyActionInvocationCount++, _ => { });
 
         Assert.False(repository.Config.EnablePreviews);
 

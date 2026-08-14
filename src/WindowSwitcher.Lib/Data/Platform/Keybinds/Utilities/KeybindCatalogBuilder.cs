@@ -63,7 +63,9 @@ internal static class KeybindCatalogBuilder
 
     public static string NormalizeTargetId(string? targetId)
     {
-        return string.IsNullOrWhiteSpace(targetId) ? string.Empty : targetId.Trim().ToLowerInvariant();
+        return string.IsNullOrWhiteSpace(targetId)
+            ? string.Empty
+            : targetId.Trim().ToLowerInvariant();
     }
 
     public static string NormalizeDisplayLabel(string? displayLabel)

@@ -34,10 +34,18 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
         await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
         await sut.StartAsync();
 
-        KeyboardFilterDecision altDown = sut.ProcessEvent(CreateWindowsEvent("VK_12", GlobalKeyState.Down));
-        KeyboardFilterDecision tabDown = sut.ProcessEvent(CreateWindowsEvent("VK_09", GlobalKeyState.Down));
-        KeyboardFilterDecision tabUp = sut.ProcessEvent(CreateWindowsEvent("VK_09", GlobalKeyState.Up));
-        KeyboardFilterDecision altUp = sut.ProcessEvent(CreateWindowsEvent("VK_12", GlobalKeyState.Up));
+        KeyboardFilterDecision altDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_12", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision tabDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_09", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision tabUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_09", GlobalKeyState.Up)
+        );
+        KeyboardFilterDecision altUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_12", GlobalKeyState.Up)
+        );
 
         Assert.Equal(KeyboardEventRouting.Buffer, altDown.Routing);
         Assert.Equal(KeyboardEventRouting.Consume, tabDown.Routing);
@@ -60,10 +68,18 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
         await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
         await sut.StartAsync();
 
-        KeyboardFilterDecision altDown = sut.ProcessEvent(CreateWindowsEvent("VK_12", GlobalKeyState.Down));
-        KeyboardFilterDecision xDown = sut.ProcessEvent(CreateWindowsEvent("VK_58", GlobalKeyState.Down));
-        KeyboardFilterDecision xUp = sut.ProcessEvent(CreateWindowsEvent("VK_58", GlobalKeyState.Up));
-        KeyboardFilterDecision altUp = sut.ProcessEvent(CreateWindowsEvent("VK_12", GlobalKeyState.Up));
+        KeyboardFilterDecision altDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_12", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision xDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_58", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision xUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_58", GlobalKeyState.Up)
+        );
+        KeyboardFilterDecision altUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_12", GlobalKeyState.Up)
+        );
 
         Assert.Equal(KeyboardEventRouting.Buffer, altDown.Routing);
         Assert.Equal(KeyboardEventRouting.Forward, xDown.Routing);
@@ -87,7 +103,9 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
             CreateWindowsEvent("VK_70", GlobalKeyState.Down)
         );
 
-        manager.SetBindings(("builtin:previous-client", new KeyCombination { Key = KeybindPrimaryKey.F1 }));
+        manager.SetBindings(
+            ("builtin:previous-client", new KeyCombination { Key = KeybindPrimaryKey.F1 })
+        );
 
         KeyboardFilterDecision afterChange = sut.ProcessEvent(
             CreateWindowsEvent("VK_70", GlobalKeyState.Down)
@@ -101,7 +119,8 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
     private static GlobalKeyEventArgs CreateWindowsEvent(
         string keyCode,
         GlobalKeyState state,
-        bool isRepeat = false)
+        bool isRepeat = false
+    )
     {
         return new GlobalKeyEventArgs
         {
@@ -159,8 +178,10 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
         {
             ArgumentNullException.ThrowIfNull(targetId);
             return _targets
-                .FirstOrDefault(target => string.Equals(target.TargetId, targetId, StringComparison.Ordinal))
-                ?.Shortcuts
+                    .FirstOrDefault(target =>
+                        string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
+                    )
+                    ?.Shortcuts
                 ?? [];
         }
 
@@ -169,7 +190,8 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
         public KeybindShortcutAddResult AddShortcut(
             string targetId,
             string displayLabel,
-            KeyCombination combination)
+            KeyCombination combination
+        )
         {
             throw new NotSupportedException();
         }

@@ -79,7 +79,10 @@ internal sealed class FloatingWindowRegistry
             return false;
         }
 
-        if (_windows.TryGetValue(windowId, out FloatingWindow? existingWindow) && existingWindow is not null)
+        if (
+            _windows.TryGetValue(windowId, out FloatingWindow? existingWindow)
+            && existingWindow is not null
+        )
         {
             floatingWindow = existingWindow;
             return true;

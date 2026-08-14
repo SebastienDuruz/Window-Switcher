@@ -218,5 +218,4 @@ internal sealed class X11PreviewFrameProvider
         foreach (X11WindowCaptureSession session in sessions)
             session.Dispose();
     }
-
 }

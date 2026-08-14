@@ -49,7 +49,8 @@ public abstract class ProcessCommandRunnerBase : ICommandRunner
             startInfo.Environment[key] = value;
 
         using var process = new Process { StartInfo = startInfo };
-        return await ProcessExecution.RunAsync(process, request.Timeout, cancellationToken)
+        return await ProcessExecution
+            .RunAsync(process, request.Timeout, cancellationToken)
             .ConfigureAwait(false);
     }
 

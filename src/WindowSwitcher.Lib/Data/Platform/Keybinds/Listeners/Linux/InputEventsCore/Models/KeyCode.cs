@@ -241,5 +241,5 @@ public enum KeyCode : ushort
     BtnExtra = 0x114,
     BtnForward = 0x115,
     BtnBack = 0x116,
-    BtnTask = 0x117
+    BtnTask = 0x117,
 }

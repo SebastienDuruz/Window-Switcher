@@ -100,9 +100,7 @@ internal sealed class FakePrefixListService : IPrefixListService
 
     public bool ContainsPrefixStartingWith(string candidate)
     {
-        return Prefixes.Any(prefix =>
-            prefix.StartsWith(candidate, StringComparison.Ordinal)
-        );
+        return Prefixes.Any(prefix => prefix.StartsWith(candidate, StringComparison.Ordinal));
     }
 
     public bool TryAddPrefix(string? value, out string normalizedPrefix)

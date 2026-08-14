@@ -50,11 +50,7 @@ internal static class X11Native
     public static extern int XDefaultScreen(IntPtr display);
 
     [DllImport("libX11.so.6", CharSet = CharSet.Ansi)]
-    public static extern IntPtr XInternAtom(
-        IntPtr display,
-        string atomName,
-        int onlyIfExists
-    );
+    public static extern IntPtr XInternAtom(IntPtr display, string atomName, int onlyIfExists);
 
     [DllImport("libX11.so.6")]
     public static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
@@ -127,18 +123,10 @@ internal static class X11Native
     );
 
     [DllImport("libXcomposite.so.1")]
-    public static extern void XCompositeRedirectWindow(
-        IntPtr display,
-        IntPtr window,
-        int update
-    );
+    public static extern void XCompositeRedirectWindow(IntPtr display, IntPtr window, int update);
 
     [DllImport("libXcomposite.so.1")]
-    public static extern void XCompositeUnredirectWindow(
-        IntPtr display,
-        IntPtr window,
-        int update
-    );
+    public static extern void XCompositeUnredirectWindow(IntPtr display, IntPtr window, int update);
 
     [DllImport("libXcomposite.so.1")]
     public static extern IntPtr XCompositeNameWindowPixmap(IntPtr display, IntPtr window);

@@ -70,9 +70,7 @@ public sealed class MainWindowViewModelTests
     public void ResetAllPreviewsCommand_CanExecuteReflectsAvailability()
     {
         bool available = false;
-        var sut = CreateSut(
-            canResetAllPreviews: () => available
-        );
+        var sut = CreateSut(canResetAllPreviews: () => available);
 
         sut.SetPreviewResetAvailability(false);
         Assert.False(sut.ResetAllPreviewsCommand.CanExecute(null));
@@ -130,10 +128,7 @@ public sealed class MainWindowViewModelTests
         var windowList = new WindowListViewModel(
             new FakeWindowSnapshotProvider([]),
             new FakeWindowFilterSettingsProvider(
-                new WindowFilterSettings(
-                    new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-                    []
-                )
+                new WindowFilterSettings(new HashSet<string>(StringComparer.OrdinalIgnoreCase), [])
             ),
             new ImmediateViewModelDispatcher()
         );

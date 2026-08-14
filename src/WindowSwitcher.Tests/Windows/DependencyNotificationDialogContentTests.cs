@@ -15,9 +15,11 @@ public sealed class DependencyNotificationDialogContentTests
     [Fact]
     public void CreateMessage_ReturnsSortedDistinctDependencyList()
     {
-        string message = DependencyNotificationDialogContent.CreateMessage(
-            ["libpipewire-0.3.so.0", "wmctrl", "LIBPIPEWIRE-0.3.SO.0"]
-        );
+        string message = DependencyNotificationDialogContent.CreateMessage([
+            "libpipewire-0.3.so.0",
+            "wmctrl",
+            "LIBPIPEWIRE-0.3.SO.0",
+        ]);
 
         Assert.Equal(
             """

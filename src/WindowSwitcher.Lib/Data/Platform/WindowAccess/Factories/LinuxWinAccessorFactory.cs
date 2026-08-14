@@ -1,6 +1,6 @@
+using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;

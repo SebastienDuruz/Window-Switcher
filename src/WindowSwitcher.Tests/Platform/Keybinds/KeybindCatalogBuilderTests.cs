@@ -9,36 +9,27 @@ public sealed class KeybindCatalogBuilderTests
     [Fact]
     public void Build_NormalizesTargetsAndFiltersInvalidBindings()
     {
-        KeybindCatalog catalog = KeybindCatalogBuilder.Build(
-            [
-                new WindowKeybindTargetConfig
-                {
-                    TargetId = "  Proc|Editor  ",
-                    DisplayLabel = "  Editor Window  ",
-                    Shortcuts =
-                    [
-                        new WindowKeybindShortcut
-                        {
-                            Combination = new KeyCombination
-                            {
-                                Ctrl = true,
-                                Key = KeybindPrimaryKey.A,
-                            },
-                        },
-                        new WindowKeybindShortcut
-                        {
-                            Combination = new KeyCombination(),
-                        },
-                    ],
-                },
-                new WindowKeybindTargetConfig
-                {
-                    TargetId = "",
-                    DisplayLabel = "invalid",
-                    Shortcuts = [],
-                },
-            ]
-        );
+        KeybindCatalog catalog = KeybindCatalogBuilder.Build([
+            new WindowKeybindTargetConfig
+            {
+                TargetId = "  Proc|Editor  ",
+                DisplayLabel = "  Editor Window  ",
+                Shortcuts =
+                [
+                    new WindowKeybindShortcut
+                    {
+                        Combination = new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.A },
+                    },
+                    new WindowKeybindShortcut { Combination = new KeyCombination() },
+                ],
+            },
+            new WindowKeybindTargetConfig
+            {
+                TargetId = "",
+                DisplayLabel = "invalid",
+                Shortcuts = [],
+            },
+        ]);
 
         WindowKeybindTargetConfig target = Assert.Single(catalog.Targets);
         Assert.Equal("proc|editor", target.TargetId);
@@ -52,40 +43,22 @@ public sealed class KeybindCatalogBuilderTests
     [Fact]
     public void Build_ResolvesUsingFirstMatchingTarget()
     {
-        var combination = new KeyCombination
-        {
-            Alt = true,
-            Key = KeybindPrimaryKey.F2,
-        };
+        var combination = new KeyCombination { Alt = true, Key = KeybindPrimaryKey.F2 };
 
-        KeybindCatalog catalog = KeybindCatalogBuilder.Build(
-            [
-                new WindowKeybindTargetConfig
-                {
-                    TargetId = "proc|editor",
-                    DisplayLabel = "Editor",
-                    Shortcuts =
-                    [
-                        new WindowKeybindShortcut
-                        {
-                            Combination = combination,
-                        },
-                    ],
-                },
-                new WindowKeybindTargetConfig
-                {
-                    TargetId = "proc|terminal",
-                    DisplayLabel = "Terminal",
-                    Shortcuts =
-                    [
-                        new WindowKeybindShortcut
-                        {
-                            Combination = combination,
-                        },
-                    ],
-                },
-            ]
-        );
+        KeybindCatalog catalog = KeybindCatalogBuilder.Build([
+            new WindowKeybindTargetConfig
+            {
+                TargetId = "proc|editor",
+                DisplayLabel = "Editor",
+                Shortcuts = [new WindowKeybindShortcut { Combination = combination }],
+            },
+            new WindowKeybindTargetConfig
+            {
+                TargetId = "proc|terminal",
+                DisplayLabel = "Terminal",
+                Shortcuts = [new WindowKeybindShortcut { Combination = combination }],
+            },
+        ]);
 
         Assert.True(catalog.TryResolveTarget(combination, out string targetId));
         Assert.Equal("proc|editor", targetId);

@@ -26,7 +26,12 @@ public sealed class KeybindPressedStateTracker
         ArgumentNullException.ThrowIfNull(keyEvent);
 
         combination = new KeyCombination();
-        if (!GlobalKeyEventKeyResolver.TryResolve(keyEvent, out ResolvedGlobalKeyEvent resolvedEvent))
+        if (
+            !GlobalKeyEventKeyResolver.TryResolve(
+                keyEvent,
+                out ResolvedGlobalKeyEvent resolvedEvent
+            )
+        )
             return false;
 
         lock (_syncRoot)

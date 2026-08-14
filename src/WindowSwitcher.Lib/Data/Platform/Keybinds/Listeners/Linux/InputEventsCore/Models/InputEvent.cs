@@ -13,7 +13,8 @@ public abstract record InputEvent(
     string DevicePath,
     ushort Type,
     ushort Code,
-    int Value);
+    int Value
+);
 
 /// <summary>
 /// Event that did not map to a specialized higher-level record.
@@ -23,8 +24,8 @@ public sealed record RawInputEvent(
     string DevicePath,
     ushort Type,
     ushort Code,
-    int Value)
-    : InputEvent(Timestamp, DevicePath, Type, Code, Value);
+    int Value
+) : InputEvent(Timestamp, DevicePath, Type, Code, Value);
 
 /// <summary>
 /// Decoded keyboard/button event with normalized key state.
@@ -36,8 +37,8 @@ public sealed record KeyEvent(
     ushort Code,
     int Value,
     KeyCode Key,
-    KeyState State)
-    : InputEvent(Timestamp, DevicePath, Type, Code, Value);
+    KeyState State
+) : InputEvent(Timestamp, DevicePath, Type, Code, Value);
 
 /// <summary>
 /// Synchronization event (<c>EV_SYN</c>) that marks frame boundaries in evdev streams.
@@ -47,8 +48,8 @@ public sealed record SyncEvent(
     string DevicePath,
     ushort Type,
     ushort Code,
-    int Value)
-    : InputEvent(Timestamp, DevicePath, Type, Code, Value);
+    int Value
+) : InputEvent(Timestamp, DevicePath, Type, Code, Value);
 
 /// <summary>
 /// Relative axis event (<c>EV_REL</c>), typically mouse movement or wheel deltas.
@@ -58,8 +59,8 @@ public sealed record RelativeAxisEvent(
     string DevicePath,
     ushort Type,
     ushort Code,
-    int Value)
-    : InputEvent(Timestamp, DevicePath, Type, Code, Value);
+    int Value
+) : InputEvent(Timestamp, DevicePath, Type, Code, Value);
 
 /// <summary>
 /// Absolute axis event (<c>EV_ABS</c>), typically touch or gamepad position updates.
@@ -69,5 +70,5 @@ public sealed record AbsoluteAxisEvent(
     string DevicePath,
     ushort Type,
     ushort Code,
-    int Value)
-    : InputEvent(Timestamp, DevicePath, Type, Code, Value);
+    int Value
+) : InputEvent(Timestamp, DevicePath, Type, Code, Value);

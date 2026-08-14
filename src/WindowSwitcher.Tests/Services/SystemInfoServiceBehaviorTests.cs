@@ -34,16 +34,20 @@ public sealed class SystemInfoServiceBehaviorTests
     [Fact]
     public async Task GetCurrentUserAsync_PropagatesExternalCancellation()
     {
-        var runner = new CapturingCommandRunner((_, token) =>
-        {
-            token.ThrowIfCancellationRequested();
-            return Task.FromResult(new CommandResult(0, "ignored", string.Empty, false));
-        });
+        var runner = new CapturingCommandRunner(
+            (_, token) =>
+            {
+                token.ThrowIfCancellationRequested();
+                return Task.FromResult(new CommandResult(0, "ignored", string.Empty, false));
+            }
+        );
         var sut = new SystemInfoService(runner);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => sut.GetCurrentUserAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            sut.GetCurrentUserAsync(cts.Token)
+        );
     }
 
     private sealed class CapturingCommandRunner(

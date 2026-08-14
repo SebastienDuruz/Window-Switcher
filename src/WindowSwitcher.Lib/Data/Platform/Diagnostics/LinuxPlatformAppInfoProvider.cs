@@ -2,8 +2,8 @@ using System.Runtime.InteropServices;
 using Avalonia.Controls.ApplicationLifetimes;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;

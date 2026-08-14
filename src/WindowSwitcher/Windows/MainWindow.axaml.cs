@@ -132,10 +132,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         }
 
         if (_configurationService.ShouldStartMinimized())
-            Dispatcher.UIThread.Post(
-                HideToTray,
-                DispatcherPriority.Background
-            );
+            Dispatcher.UIThread.Post(HideToTray, DispatcherPriority.Background);
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)
@@ -259,10 +256,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _previewSelectionReset?.ResetSelection(windowId);
     }
 
-    private void OnSelectionPromptChanged(
-        object? sender,
-        PreviewSelectionPromptEventArgs eventArgs
-    )
+    private void OnSelectionPromptChanged(object? sender, PreviewSelectionPromptEventArgs eventArgs)
     {
         if (StaticData.AppClosing)
             return;
@@ -368,5 +362,4 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
         Close();
     }
-
 }

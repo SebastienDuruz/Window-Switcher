@@ -32,11 +32,9 @@ public sealed class LinuxInputAccessException : InvalidOperationException
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        string paths = normalizedPaths.Length == 0
-            ? "/dev/input/event*"
-            : string.Join(", ", normalizedPaths);
+        string paths =
+            normalizedPaths.Length == 0 ? "/dev/input/event*" : string.Join(", ", normalizedPaths);
 
-        return
-            $"Global keyboard startup failed on Linux due to inaccessible input devices ({paths}). Reading /dev/input/event* requires elevated access. Use root, add the user to the input group, or configure udev rules.";
+        return $"Global keyboard startup failed on Linux due to inaccessible input devices ({paths}). Reading /dev/input/event* requires elevated access. Use root, add the user to the input group, or configure udev rules.";
     }
 }

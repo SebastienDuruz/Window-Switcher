@@ -9,13 +9,13 @@ internal sealed class ConfigFileWindowFilterSettingsProvider : IWindowFilterSett
 {
     public WindowFilterSettings GetSettings()
     {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config =>
-            new WindowFilterSettings(
+        return ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => new WindowFilterSettings(
                 config.BlacklistPrefixes.ToHashSet(StringComparer.OrdinalIgnoreCase),
                 config
                     .WhitelistPrefixes.Where(prefix => !string.IsNullOrWhiteSpace(prefix))
                     .ToArray()
-            )
-        );
+            ));
     }
 }

@@ -12,12 +12,30 @@ public sealed class PipeWireInteropTests
     {
         byte[] source =
         [
-            0, 0, 0, 255,
-            255, 0, 0, 255,
-            0, 0, 0, 0,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            0, 0, 0, 0,
+            0,
+            0,
+            0,
+            255,
+            255,
+            0,
+            0,
+            255,
+            0,
+            0,
+            0,
+            0,
+            0,
+            255,
+            0,
+            255,
+            0,
+            0,
+            255,
+            255,
+            0,
+            0,
+            0,
+            0,
         ];
         IntPtr sourcePointer = Marshal.AllocHGlobal(source.Length);
         IntPtr destinationPointer = Marshal.AllocHGlobal(3 * 3 * 4);
@@ -54,11 +72,7 @@ public sealed class PipeWireInteropTests
     [Fact]
     public void BgraFrameCopier_HandlesNegativeStride()
     {
-        byte[] bottomUp =
-        [
-            255, 0, 0, 255,
-            0, 0, 255, 255,
-        ];
+        byte[] bottomUp = [255, 0, 0, 255, 0, 0, 255, 255];
         IntPtr source = Marshal.AllocHGlobal(bottomUp.Length);
         IntPtr destination = Marshal.AllocHGlobal(bottomUp.Length);
         try
@@ -145,13 +159,7 @@ public sealed class PipeWireInteropTests
         bool firstReleased = false;
         bool secondReleased = false;
         var first = new NativeBgraPreviewFrame(IntPtr.Zero, 4, 1, 1, () => firstReleased = true);
-        var second = new NativeBgraPreviewFrame(
-            IntPtr.Zero,
-            4,
-            1,
-            1,
-            () => secondReleased = true
-        );
+        var second = new NativeBgraPreviewFrame(IntPtr.Zero, 4, 1, 1, () => secondReleased = true);
 
         channel.Publish(first);
         channel.Publish(second);
@@ -193,5 +201,4 @@ public sealed class PipeWireInteropTests
         Assert.Equal("token-2", cache.TakeRestoreToken([aliases[1]]));
         Assert.Null(cache.TakeRestoreToken(aliases));
     }
-
 }

@@ -26,7 +26,8 @@ public sealed class WindowKeybindTargetCatalogService : IWindowKeybindTargetCata
     {
         ArgumentNullException.ThrowIfNull(runtimeWindows);
 
-        IReadOnlyCollection<WindowKeybindTargetConfig> persistedTargets = _keybindManager.GetTargets();
+        IReadOnlyCollection<WindowKeybindTargetConfig> persistedTargets =
+            _keybindManager.GetTargets();
         IReadOnlyList<KeybindTargetDescriptor> actionTargets = BuildActionTargets(persistedTargets);
         IReadOnlyList<KeybindTargetDescriptor> clientTargets = BuildClientTargets(
             persistedTargets,
@@ -49,7 +50,8 @@ public sealed class WindowKeybindTargetCatalogService : IWindowKeybindTargetCata
     }
 
     private static IReadOnlyList<KeybindTargetDescriptor> BuildActionTargets(
-        IEnumerable<WindowKeybindTargetConfig> persistedTargets)
+        IEnumerable<WindowKeybindTargetConfig> persistedTargets
+    )
     {
         ArgumentNullException.ThrowIfNull(persistedTargets);
 
@@ -105,7 +107,8 @@ public sealed class WindowKeybindTargetCatalogService : IWindowKeybindTargetCata
 
     private static IReadOnlyList<KeybindTargetDescriptor> BuildClientTargets(
         IReadOnlyCollection<WindowKeybindTargetConfig> persistedTargets,
-        IReadOnlyCollection<WindowConfig> runtimeWindows)
+        IReadOnlyCollection<WindowConfig> runtimeWindows
+    )
     {
         ArgumentNullException.ThrowIfNull(persistedTargets);
         ArgumentNullException.ThrowIfNull(runtimeWindows);

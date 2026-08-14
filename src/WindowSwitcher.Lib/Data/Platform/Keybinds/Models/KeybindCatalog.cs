@@ -11,7 +11,8 @@ internal sealed class KeybindCatalog
     public KeybindCatalog(
         IReadOnlyList<WindowKeybindTargetConfig> targets,
         IReadOnlyDictionary<string, WindowKeybindTargetConfig> targetsById,
-        IReadOnlyDictionary<KeyCombination, string> targetsByCombination)
+        IReadOnlyDictionary<KeyCombination, string> targetsByCombination
+    )
     {
         ArgumentNullException.ThrowIfNull(targets);
         ArgumentNullException.ThrowIfNull(targetsById);

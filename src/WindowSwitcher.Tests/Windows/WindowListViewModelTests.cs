@@ -11,25 +11,11 @@ public sealed class WindowListViewModelTests
     public async Task FetchWindowsWithFiltersAsync_AppliesInjectedFilterSettings()
     {
         using var sut = new WindowListViewModel(
-            new FakeWindowSnapshotProvider(
-                [
-                    new WindowConfig
-                    {
-                        WindowId = "1",
-                        WindowTitle = "Visual Studio Code",
-                    },
-                    new WindowConfig
-                    {
-                        WindowId = "2",
-                        WindowTitle = "Browser",
-                    },
-                    new WindowConfig
-                    {
-                        WindowId = "3",
-                        WindowTitle = "Blocked Code",
-                    },
-                ]
-            ),
+            new FakeWindowSnapshotProvider([
+                new WindowConfig { WindowId = "1", WindowTitle = "Visual Studio Code" },
+                new WindowConfig { WindowId = "2", WindowTitle = "Browser" },
+                new WindowConfig { WindowId = "3", WindowTitle = "Blocked Code" },
+            ]),
             new FakeWindowFilterSettingsProvider(
                 new WindowFilterSettings(
                     new HashSet<string>(["Blocked Code"], StringComparer.OrdinalIgnoreCase),

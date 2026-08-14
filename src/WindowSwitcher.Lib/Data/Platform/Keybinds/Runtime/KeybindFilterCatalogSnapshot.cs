@@ -18,7 +18,8 @@ internal sealed class KeybindFilterCatalogSnapshot
 
     private KeybindFilterCatalogSnapshot(
         IReadOnlyList<KeyCombination> combinations,
-        KeybindCatalog catalog)
+        KeybindCatalog catalog
+    )
     {
         _combinations = combinations;
         _catalog = catalog;
@@ -27,7 +28,8 @@ internal sealed class KeybindFilterCatalogSnapshot
     public static KeybindFilterCatalogSnapshot Empty => EmptySnapshot;
 
     public static KeybindFilterCatalogSnapshot Create(
-        IReadOnlyCollection<WindowKeybindTargetConfig> targets)
+        IReadOnlyCollection<WindowKeybindTargetConfig> targets
+    )
     {
         ArgumentNullException.ThrowIfNull(targets);
 

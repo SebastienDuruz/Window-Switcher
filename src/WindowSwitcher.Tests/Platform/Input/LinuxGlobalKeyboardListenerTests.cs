@@ -43,8 +43,8 @@ public sealed class LinuxGlobalKeyboardListenerTests
             },
         };
 
-        LinuxInputAccessException exception = Assert.Throws<LinuxInputAccessException>(
-            () => LinuxGlobalKeyboardListener.EnsureKeyboardAccess(devices)
+        LinuxInputAccessException exception = Assert.Throws<LinuxInputAccessException>(() =>
+            LinuxGlobalKeyboardListener.EnsureKeyboardAccess(devices)
         );
 
         Assert.Contains("/dev/input/event*", exception.Message, StringComparison.Ordinal);

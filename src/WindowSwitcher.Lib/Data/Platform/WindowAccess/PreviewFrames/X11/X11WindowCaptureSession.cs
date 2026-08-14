@@ -10,8 +10,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
     private const int DamageEventOffset = 0;
     private const int ShmPermissions = 0x180;
     private const string DisableShmEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_SHM";
-    private static readonly nint XImageDataOffset =
-        Marshal.OffsetOf<XImage>(nameof(XImage.Data));
+    private static readonly nint XImageDataOffset = Marshal.OffsetOf<XImage>(nameof(XImage.Data));
 
     private readonly object _sync = new();
     private readonly IntPtr _display;
@@ -105,12 +104,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 return CloseAndReturnNull(display);
 
             _ = X11Native.XFlush(display);
-            return new X11WindowCaptureSession(
-                display,
-                window,
-                damageEventBase,
-                damage
-            )
+            return new X11WindowCaptureSession(display, window, damageEventBase, damage)
             {
                 _isRedirected = redirectedByThisClient,
             };
@@ -140,10 +134,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
         }
     }
 
-    public async Task<bool> WaitForDamageAsync(
-        int timeoutMs,
-        CancellationToken cancellationToken
-    )
+    public async Task<bool> WaitForDamageAsync(int timeoutMs, CancellationToken cancellationToken)
     {
         int delayMs = Math.Min(33, Math.Max(1, timeoutMs));
         long deadlineTicks = DateTimeOffset.UtcNow.AddMilliseconds(timeoutMs).Ticks;
@@ -275,18 +266,13 @@ internal sealed class X11WindowCaptureSession : IDisposable
     private bool EnsureCaptureSurface()
     {
         if (
-            X11Native.XGetWindowAttributes(_display, _window, out XWindowAttributes attributes)
-            == 0
+            X11Native.XGetWindowAttributes(_display, _window, out XWindowAttributes attributes) == 0
         )
             return false;
         if (attributes.Width <= 0 || attributes.Height <= 0)
             return false;
 
-        if (
-            _pixmap != IntPtr.Zero
-            && _width == attributes.Width
-            && _height == attributes.Height
-        )
+        if (_pixmap != IntPtr.Zero && _width == attributes.Width && _height == attributes.Height)
             return true;
 
         ReleaseCaptureSurface();
@@ -326,8 +312,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 out uint pixmapHeight,
                 out _,
                 out uint pixmapDepth
-            )
-            == 0
+            ) == 0
         )
             return false;
 
@@ -443,8 +428,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
                     x: 0,
                     y: 0,
                     X11Native.AllPlanes
-                )
-                == 0
+                ) == 0
             )
                 return null;
 
@@ -523,12 +507,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
 
                 if (sawDamage && _damage != IntPtr.Zero)
                 {
-                    X11Native.XDamageSubtract(
-                        _display,
-                        _damage,
-                        IntPtr.Zero,
-                        IntPtr.Zero
-                    );
+                    X11Native.XDamageSubtract(_display, _damage, IntPtr.Zero, IntPtr.Zero);
                     _ = X11Native.XFlush(_display);
                 }
             }

@@ -23,5 +23,5 @@ public enum KeyState
     /// <summary>
     /// Key repeat event while held down (<c>value = 2</c>).
     /// </summary>
-    Repeat = 2
+    Repeat = 2,
 }
