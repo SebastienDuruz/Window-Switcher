@@ -25,6 +25,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
     private int _height;
     private int _depth;
     private bool _isRedirected;
+    private bool _sharedMemoryDisabled;
     private bool _disposed;
 
     private X11WindowCaptureSession(
@@ -130,10 +131,12 @@ internal sealed class X11WindowCaptureSession : IDisposable
             if (!EnsureCaptureSurface())
                 return null;
 
-            if (_shmImage != IntPtr.Zero)
-                return CaptureShmFrame(request, bufferPool);
-
-            return CaptureXImageFrame(request, bufferPool);
+            return X11CaptureFallback.Capture(
+                _shmImage != IntPtr.Zero,
+                () => CaptureShmFrame(request, bufferPool),
+                DisableSharedMemory,
+                () => CaptureXImageFrame(request, bufferPool)
+            );
         }
     }
 
@@ -337,7 +340,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
 
     private void TryCreateShmImage(IntPtr visual)
     {
-        if (IsShmDisabled())
+        if (_sharedMemoryDisabled || IsShmDisabled())
             return;
 
         try
@@ -419,7 +422,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private NativeBgraPreviewFrame? CaptureShmFrame(
+    private X11CaptureAttempt CaptureShmFrame(
         ScreenshotRequest request,
         NativeFrameBufferPool bufferPool
     )
@@ -436,16 +439,24 @@ internal sealed class X11WindowCaptureSession : IDisposable
                     X11Native.AllPlanes
                 ) == 0
             )
-                return null;
+                return new X11CaptureAttempt(BackendSucceeded: false, Frame: null);
 
             _ = X11Native.XSync(_display, discard: 0);
-            return X11FrameConverter.CreateFrame(_shmImage, request, bufferPool);
+            return new X11CaptureAttempt(
+                BackendSucceeded: true,
+                X11FrameConverter.CreateFrame(_shmImage, request, bufferPool)
+            );
         }
         catch
         {
-            ReleaseShmImage();
-            return null;
+            return new X11CaptureAttempt(BackendSucceeded: false, Frame: null);
         }
+    }
+
+    private void DisableSharedMemory()
+    {
+        _sharedMemoryDisabled = true;
+        ReleaseShmImage();
     }
 
     private NativeBgraPreviewFrame? CaptureXImageFrame(

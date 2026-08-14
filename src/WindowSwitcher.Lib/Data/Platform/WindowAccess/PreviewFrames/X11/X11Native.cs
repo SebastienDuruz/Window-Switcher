@@ -6,6 +6,7 @@ internal static class X11Native
 {
     public const int ZPixmap = 2;
     public const int LsbFirst = 0;
+    public const int MsbFirst = 1;
     public const int CompositeRedirectAutomatic = 0;
     public const int DamageReportNonEmpty = 3;
     public const int IpcPrivate = 0;
