@@ -195,22 +195,14 @@ public partial class App : Application
             }
             catch (Exception) { }
 
-            try
-            {
-                await GlobalWindowKeybindRuntimeService.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception) { }
-            finally
-            {
-                GlobalWindowKeybindRuntimeService = null;
-            }
+            GlobalWindowKeybindRuntimeService = null;
         }
 
         if (GlobalKeyboardService is null)
         {
             GlobalKeyboardCts?.Dispose();
             GlobalKeyboardCts = null;
-            await ShutdownTelemetryAsync().ConfigureAwait(false);
+            await CompleteShutdownAsync().ConfigureAwait(false);
             return;
         }
 
@@ -220,19 +212,11 @@ public partial class App : Application
         }
         catch (Exception) { }
 
-        try
-        {
-            await GlobalKeyboardService.DisposeAsync().ConfigureAwait(false);
-        }
-        catch (Exception) { }
-        finally
-        {
-            GlobalKeyboardCts?.Dispose();
-            GlobalKeyboardCts = null;
-            GlobalKeyboardService = null;
-        }
+        GlobalKeyboardCts?.Dispose();
+        GlobalKeyboardCts = null;
+        GlobalKeyboardService = null;
 
-        await ShutdownTelemetryAsync().ConfigureAwait(false);
+        await CompleteShutdownAsync().ConfigureAwait(false);
     }
 
     private void OnDispatcherUnhandledException(
@@ -265,5 +249,11 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException -= OnCurrentDomainUnhandledException;
         TaskScheduler.UnobservedTaskException -= OnTaskSchedulerUnobservedTaskException;
         await AppTelemetry.ShutdownAsync().ConfigureAwait(false);
+    }
+
+    private async Task CompleteShutdownAsync()
+    {
+        await ShutdownTelemetryAsync().ConfigureAwait(false);
+        await AppServiceProvider.DisposeAsync().ConfigureAwait(false);
     }
 }

@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -11,61 +11,125 @@ using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 
 /// <summary>
-/// Default preview provider factory selected from runtime capabilities.
+/// Creates the single preview provider selected for the current platform session.
 /// </summary>
 public sealed class RuntimePreviewFrameProviderFactory(
-    ILinuxDependencyRegistry? linuxDependencies = null
-) : IPreviewFrameProviderFactory
+    ILinuxDependencyRegistry? linuxDependencies = null,
+    PlatformCapabilityStatus? capabilityStatus = null
+)
 {
     private readonly ILinuxDependencyRegistry _linuxDependencies =
         linuxDependencies ?? LinuxDependencies.Instance;
-    private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProviderSupport;
+    private readonly PlatformCapabilityStatus _capabilityStatus =
+        capabilityStatus ?? new PlatformCapabilityStatus();
+    private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProvider.IsSupported;
     private readonly Func<bool> _supportsPipeWire = LibPipeWireNative.IsAvailable;
-    private readonly Func<string?> _sessionTypeResolver = LinuxSessionDetector.GetSessionType;
-
-    internal RuntimePreviewFrameProviderFactory(
-        ILinuxDependencyRegistry? linuxDependencies,
-        Func<bool> supportsX11PreviewCapture,
-        Func<string?>? sessionTypeResolver = null
-    )
-        : this(linuxDependencies)
-    {
-        ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
-        _supportsX11PreviewCapture = supportsX11PreviewCapture;
-        if (sessionTypeResolver is not null)
-            _sessionTypeResolver = sessionTypeResolver;
-    }
+    private readonly Func<LinuxSessionKind> _sessionKindResolver =
+        LinuxSessionDetector.GetSessionKind;
+    private readonly Func<string, string?> _environmentResolver =
+        Environment.GetEnvironmentVariable;
 
     internal RuntimePreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
         Func<bool> supportsX11PreviewCapture,
         Func<bool> supportsPipeWire,
-        Func<string?>? sessionTypeResolver = null
+        Func<LinuxSessionKind> sessionKindResolver,
+        Func<string, string?>? environmentResolver = null,
+        PlatformCapabilityStatus? capabilityStatus = null
     )
-        : this(linuxDependencies, supportsX11PreviewCapture, sessionTypeResolver)
+        : this(linuxDependencies, capabilityStatus)
     {
+        ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
         ArgumentNullException.ThrowIfNull(supportsPipeWire);
+        ArgumentNullException.ThrowIfNull(sessionKindResolver);
+        _supportsX11PreviewCapture = supportsX11PreviewCapture;
         _supportsPipeWire = supportsPipeWire;
+        _sessionKindResolver = sessionKindResolver;
+        if (environmentResolver is not null)
+            _environmentResolver = environmentResolver;
     }
 
-    /// <inheritdoc />
-    public IPreviewFrameProvider Create(WinAccessorBase accessorBase)
+    /// <summary>
+    /// Creates the preview provider selected for the current platform and session.
+    /// </summary>
+    public IPreviewFrameProvider Create(WinAccessorBase accessor)
     {
-        ArgumentNullException.ThrowIfNull(accessorBase);
+        ArgumentNullException.ThrowIfNull(accessor);
 
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             return new NoOpPreviewFrameProvider();
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            throw new PlatformNotSupportedException("Only Windows and Linux are supported.");
 
-        return new LinuxPreviewFrameProviderFactory(
-            _linuxDependencies,
-            _supportsX11PreviewCapture,
-            _supportsPipeWire,
-            _sessionTypeResolver
-        ).Create(accessorBase);
+        LinuxSessionKind session = _sessionKindResolver();
+        return session switch
+        {
+            LinuxSessionKind.X11 => CreateX11Provider(session, accessor),
+            LinuxSessionKind.Wayland => CreateWaylandProvider(session, accessor),
+            _ => CreateUnsupportedProvider(session),
+        };
     }
 
-    private static bool X11PreviewFrameProviderSupport()
+    private IPreviewFrameProvider CreateX11Provider(
+        LinuxSessionKind session,
+        WinAccessorBase accessor
+    )
     {
-        return X11PreviewFrameProvider.IsSupported();
+        bool available = _supportsX11PreviewCapture();
+        _capabilityStatus.Update(
+            new PlatformCapabilitySnapshot(
+                session,
+                "EWMH",
+                available ? "XComposite" : "None",
+                available,
+                available ? null : "XComposite or XDamage is unavailable."
+            )
+        );
+        return available
+            ? new X11PreviewFrameProvider(accessor)
+            : new NoOpPreviewFrameProvider();
+    }
+
+    private IPreviewFrameProvider CreateWaylandProvider(
+        LinuxSessionKind session,
+        WinAccessorBase accessor
+    )
+    {
+        bool hasXWayland = !string.IsNullOrWhiteSpace(_environmentResolver("DISPLAY"));
+        bool available = _supportsPipeWire();
+        if (!available)
+            _linuxDependencies.ReportMissingOnce(LibPipeWireNative.LibraryName);
+
+        string? failure = available ? null : $"{LibPipeWireNative.LibraryName} is unavailable.";
+        if (!hasXWayland)
+        {
+            const string xWaylandFailure = "DISPLAY is unavailable; XWayland window discovery is disabled.";
+            failure = failure is null ? xWaylandFailure : $"{xWaylandFailure} {failure}";
+        }
+
+        _capabilityStatus.Update(
+            new PlatformCapabilitySnapshot(
+                session,
+                hasXWayland ? "EWMH (XWayland)" : "Unavailable",
+                available ? "PipeWire" : "None",
+                available,
+                failure
+            )
+        );
+        return available ? new PipeWireFrameProvider(accessor) : new NoOpPreviewFrameProvider();
+    }
+
+    private IPreviewFrameProvider CreateUnsupportedProvider(LinuxSessionKind session)
+    {
+        _capabilityStatus.Update(
+            new PlatformCapabilitySnapshot(
+                session,
+                "Unavailable",
+                "None",
+                false,
+                "No supported Linux display session was detected."
+            )
+        );
+        return new NoOpPreviewFrameProvider();
     }
 }

@@ -6,6 +6,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -26,7 +27,7 @@ public sealed class PipeWireFrameProvider
     private readonly WinAccessorBase _accessor;
     private readonly IPipeWirePortalClient _portalClient;
     private readonly IPipeWireNativeStreamFactory _streamFactory;
-    private readonly IPipeWireDiagnostics _diagnostics;
+    private readonly IPlatformDiagnostics _diagnostics;
     private readonly WaylandScreenCastMemoryCache _restoreTokenCache;
     private readonly SemaphoreSlim _portalCreationGate = new(1, 1);
     private readonly object _capturesSync = new();
@@ -51,9 +52,9 @@ public sealed class PipeWireFrameProvider
     public PipeWireFrameProvider(WinAccessorBase accessorBase)
         : this(
             accessorBase,
-            new PipeWirePortalClient(TracePipeWireDiagnostics.Instance),
+            new PipeWirePortalClient(TracePlatformDiagnostics.Instance),
             new PipeWireNativeStreamFactory(),
-            TracePipeWireDiagnostics.Instance,
+            TracePlatformDiagnostics.Instance,
             WaylandScreenCastMemoryCache.Shared
         )
     { }
@@ -62,7 +63,7 @@ public sealed class PipeWireFrameProvider
         WinAccessorBase accessorBase,
         IPipeWirePortalClient portalClient,
         IPipeWireNativeStreamFactory streamFactory,
-        IPipeWireDiagnostics diagnostics,
+        IPlatformDiagnostics diagnostics,
         WaylandScreenCastMemoryCache restoreTokenCache
     )
     {
@@ -732,7 +733,7 @@ internal interface IPipeWirePortalClient : IDisposable
     Task CloseAsync(string sessionPath, CancellationToken cancellationToken);
 }
 
-internal sealed class PipeWirePortalClient(IPipeWireDiagnostics diagnostics) : IPipeWirePortalClient
+internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : IPipeWirePortalClient
 {
     private const string Destination = "org.freedesktop.portal.Desktop";
     private static readonly ObjectPath DesktopPath = new("/org/freedesktop/portal/desktop");

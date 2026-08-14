@@ -1,7 +1,6 @@
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
@@ -9,7 +8,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 /// <summary>
 /// Activates runtime windows from a configured target id.
 /// </summary>
-public sealed class WindowKeybindActivator : IWindowKeybindActivator, IDisposable
+public sealed class WindowKeybindActivator : IWindowKeybindActivator
 {
     private readonly object _syncRoot = new();
     private readonly WinAccessorBase _accessor;
@@ -18,31 +17,20 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator, IDisposabl
         IReadOnlyList<WindowConfig>
     > _cycleCandidatesResolver;
     private readonly List<string> _cycleOrderWindowIds = [];
-    private readonly bool _ownsAccessor;
     private string _lastActivatedClientId = string.Empty;
 
     /// <inheritdoc />
     public event EventHandler<string>? WindowActivated;
 
     /// <summary>
-    /// Creates an activator from the current runtime accessor factory.
+    /// Creates an activator using the shared runtime window accessor.
     /// </summary>
-    public WindowKeybindActivator()
-        : this(AccessorFactory.GetAccessor(), ResolveSelectedCycleCandidates, ownsAccessor: true) { }
-
-    internal WindowKeybindActivator(WinAccessorBase accessor)
-        : this(accessor, ResolveSelectedCycleCandidates, ownsAccessor: false) { }
+    public WindowKeybindActivator(WinAccessorBase accessor)
+        : this(accessor, ResolveSelectedCycleCandidates) { }
 
     internal WindowKeybindActivator(
         WinAccessorBase accessor,
         Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> cycleCandidatesResolver
-    )
-        : this(accessor, cycleCandidatesResolver, ownsAccessor: false) { }
-
-    private WindowKeybindActivator(
-        WinAccessorBase accessor,
-        Func<IReadOnlyCollection<WindowConfig>, IReadOnlyList<WindowConfig>> cycleCandidatesResolver,
-        bool ownsAccessor
     )
     {
         ArgumentNullException.ThrowIfNull(accessor);
@@ -50,7 +38,6 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator, IDisposabl
 
         _accessor = accessor;
         _cycleCandidatesResolver = cycleCandidatesResolver;
-        _ownsAccessor = ownsAccessor;
     }
 
     /// <inheritdoc />
@@ -129,15 +116,6 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator, IDisposabl
         {
             _lastActivatedClientId = windowId;
         }
-    }
-
-    /// <summary>
-    /// Releases the runtime accessor created by the default constructor.
-    /// </summary>
-    public void Dispose()
-    {
-        if (_ownsAccessor)
-            _accessor.Dispose();
     }
 
     private async Task<bool> TryActivateRelativeClientAsync(
