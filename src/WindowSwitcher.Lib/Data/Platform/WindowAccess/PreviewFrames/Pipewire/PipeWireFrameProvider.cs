@@ -1,9 +1,6 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Avalonia;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
@@ -16,10 +13,7 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 /// <summary>
 /// Captures Wayland window previews through the ScreenCast portal and libpipewire.
 /// </summary>
-public sealed class PipeWireFrameProvider
-    : IPreviewFrameProvider,
-        INativeBgraStreamingPreviewFrameProvider,
-        IPreviewSelectionReset
+public sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSelectionReset
 {
     private const int DefaultWidth = 640;
     private const int DefaultHeight = 360;
@@ -80,39 +74,7 @@ public sealed class PipeWireFrameProvider
     }
 
     /// <inheritdoc />
-    public async Task<Bitmap?> RequestAsync(
-        string windowId,
-        ScreenshotRequest request,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (!CanCapture(windowId))
-            return null;
-
-        CaptureContext? capture = await EnsureCaptureAsync(windowId, request, cancellationToken)
-            .ConfigureAwait(false);
-        if (capture is null)
-            return null;
-
-        NativeBgraPreviewFrame? frame = await capture
-            .Stream.ReadFrameAsync(
-                TimeSpan.FromMilliseconds(Math.Max(0, request.TimeoutMs)),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-        if (frame is null)
-        {
-            if (capture.Stream.IsFaulted)
-                InvalidateCapture(windowId, capture);
-            return null;
-        }
-
-        using (frame)
-            return CreateBitmap(frame);
-    }
-
-    /// <inheritdoc />
-    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamNativeBgraAsync(
+    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -582,27 +544,6 @@ public sealed class PipeWireFrameProvider
     private static int GetHeight(ScreenshotRequest request)
     {
         return request.MaxHeightPx is > 0 ? request.MaxHeightPx.Value : DefaultHeight;
-    }
-
-    private static Bitmap? CreateBitmap(NativeBgraPreviewFrame frame)
-    {
-        if (frame.Data == IntPtr.Zero || frame.WidthPx <= 0 || frame.HeightPx <= 0)
-            return null;
-
-        var bitmap = new WriteableBitmap(
-            new PixelSize(frame.WidthPx, frame.HeightPx),
-            new Vector(96, 96),
-            PixelFormat.Bgra8888,
-            AlphaFormat.Opaque
-        );
-        using ILockedFramebuffer framebuffer = bitmap.Lock();
-        if (
-            framebuffer.Address != IntPtr.Zero
-            && frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes)
-        )
-            return bitmap;
-        bitmap.Dispose();
-        return null;
     }
 
     /// <inheritdoc />

@@ -5,14 +5,14 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractio
 /// </summary>
 public sealed class NativeBgraPreviewFrame : IDisposable
 {
-    private readonly Action _release;
-    private bool _disposed;
+    private Action? _release;
 
     internal NativeBgraPreviewFrame(
         IntPtr data,
         int length,
         int widthPx,
         int heightPx,
+        int stride,
         Action release
     )
     {
@@ -22,6 +22,7 @@ public sealed class NativeBgraPreviewFrame : IDisposable
         Length = length;
         WidthPx = widthPx;
         HeightPx = heightPx;
+        Stride = stride;
         _release = release;
     }
 
@@ -46,6 +47,11 @@ public sealed class NativeBgraPreviewFrame : IDisposable
     public int HeightPx { get; }
 
     /// <summary>
+    /// Gets the number of source bytes between two adjacent rows.
+    /// </summary>
+    public int Stride { get; }
+
+    /// <summary>
     /// Copies the frame bytes into a native BGRA destination buffer.
     /// </summary>
     /// <param name="destination">Destination buffer pointer.</param>
@@ -53,7 +59,15 @@ public sealed class NativeBgraPreviewFrame : IDisposable
     /// <returns><see langword="true" /> when the copy succeeds; otherwise, <see langword="false" />.</returns>
     public bool TryCopyTo(IntPtr destination, int destinationStride)
     {
-        if (Data == IntPtr.Zero || destination == IntPtr.Zero || Length <= 0)
+        if (
+            Data == IntPtr.Zero
+            || destination == IntPtr.Zero
+            || Length <= 0
+            || WidthPx <= 0
+            || HeightPx <= 0
+            || Stride <= 0
+            || destinationStride <= 0
+        )
             return false;
 
         int sourceStride;
@@ -61,17 +75,17 @@ public sealed class NativeBgraPreviewFrame : IDisposable
         try
         {
             sourceStride = checked(WidthPx * 4);
-            requiredBytes = checked(sourceStride * HeightPx);
+            requiredBytes = checked(Stride * HeightPx);
         }
         catch (OverflowException)
         {
             return false;
         }
 
-        if (Length < requiredBytes || destinationStride < sourceStride)
+        if (Stride < sourceStride || Length < requiredBytes || destinationStride < sourceStride)
             return false;
 
-        if (destinationStride == sourceStride)
+        if (Stride == sourceStride && destinationStride == sourceStride)
         {
             NativeMemoryCopy(destination, Data, (UIntPtr)requiredBytes);
             return true;
@@ -81,7 +95,7 @@ public sealed class NativeBgraPreviewFrame : IDisposable
         {
             NativeMemoryCopy(
                 IntPtr.Add(destination, row * destinationStride),
-                IntPtr.Add(Data, row * sourceStride),
+                IntPtr.Add(Data, row * Stride),
                 (UIntPtr)sourceStride
             );
         }
@@ -92,11 +106,7 @@ public sealed class NativeBgraPreviewFrame : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-        _release();
+        Interlocked.Exchange(ref _release, null)?.Invoke();
     }
 
     [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "memcpy")]

@@ -10,7 +10,6 @@ using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
-using Bitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace WindowSwitcher.Windows.Services;
 
@@ -18,15 +17,11 @@ internal sealed class FloatingWindowService
 {
     private const double TitleReservedHeight = 12;
     private const double PreviewBorderThickness = 2;
-    private const int DefaultPreviewRefreshIntervalMs = 100;
     private const int PreviewRequestTimeoutMs = 1_500;
-    private const int StreamPreviewRequestTimeoutMs = 1_500;
     private const int ResizePreviewRefreshDebounceMs = 250;
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
-    private readonly IStreamingPreviewFrameProvider? _streamingPreviewFrameProvider;
-    private readonly INativeBgraStreamingPreviewFrameProvider? _nativeBgraStreamingPreviewFrameProvider;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
     private readonly INativeThumbnailRenderer _nativeThumbnailRenderer;
     private readonly Image _windowScreenshot;
@@ -34,28 +29,24 @@ internal sealed class FloatingWindowService
     private readonly CancellationTokenSource _cts = new();
     private readonly Lock _previewOperationCancellationSync = new();
     private readonly SemaphoreSlim _previewUpdateSemaphore = new(1, 1);
-    private CancellationTokenSource? _previewOperationCancellation = new();
-    private Bitmap? _currentScreenshot;
-    private Bitmap? _previousScreenshot;
-    private nint _thumbnailHandle;
-    private volatile bool _isClosing;
-    private bool _previewCaptureSuspendedWhileDisabled;
-    private bool _isPreviewSurfaceCleared = true;
-    private int _targetScreenshotWidthPx;
-    private int _targetScreenshotHeightPx;
-    private readonly Lock _streamFrameSync = new();
+    private readonly Lock _pendingFrameSync = new();
     private readonly Lock _resizePreviewRefreshSync = new();
-    private Bitmap? _pendingStreamFrame;
-    private NativeBgraPreviewFrame? _pendingNativeBgraStreamFrame;
-    private int _previewCaptureEnabled;
-    private int _streamFrameDrainScheduled;
-    private int _nativeBgraStreamFrameDrainScheduled;
+    private CancellationTokenSource? _previewOperationCancellation = new();
     private CancellationTokenSource? _resizePreviewRefreshCancellation;
-    private bool _resizePreviewRefreshPending;
+    private NativeBgraPreviewFrame? _pendingFrame;
     private WriteableBitmap? _streamBitmapA;
     private WriteableBitmap? _streamBitmapB;
-    private int _nextStreamBitmapIndex;
     private PixelSize _streamBitmapSize;
+    private nint _thumbnailHandle;
+    private int _nextStreamBitmapIndex;
+    private int _pendingFrameDrainScheduled;
+    private int _previewCaptureEnabled;
+    private int _targetScreenshotWidthPx;
+    private int _targetScreenshotHeightPx;
+    private volatile bool _isClosing;
+    private bool _isPreviewSurfaceCleared = true;
+    private bool _previewCaptureSuspendedWhileDisabled;
+    private bool _resizePreviewRefreshPending;
 
     public FloatingWindowService(
         Window ownerWindow,
@@ -78,9 +69,6 @@ internal sealed class FloatingWindowService
         _ownerWindow = ownerWindow;
         _windowConfig = windowConfig;
         _previewFrameProvider = previewFrameProvider;
-        _streamingPreviewFrameProvider = previewFrameProvider as IStreamingPreviewFrameProvider;
-        _nativeBgraStreamingPreviewFrameProvider =
-            previewFrameProvider as INativeBgraStreamingPreviewFrameProvider;
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _nativeThumbnailRenderer = nativeThumbnailRenderer;
         _windowScreenshot = windowScreenshot;
@@ -89,57 +77,33 @@ internal sealed class FloatingWindowService
         _previewCaptureSuspendedWhileDisabled = !IsPreviewCaptureEnabled();
     }
 
-    public void Start()
-    {
-        _ = Task.Run(() => RunPreviewLoopAsync(_cts.Token));
-    }
+    public void Start() => _ = Task.Run(() => RunPreviewLoopAsync(_cts.Token));
 
     public void OnWindowResized()
     {
         UpdateLayout();
-
-        if (HasStreamingPreviewProvider())
+        if (!_floatingPreviewPolicy.UseNativeThumbnailPreview)
             ScheduleResizePreviewRefresh();
-
-        if (_floatingPreviewPolicy.UseNativeThumbnailPreview && IsPreviewCaptureEnabled())
+        else if (IsPreviewCaptureEnabled())
             RegisterWindowThumbnail();
     }
 
-    public void OnPointerReleased()
-    {
-        FlushPendingResizePreviewRefresh();
-    }
+    public void OnPointerReleased() => FlushPendingResizePreviewRefresh();
 
-    public void SetPreviewHighlight(bool isSelected)
-    {
-        _previewBorder.IsVisible = isSelected;
-        if (
-            !isSelected
-            && IsPreviewCaptureEnabled()
-            && !HasStreamingPreviewProvider()
-            && _floatingPreviewPolicy.RefreshScreenshotWhenDeselected
-        )
-        {
-            _ = UpdateScreenshotForCurrentOperationAsync(PreviewRequestTimeoutMs, _cts.Token);
-        }
-    }
+    public void SetPreviewHighlight(bool isSelected) => _previewBorder.IsVisible = isSelected;
 
     public void UpdateLayout()
     {
         double topOffset = TitleReservedHeight;
-        double previewWidth = Math.Max(0, _ownerWindow.Width);
-        double previewHeight = Math.Max(0, _ownerWindow.Height - topOffset);
-
+        double previewWidth = RoundToPixel(Math.Max(0, _ownerWindow.Width));
+        double previewHeight = RoundToPixel(Math.Max(0, _ownerWindow.Height - topOffset));
         double left = RoundToPixel(0);
         double top = RoundToPixel(topOffset);
-        previewWidth = RoundToPixel(previewWidth);
-        previewHeight = RoundToPixel(previewHeight);
 
         Canvas.SetLeft(_previewBorder, left);
         Canvas.SetTop(_previewBorder, top);
         _previewBorder.Width = previewWidth;
         _previewBorder.Height = previewHeight;
-
         if (!_floatingPreviewPolicy.ShowScreenshotControl)
             return;
 
@@ -148,13 +112,9 @@ internal sealed class FloatingWindowService
         _windowScreenshot.Width = previewWidth;
         _windowScreenshot.Height = previewHeight;
 
-        double scale = _ownerWindow.RenderScaling;
-        if (scale <= 0)
-            scale = 1;
-        int widthPx = (int)Math.Round(previewWidth * scale);
-        int heightPx = (int)Math.Round(previewHeight * scale);
-        Volatile.Write(ref _targetScreenshotWidthPx, widthPx);
-        Volatile.Write(ref _targetScreenshotHeightPx, heightPx);
+        double scale = _ownerWindow.RenderScaling > 0 ? _ownerWindow.RenderScaling : 1;
+        Volatile.Write(ref _targetScreenshotWidthPx, (int)Math.Round(previewWidth * scale));
+        Volatile.Write(ref _targetScreenshotHeightPx, (int)Math.Round(previewHeight * scale));
     }
 
     public void Stop(string windowId)
@@ -164,20 +124,13 @@ internal sealed class FloatingWindowService
 
         _isClosing = true;
         CancelPendingResizePreviewRefresh(executeRefresh: false);
-        _previewFrameProvider.ForgetWindow(windowId);
         _cts.Cancel();
         CancelPreviewOperations(recreateTokenSource: false);
-        DisposePendingStreamFrame();
-        DisposePendingNativeBgraStreamFrame();
-
+        _previewFrameProvider.ForgetWindow(windowId);
+        DisposePendingFrame();
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
             UnregisterWindowThumbnail();
-
         _windowScreenshot.Source = null;
-        _currentScreenshot?.Dispose();
-        _previousScreenshot?.Dispose();
-        _currentScreenshot = null;
-        _previousScreenshot = null;
         DisposeStreamBitmaps();
         _isPreviewSurfaceCleared = true;
     }
@@ -190,16 +143,15 @@ internal sealed class FloatingWindowService
         CancelPendingResizePreviewRefresh(executeRefresh: false);
         UpdateLayout();
         CancelPreviewOperations(recreateTokenSource: true);
-        bool previewCaptureEnabled = ReadPreviewCaptureEnabled();
-        Volatile.Write(ref _previewCaptureEnabled, previewCaptureEnabled ? 1 : 0);
-        if (!previewCaptureEnabled)
+        bool enabled = ReadPreviewCaptureEnabled();
+        Volatile.Write(ref _previewCaptureEnabled, enabled ? 1 : 0);
+        if (!enabled)
         {
             if (!_previewCaptureSuspendedWhileDisabled)
             {
                 _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
                 _previewCaptureSuspendedWhileDisabled = true;
             }
-
             if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
                 UnregisterWindowThumbnail();
             _ = ClearPreviewSurfaceAsync(_cts.Token);
@@ -211,98 +163,6 @@ internal sealed class FloatingWindowService
             RegisterWindowThumbnail();
     }
 
-    private void ScheduleResizePreviewRefresh()
-    {
-        CancellationTokenSource refreshCancellation = new();
-        CancellationTokenSource? previousCancellation;
-        lock (_resizePreviewRefreshSync)
-        {
-            previousCancellation = _resizePreviewRefreshCancellation;
-            _resizePreviewRefreshCancellation = refreshCancellation;
-            _resizePreviewRefreshPending = true;
-        }
-
-        previousCancellation?.Cancel();
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(ResizePreviewRefreshDebounceMs, refreshCancellation.Token)
-                    .ConfigureAwait(false);
-
-                if (TryConsumePendingResizePreviewRefresh(refreshCancellation))
-                    CancelPreviewOperations(recreateTokenSource: true);
-            }
-            catch (OperationCanceledException)
-            {
-                // Resize is still in progress or the window is shutting down.
-            }
-            finally
-            {
-                refreshCancellation.Dispose();
-            }
-        });
-    }
-
-    private void FlushPendingResizePreviewRefresh()
-    {
-        CancellationTokenSource? pendingCancellation;
-        bool shouldRefresh = false;
-        lock (_resizePreviewRefreshSync)
-        {
-            pendingCancellation = _resizePreviewRefreshCancellation;
-            _resizePreviewRefreshCancellation = null;
-            if (_resizePreviewRefreshPending)
-            {
-                _resizePreviewRefreshPending = false;
-                shouldRefresh = true;
-            }
-        }
-
-        pendingCancellation?.Cancel();
-
-        if (shouldRefresh && !_isClosing)
-            CancelPreviewOperations(recreateTokenSource: true);
-    }
-
-    private void CancelPendingResizePreviewRefresh(bool executeRefresh)
-    {
-        CancellationTokenSource? pendingCancellation;
-        bool shouldRefresh = false;
-        lock (_resizePreviewRefreshSync)
-        {
-            pendingCancellation = _resizePreviewRefreshCancellation;
-            _resizePreviewRefreshCancellation = null;
-            if (_resizePreviewRefreshPending)
-            {
-                _resizePreviewRefreshPending = false;
-                shouldRefresh = true;
-            }
-        }
-
-        pendingCancellation?.Cancel();
-
-        if (executeRefresh && shouldRefresh && !_isClosing)
-            CancelPreviewOperations(recreateTokenSource: true);
-    }
-
-    private bool TryConsumePendingResizePreviewRefresh(CancellationTokenSource refreshCancellation)
-    {
-        lock (_resizePreviewRefreshSync)
-        {
-            if (!ReferenceEquals(_resizePreviewRefreshCancellation, refreshCancellation))
-                return false;
-
-            _resizePreviewRefreshCancellation = null;
-            if (!_resizePreviewRefreshPending || _isClosing)
-                return false;
-
-            _resizePreviewRefreshPending = false;
-            return true;
-        }
-    }
-
     private async Task RunPreviewLoopAsync(CancellationToken cancellationToken)
     {
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
@@ -312,31 +172,15 @@ internal sealed class FloatingWindowService
             return;
         }
 
-        await Task.Delay(Random.Shared.Next(0, 400), cancellationToken);
-
-        if (_nativeBgraStreamingPreviewFrameProvider is not null)
+        try
         {
-            await RunContinuousNativeBgraStreamLoopAsync(cancellationToken).ConfigureAwait(false);
+            await Task.Delay(Random.Shared.Next(0, 400), cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
             return;
         }
 
-        if (_streamingPreviewFrameProvider is not null)
-        {
-            await RunContinuousStreamLoopAsync(cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        await RunScreenshotPollingLoopAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    private bool HasStreamingPreviewProvider()
-    {
-        return _nativeBgraStreamingPreviewFrameProvider is not null
-            || _streamingPreviewFrameProvider is not null;
-    }
-
-    private async Task RunScreenshotPollingLoopAsync(CancellationToken cancellationToken)
-    {
         while (!cancellationToken.IsCancellationRequested)
         {
             using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
@@ -348,53 +192,13 @@ internal sealed class FloatingWindowService
                 if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
                     continue;
 
-                await UpdateScreenshot(PreviewRequestTimeoutMs, operationToken)
-                    .ConfigureAwait(false);
-                await Task.Delay(DefaultPreviewRefreshIntervalMs, operationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Shutdown path.
-            }
-            catch (OperationCanceledException)
-            {
-                // Preview settings changed while an operation was running.
-            }
-            catch (Exception)
-            {
-                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-            }
-        }
-    }
-
-    private async Task RunContinuousStreamLoopAsync(CancellationToken cancellationToken)
-    {
-        if (_streamingPreviewFrameProvider is null)
-            return;
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
-                cancellationToken
-            );
-            CancellationToken operationToken = operationCts.Token;
-
-            try
-            {
-                if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
-                    continue;
-
-                int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-                int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
                 var request = new ScreenshotRequest(
-                    MaxWidthPx: widthPx > 0 ? widthPx : null,
-                    MaxHeightPx: heightPx > 0 ? heightPx : null,
-                    TimeoutMs: StreamPreviewRequestTimeoutMs
+                    MaxWidthPx: PositiveOrNull(Volatile.Read(ref _targetScreenshotWidthPx)),
+                    MaxHeightPx: PositiveOrNull(Volatile.Read(ref _targetScreenshotHeightPx)),
+                    TimeoutMs: PreviewRequestTimeoutMs
                 );
-
                 await foreach (
-                    Bitmap frame in _streamingPreviewFrameProvider.StreamAsync(
+                    NativeBgraPreviewFrame frame in _previewFrameProvider.StreamAsync(
                         _windowConfig.WindowId,
                         request,
                         operationToken
@@ -406,513 +210,126 @@ internal sealed class FloatingWindowService
                         frame.Dispose();
                         break;
                     }
-
-                    QueueLatestStreamFrame(frame, operationToken);
+                    QueueLatestFrame(frame, operationToken);
                 }
+
+                await Task.Delay(500, operationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Shutdown path.
-            }
-            catch (OperationCanceledException)
-            {
-                // Preview settings changed while an operation was running.
-            }
+            catch (OperationCanceledException) when (operationToken.IsCancellationRequested) { }
             catch (Exception)
             {
-                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+                await DelayAfterFailureAsync(cancellationToken).ConfigureAwait(false);
             }
         }
     }
 
-    private async Task RunContinuousNativeBgraStreamLoopAsync(CancellationToken cancellationToken)
-    {
-        if (_nativeBgraStreamingPreviewFrameProvider is null)
-            return;
+    private static int? PositiveOrNull(int value) => value > 0 ? value : null;
 
-        while (!cancellationToken.IsCancellationRequested)
+    private static async Task DelayAfterFailureAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
-                cancellationToken
-            );
-            CancellationToken operationToken = operationCts.Token;
+            await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+    }
 
-            try
+    private void QueueLatestFrame(
+        NativeBgraPreviewFrame frame,
+        CancellationToken cancellationToken
+    )
+    {
+        NativeBgraPreviewFrame? disposeNow;
+        bool scheduleDrain = false;
+        lock (_pendingFrameSync)
+        {
+            if (
+                _isClosing
+                || cancellationToken.IsCancellationRequested
+                || !IsPreviewCaptureEnabled()
+            )
             {
-                if (!await EnsurePreviewEnabledAsync(operationToken).ConfigureAwait(false))
-                    continue;
+                disposeNow = frame;
+            }
+            else
+            {
+                disposeNow = _pendingFrame;
+                _pendingFrame = frame;
+                scheduleDrain =
+                    Interlocked.CompareExchange(ref _pendingFrameDrainScheduled, 1, 0) == 0;
+            }
+        }
 
-                int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-                int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
-                var request = new ScreenshotRequest(
-                    MaxWidthPx: widthPx > 0 ? widthPx : null,
-                    MaxHeightPx: heightPx > 0 ? heightPx : null,
-                    TimeoutMs: StreamPreviewRequestTimeoutMs
-                );
+        disposeNow?.Dispose();
+        if (scheduleDrain)
+            _ = ProcessQueuedFramesAsync(cancellationToken);
+    }
 
-                await foreach (
-                    NativeBgraPreviewFrame frame in _nativeBgraStreamingPreviewFrameProvider.StreamNativeBgraAsync(
-                        _windowConfig.WindowId,
-                        request,
-                        operationToken
-                    )
-                )
+    private async Task ProcessQueuedFramesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                NativeBgraPreviewFrame? frame;
+                lock (_pendingFrameSync)
                 {
-                    if (!IsPreviewCaptureEnabled())
-                    {
-                        frame.Dispose();
-                        break;
-                    }
-
-                    QueueLatestNativeBgraStreamFrame(frame, operationToken);
+                    frame = _pendingFrame;
+                    _pendingFrame = null;
+                }
+                if (frame is null)
+                    break;
+                await ApplyFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        finally
+        {
+            Interlocked.Exchange(ref _pendingFrameDrainScheduled, 0);
+            bool scheduleDrain = false;
+            lock (_pendingFrameSync)
+            {
+                if (_isClosing || cancellationToken.IsCancellationRequested)
+                {
+                    _pendingFrame?.Dispose();
+                    _pendingFrame = null;
+                }
+                else if (_pendingFrame is not null)
+                {
+                    scheduleDrain =
+                        Interlocked.CompareExchange(ref _pendingFrameDrainScheduled, 1, 0) == 0;
                 }
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Shutdown path.
-            }
-            catch (OperationCanceledException)
-            {
-                // Preview settings changed while an operation was running.
-            }
-            catch (Exception)
-            {
-                await Task.Delay(500, cancellationToken).ConfigureAwait(false);
-            }
+            if (scheduleDrain)
+                _ = ProcessQueuedFramesAsync(cancellationToken);
         }
     }
 
-    private async Task UpdateScreenshot(int requestTimeoutMs, CancellationToken cancellationToken)
+    private async Task ApplyFrameAsync(
+        NativeBgraPreviewFrame frame,
+        CancellationToken cancellationToken
+    )
     {
-        if (_isClosing || cancellationToken.IsCancellationRequested || !IsPreviewCaptureEnabled())
-            return;
-
         bool lockTaken = false;
-        Bitmap? appScreenshot = null;
         try
         {
             await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             lockTaken = true;
-
-            if (_isClosing || cancellationToken.IsCancellationRequested)
+            if (_isClosing || !IsPreviewCaptureEnabled())
                 return;
-
-            int widthPx = Volatile.Read(ref _targetScreenshotWidthPx);
-            int heightPx = Volatile.Read(ref _targetScreenshotHeightPx);
-            var request = new ScreenshotRequest(
-                MaxWidthPx: widthPx > 0 ? widthPx : null,
-                MaxHeightPx: heightPx > 0 ? heightPx : null,
-                TimeoutMs: requestTimeoutMs
-            );
-
-            appScreenshot = await _previewFrameProvider
-                .RequestAsync(_windowConfig.WindowId, request, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (appScreenshot is null || _isClosing || cancellationToken.IsCancellationRequested)
-            {
-                appScreenshot?.Dispose();
-                return;
-            }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_isClosing || cancellationToken.IsCancellationRequested)
-                {
-                    appScreenshot.Dispose();
                     return;
-                }
-
-                Bitmap? disposeNow = _previousScreenshot;
-                _previousScreenshot = _currentScreenshot;
-                _currentScreenshot = appScreenshot;
-                _windowScreenshot.Source = appScreenshot;
-                _isPreviewSurfaceCleared = false;
-                disposeNow?.Dispose();
-            });
-        }
-        catch (OperationCanceledException)
-        {
-            appScreenshot?.Dispose();
-        }
-        finally
-        {
-            if (lockTaken)
-                _previewUpdateSemaphore.Release();
-        }
-    }
-
-    private bool IsPreviewCaptureEnabled()
-    {
-        return Volatile.Read(ref _previewCaptureEnabled) != 0;
-    }
-
-    private static bool ReadPreviewCaptureEnabled()
-    {
-        return ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
-    }
-
-    private async Task UpdateScreenshotForCurrentOperationAsync(
-        int requestTimeoutMs,
-        CancellationToken cancellationToken
-    )
-    {
-        using CancellationTokenSource operationCts = CreatePreviewOperationTokenSource(
-            cancellationToken
-        );
-        await UpdateScreenshot(requestTimeoutMs, operationCts.Token).ConfigureAwait(false);
-    }
-
-    private CancellationTokenSource CreatePreviewOperationTokenSource(
-        CancellationToken cancellationToken
-    )
-    {
-        CancellationToken previewOperationToken;
-        lock (_previewOperationCancellationSync)
-            previewOperationToken = _previewOperationCancellation?.Token ?? CancellationToken.None;
-
-        return CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            previewOperationToken
-        );
-    }
-
-    private void CancelPreviewOperations(bool recreateTokenSource)
-    {
-        CancellationTokenSource? toCancel;
-        lock (_previewOperationCancellationSync)
-        {
-            toCancel = _previewOperationCancellation;
-            _previewOperationCancellation = recreateTokenSource
-                ? new CancellationTokenSource()
-                : null;
-        }
-
-        if (toCancel is null)
-            return;
-
-        try
-        {
-            toCancel.Cancel();
-        }
-        catch
-        {
-            // Best effort cancellation.
-        }
-        finally
-        {
-            toCancel.Dispose();
-        }
-    }
-
-    private async Task<bool> EnsurePreviewEnabledAsync(CancellationToken cancellationToken)
-    {
-        if (IsPreviewCaptureEnabled())
-        {
-            _previewCaptureSuspendedWhileDisabled = false;
-            return true;
-        }
-
-        DisposePendingStreamFrame();
-        DisposePendingNativeBgraStreamFrame();
-        if (!_previewCaptureSuspendedWhileDisabled)
-        {
-            _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
-            _previewCaptureSuspendedWhileDisabled = true;
-        }
-
-        await ClearPreviewSurfaceAsync(cancellationToken).ConfigureAwait(false);
-        await Task.Delay(DefaultPreviewRefreshIntervalMs, cancellationToken).ConfigureAwait(false);
-        return false;
-    }
-
-    private async Task ClearPreviewSurfaceAsync(CancellationToken cancellationToken)
-    {
-        if (_isPreviewSurfaceCleared)
-            return;
-
-        bool lockTaken = false;
-        try
-        {
-            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lockTaken = true;
-
-            if (_isPreviewSurfaceCleared)
-                return;
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                Bitmap? current = _currentScreenshot;
-                Bitmap? previous = _previousScreenshot;
-                _currentScreenshot = null;
-                _previousScreenshot = null;
-                _windowScreenshot.Source = null;
-                _isPreviewSurfaceCleared = true;
-                current?.Dispose();
-                previous?.Dispose();
-            });
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Shutdown path.
-        }
-        finally
-        {
-            if (lockTaken)
-                _previewUpdateSemaphore.Release();
-        }
-    }
-
-    private void QueueLatestStreamFrame(Bitmap frame, CancellationToken cancellationToken)
-    {
-        Bitmap? disposeNow = null;
-        bool scheduleDrain = false;
-
-        lock (_streamFrameSync)
-        {
-            if (
-                _isClosing
-                || cancellationToken.IsCancellationRequested
-                || !IsPreviewCaptureEnabled()
-            )
-            {
-                disposeNow = frame;
-            }
-            else
-            {
-                // Last-frame-wins: replace any older frame still waiting for UI.
-                disposeNow = _pendingStreamFrame;
-                _pendingStreamFrame = frame;
-                scheduleDrain =
-                    Interlocked.CompareExchange(ref _streamFrameDrainScheduled, 1, 0) == 0;
-            }
-        }
-
-        disposeNow?.Dispose();
-
-        if (scheduleDrain)
-            _ = ProcessQueuedStreamFramesAsync(cancellationToken);
-    }
-
-    private void QueueLatestNativeBgraStreamFrame(
-        NativeBgraPreviewFrame frame,
-        CancellationToken cancellationToken
-    )
-    {
-        NativeBgraPreviewFrame? disposeNow = null;
-        bool scheduleDrain = false;
-
-        lock (_streamFrameSync)
-        {
-            if (
-                _isClosing
-                || cancellationToken.IsCancellationRequested
-                || !IsPreviewCaptureEnabled()
-            )
-            {
-                disposeNow = frame;
-            }
-            else
-            {
-                disposeNow = _pendingNativeBgraStreamFrame;
-                _pendingNativeBgraStreamFrame = frame;
-                scheduleDrain =
-                    Interlocked.CompareExchange(ref _nativeBgraStreamFrameDrainScheduled, 1, 0)
-                    == 0;
-            }
-        }
-
-        disposeNow?.Dispose();
-
-        if (scheduleDrain)
-            _ = ProcessQueuedNativeBgraStreamFramesAsync(cancellationToken);
-    }
-
-    private async Task ProcessQueuedStreamFramesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                Bitmap? nextFrame;
-                lock (_streamFrameSync)
-                {
-                    nextFrame = _pendingStreamFrame;
-                    _pendingStreamFrame = null;
-                }
-
-                if (nextFrame is null)
-                    break;
-
-                await ApplyStreamFrameAsync(nextFrame, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Shutdown or preview settings changed while processing queued stream frames.
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _streamFrameDrainScheduled, 0);
-
-            bool shouldScheduleDrain = false;
-            if (_isClosing || cancellationToken.IsCancellationRequested)
-            {
-                DisposePendingStreamFrame();
-            }
-            else
-            {
-                bool hasPendingFrame;
-                lock (_streamFrameSync)
-                    hasPendingFrame = _pendingStreamFrame is not null;
-
-                shouldScheduleDrain =
-                    hasPendingFrame
-                    && Interlocked.CompareExchange(ref _streamFrameDrainScheduled, 1, 0) == 0;
-            }
-
-            if (shouldScheduleDrain)
-            {
-                _ = ProcessQueuedStreamFramesAsync(cancellationToken);
-            }
-        }
-    }
-
-    private async Task ProcessQueuedNativeBgraStreamFramesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                NativeBgraPreviewFrame? nextFrame;
-                lock (_streamFrameSync)
-                {
-                    nextFrame = _pendingNativeBgraStreamFrame;
-                    _pendingNativeBgraStreamFrame = null;
-                }
-
-                if (nextFrame is null)
-                    break;
-
-                await ApplyNativeBgraStreamFrameAsync(nextFrame, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Shutdown or preview settings changed while processing queued stream frames.
-        }
-        finally
-        {
-            Interlocked.Exchange(ref _nativeBgraStreamFrameDrainScheduled, 0);
-
-            bool shouldScheduleDrain = false;
-            if (_isClosing || cancellationToken.IsCancellationRequested)
-            {
-                DisposePendingNativeBgraStreamFrame();
-            }
-            else
-            {
-                bool hasPendingFrame;
-                lock (_streamFrameSync)
-                    hasPendingFrame = _pendingNativeBgraStreamFrame is not null;
-
-                shouldScheduleDrain =
-                    hasPendingFrame
-                    && Interlocked.CompareExchange(ref _nativeBgraStreamFrameDrainScheduled, 1, 0)
-                        == 0;
-            }
-
-            if (shouldScheduleDrain)
-                _ = ProcessQueuedNativeBgraStreamFramesAsync(cancellationToken);
-        }
-    }
-
-    private async Task ApplyStreamFrameAsync(Bitmap frame, CancellationToken cancellationToken)
-    {
-        bool lockTaken = false;
-        bool frameTransferred = false;
-        try
-        {
-            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lockTaken = true;
-
-            if (
-                _isClosing
-                || cancellationToken.IsCancellationRequested
-                || !IsPreviewCaptureEnabled()
-            )
-            {
-                frame.Dispose();
-                return;
-            }
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (
-                    _isClosing
-                    || cancellationToken.IsCancellationRequested
-                    || !IsPreviewCaptureEnabled()
-                )
-                {
-                    frame.Dispose();
-                    return;
-                }
-
-                Bitmap? disposeNow = _previousScreenshot;
-                _previousScreenshot = _currentScreenshot;
-                _currentScreenshot = frame;
-                _windowScreenshot.Source = frame;
-                _isPreviewSurfaceCleared = false;
-                frameTransferred = true;
-                disposeNow?.Dispose();
-            });
-        }
-        catch
-        {
-            if (!frameTransferred)
-                frame.Dispose();
-            throw;
-        }
-        finally
-        {
-            if (lockTaken)
-                _previewUpdateSemaphore.Release();
-        }
-    }
-
-    private async Task ApplyNativeBgraStreamFrameAsync(
-        NativeBgraPreviewFrame frame,
-        CancellationToken cancellationToken
-    )
-    {
-        bool lockTaken = false;
-        try
-        {
-            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-            lockTaken = true;
-
-            if (
-                _isClosing
-                || cancellationToken.IsCancellationRequested
-                || !IsPreviewCaptureEnabled()
-            )
-                return;
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (
-                    _isClosing
-                    || cancellationToken.IsCancellationRequested
-                    || !IsPreviewCaptureEnabled()
-                )
-                    return;
-
                 WriteableBitmap? bitmap = GetNextStreamBitmap(frame.WidthPx, frame.HeightPx);
                 if (bitmap is null)
                     return;
-
-                if (TryCopyNativeBgraFrameToBitmap(frame, bitmap))
+                using ILockedFramebuffer framebuffer = bitmap.Lock();
+                if (
+                    framebuffer.Address != IntPtr.Zero
+                    && frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes)
+                )
                 {
                     _windowScreenshot.Source = bitmap;
                     _isPreviewSurfaceCleared = false;
@@ -927,72 +344,81 @@ internal sealed class FloatingWindowService
         }
     }
 
-    private void DisposePendingStreamFrame()
+    private async Task<bool> EnsurePreviewEnabledAsync(CancellationToken cancellationToken)
     {
-        Bitmap? pendingFrame;
-        lock (_streamFrameSync)
+        if (IsPreviewCaptureEnabled())
         {
-            pendingFrame = _pendingStreamFrame;
-            _pendingStreamFrame = null;
+            _previewCaptureSuspendedWhileDisabled = false;
+            return true;
         }
 
-        pendingFrame?.Dispose();
+        DisposePendingFrame();
+        if (!_previewCaptureSuspendedWhileDisabled)
+        {
+            _previewFrameProvider.SuspendWindow(_windowConfig.WindowId);
+            _previewCaptureSuspendedWhileDisabled = true;
+        }
+        await ClearPreviewSurfaceAsync(cancellationToken).ConfigureAwait(false);
+        await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        return false;
     }
 
-    private void DisposePendingNativeBgraStreamFrame()
+    private async Task ClearPreviewSurfaceAsync(CancellationToken cancellationToken)
     {
-        NativeBgraPreviewFrame? pendingFrame;
-        lock (_streamFrameSync)
-        {
-            pendingFrame = _pendingNativeBgraStreamFrame;
-            _pendingNativeBgraStreamFrame = null;
-        }
+        if (_isPreviewSurfaceCleared)
+            return;
 
-        pendingFrame?.Dispose();
+        bool lockTaken = false;
+        try
+        {
+            await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            lockTaken = true;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                _windowScreenshot.Source = null;
+                DisposeStreamBitmaps();
+                _isPreviewSurfaceCleared = true;
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        finally
+        {
+            if (lockTaken)
+                _previewUpdateSemaphore.Release();
+        }
+    }
+
+    private void DisposePendingFrame()
+    {
+        NativeBgraPreviewFrame? frame;
+        lock (_pendingFrameSync)
+        {
+            frame = _pendingFrame;
+            _pendingFrame = null;
+        }
+        frame?.Dispose();
     }
 
     private WriteableBitmap? GetNextStreamBitmap(int widthPx, int heightPx)
     {
         if (widthPx <= 0 || heightPx <= 0)
             return null;
-
-        var requestedSize = new PixelSize(widthPx, heightPx);
-        if (_streamBitmapSize != requestedSize)
+        var size = new PixelSize(widthPx, heightPx);
+        if (_streamBitmapSize != size)
         {
             _windowScreenshot.Source = null;
             DisposeStreamBitmaps();
-            _streamBitmapSize = requestedSize;
-            _streamBitmapA = CreateStreamBitmap(requestedSize);
-            _streamBitmapB = CreateStreamBitmap(requestedSize);
-            _nextStreamBitmapIndex = 0;
+            _streamBitmapSize = size;
+            _streamBitmapA = CreateStreamBitmap(size);
+            _streamBitmapB = CreateStreamBitmap(size);
         }
-
         WriteableBitmap? bitmap = _nextStreamBitmapIndex == 0 ? _streamBitmapA : _streamBitmapB;
         _nextStreamBitmapIndex = _nextStreamBitmapIndex == 0 ? 1 : 0;
         return bitmap;
     }
 
-    private static WriteableBitmap CreateStreamBitmap(PixelSize size)
-    {
-        return new WriteableBitmap(
-            size,
-            new Vector(96, 96),
-            PixelFormat.Bgra8888,
-            AlphaFormat.Opaque
-        );
-    }
-
-    private static bool TryCopyNativeBgraFrameToBitmap(
-        NativeBgraPreviewFrame frame,
-        WriteableBitmap bitmap
-    )
-    {
-        using ILockedFramebuffer framebuffer = bitmap.Lock();
-        if (framebuffer.Address == IntPtr.Zero)
-            return false;
-
-        return frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes);
-    }
+    private static WriteableBitmap CreateStreamBitmap(PixelSize size) =>
+        new(size, new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
 
     private void DisposeStreamBitmaps()
     {
@@ -1001,58 +427,145 @@ internal sealed class FloatingWindowService
         _streamBitmapA = null;
         _streamBitmapB = null;
         _streamBitmapSize = default;
+        _nextStreamBitmapIndex = 0;
     }
+
+    private CancellationTokenSource CreatePreviewOperationTokenSource(
+        CancellationToken cancellationToken
+    )
+    {
+        CancellationToken operationToken;
+        lock (_previewOperationCancellationSync)
+            operationToken = _previewOperationCancellation?.Token ?? CancellationToken.None;
+        return CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, operationToken);
+    }
+
+    private void CancelPreviewOperations(bool recreateTokenSource)
+    {
+        CancellationTokenSource? cancellation;
+        lock (_previewOperationCancellationSync)
+        {
+            cancellation = _previewOperationCancellation;
+            _previewOperationCancellation = recreateTokenSource
+                ? new CancellationTokenSource()
+                : null;
+        }
+        try
+        {
+            cancellation?.Cancel();
+        }
+        catch (ObjectDisposedException) { }
+        finally
+        {
+            cancellation?.Dispose();
+        }
+    }
+
+    private void ScheduleResizePreviewRefresh()
+    {
+        var cancellation = new CancellationTokenSource();
+        CancellationTokenSource? previous;
+        lock (_resizePreviewRefreshSync)
+        {
+            previous = _resizePreviewRefreshCancellation;
+            _resizePreviewRefreshCancellation = cancellation;
+            _resizePreviewRefreshPending = true;
+        }
+        previous?.Cancel();
+        _ = RestartAfterResizeAsync(cancellation);
+    }
+
+    private async Task RestartAfterResizeAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(ResizePreviewRefreshDebounceMs, cancellation.Token)
+                .ConfigureAwait(false);
+            if (TryConsumePendingResizePreviewRefresh(cancellation))
+                CancelPreviewOperations(recreateTokenSource: true);
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            cancellation.Dispose();
+        }
+    }
+
+    private void FlushPendingResizePreviewRefresh() =>
+        CancelPendingResizePreviewRefresh(executeRefresh: true);
+
+    private void CancelPendingResizePreviewRefresh(bool executeRefresh)
+    {
+        CancellationTokenSource? cancellation;
+        bool refresh;
+        lock (_resizePreviewRefreshSync)
+        {
+            cancellation = _resizePreviewRefreshCancellation;
+            _resizePreviewRefreshCancellation = null;
+            refresh = _resizePreviewRefreshPending;
+            _resizePreviewRefreshPending = false;
+        }
+        cancellation?.Cancel();
+        if (executeRefresh && refresh && !_isClosing)
+            CancelPreviewOperations(recreateTokenSource: true);
+    }
+
+    private bool TryConsumePendingResizePreviewRefresh(CancellationTokenSource cancellation)
+    {
+        lock (_resizePreviewRefreshSync)
+        {
+            if (!ReferenceEquals(_resizePreviewRefreshCancellation, cancellation))
+                return false;
+            _resizePreviewRefreshCancellation = null;
+            bool refresh = _resizePreviewRefreshPending && !_isClosing;
+            _resizePreviewRefreshPending = false;
+            return refresh;
+        }
+    }
+
+    private bool IsPreviewCaptureEnabled() =>
+        Volatile.Read(ref _previewCaptureEnabled) != 0;
+
+    private static bool ReadPreviewCaptureEnabled() =>
+        ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
 
     private void RegisterWindowThumbnail()
     {
-        if (_thumbnailHandle != 0)
-        {
-            _nativeThumbnailRenderer.Unregister(_thumbnailHandle);
-            _thumbnailHandle = 0;
-        }
-
+        UnregisterWindowThumbnail();
         IPlatformHandle? platformHandle = _ownerWindow.TryGetPlatformHandle();
-        if (platformHandle is null)
-            return;
-        if (!long.TryParse(_windowConfig.WindowId, out long srcHandleLong))
+        if (platformHandle is null || !long.TryParse(_windowConfig.WindowId, out long sourceHandle))
             return;
 
         double scale = _ownerWindow.Screens.Primary?.Scaling ?? 1;
         int inset = (int)Math.Round(PreviewBorderThickness * scale);
-        var destinationBounds = new NativeThumbnailBounds(
-            Left: inset,
-            Top: (int)(TitleReservedHeight * scale) + inset,
-            Right: (int)(_windowConfig.WindowWidth * scale) - inset,
-            Bottom: (int)(_windowConfig.WindowHeight * scale) - inset
+        var bounds = new NativeThumbnailBounds(
+            inset,
+            (int)(TitleReservedHeight * scale) + inset,
+            (int)(_windowConfig.WindowWidth * scale) - inset,
+            (int)(_windowConfig.WindowHeight * scale) - inset
         );
-
         if (
             _nativeThumbnailRenderer.TryRegister(
                 platformHandle.Handle,
-                new IntPtr(srcHandleLong),
-                destinationBounds,
-                out nint thumbnailHandle
+                new IntPtr(sourceHandle),
+                bounds,
+                out nint handle
             )
         )
-        {
-            _thumbnailHandle = thumbnailHandle;
-        }
+            _thumbnailHandle = handle;
     }
 
     private void UnregisterWindowThumbnail()
     {
         if (_thumbnailHandle == 0)
             return;
-
         _nativeThumbnailRenderer.Unregister(_thumbnailHandle);
         _thumbnailHandle = 0;
     }
 
     private double RoundToPixel(double value)
     {
-        double scale = _ownerWindow.RenderScaling;
-        if (scale <= 0)
-            scale = 1;
+        double scale = _ownerWindow.RenderScaling > 0 ? _ownerWindow.RenderScaling : 1;
         return Math.Round(value * scale) / scale;
     }
 }
