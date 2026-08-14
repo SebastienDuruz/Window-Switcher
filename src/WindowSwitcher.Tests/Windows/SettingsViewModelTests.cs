@@ -24,6 +24,7 @@ public sealed class SettingsViewModelTests
     public void EnablePreviews_AppliesImmediatelyAndInvokesApplyAction()
     {
         var repository = new FakeSettingsRepository();
+        repository.Config.EnablePreviews = false;
         int applyActionInvocationCount = 0;
         var sut = new SettingsViewModel(repository, () => applyActionInvocationCount++, _ => { });
 

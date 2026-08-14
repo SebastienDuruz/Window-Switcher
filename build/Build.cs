@@ -162,7 +162,13 @@ sealed class Build : NukeBuild
             PublishForRuntime(LinuxRuntime, EffectiveLinuxPublishDir);
 
             var publishedExecutable = EffectiveLinuxPublishDir / "WindowSwitcher";
+            var publishedPipeWireLibrary = EffectiveLinuxPublishDir / "libwindowswitcher-pipewire.so";
             True(File.Exists(publishedExecutable), $"Published binary not found at: {publishedExecutable}");
+            True(
+                File.Exists(publishedPipeWireLibrary),
+                $"Published PipeWire library not found at: {publishedPipeWireLibrary}");
+            AssertElfX64(publishedExecutable);
+            AssertElfX64(publishedPipeWireLibrary);
         });
 
     /// <summary>
@@ -221,6 +227,7 @@ sealed class Build : NukeBuild
 
             MakeExecutable(outputFile);
             True(File.Exists(outputFile), $"AppImage was not created at: {outputFile}");
+            AssertElfX64(outputFile);
         });
 
     /// <summary>
@@ -355,7 +362,6 @@ sealed class Build : NukeBuild
         => runtime switch
         {
             "linux-x64" => "x86_64",
-            "linux-arm64" => "aarch64",
             _ => throw new Exception($"Unsupported Linux runtime: {runtime}")
         };
 
@@ -372,9 +378,33 @@ sealed class Build : NukeBuild
         return architecture switch
         {
             "x86_64" => "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage",
-            "aarch64" => "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage",
             _ => throw new Exception($"Unsupported AppImage architecture: {architecture}")
         };
+    }
+
+    /// <summary>
+    /// Verifies that a file is a little-endian 64-bit ELF for the AMD64 architecture.
+    /// </summary>
+    static void AssertElfX64(AbsolutePath filePath)
+    {
+        const int ElfHeaderSize = 20;
+        const ushort ElfMachineX64 = 62;
+
+        True(File.Exists(filePath), $"ELF file not found: {filePath}");
+
+        Span<byte> header = stackalloc byte[ElfHeaderSize];
+        using var stream = File.OpenRead(filePath);
+        var bytesRead = stream.Read(header);
+
+        True(bytesRead == ElfHeaderSize, $"Invalid ELF header in: {filePath}");
+        True(
+            header[0] == 0x7f && header[1] == (byte)'E' && header[2] == (byte)'L' && header[3] == (byte)'F',
+            $"File is not an ELF executable: {filePath}");
+        True(header[4] == 2, $"ELF file is not 64-bit: {filePath}");
+        True(header[5] == 1, $"ELF file is not little-endian: {filePath}");
+
+        var machine = (ushort)(header[18] | (header[19] << 8));
+        True(machine == ElfMachineX64, $"ELF file is not x86-64: {filePath}");
     }
 
     /// <summary>
@@ -573,6 +603,6 @@ sealed class Build : NukeBuild
     /// </summary>
     static void EnsureLinuxRuntimeSupported(string runtime)
     {
-        True(runtime is "linux-x64" or "linux-arm64", $"Unsupported Linux runtime: {runtime}");
+        True(runtime == "linux-x64", $"Unsupported Linux runtime: {runtime}. Window Switcher supports linux-x64 only.");
     }
 }

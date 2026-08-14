@@ -200,7 +200,10 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         if (assets is null || assets.Count == 0)
             return (null, null);
 
-        string runtimeToken = GetRuntimeToken();
+        string? runtimeToken = GetRuntimeToken();
+        if (runtimeToken is null)
+            return (null, null);
+
         string extension = OperatingSystem.IsWindows() ? ".exe" : ".AppImage";
 
         string? fallbackName = null;
@@ -227,15 +230,25 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
                 return (name, url);
             }
 
-            fallbackName ??= name;
-            fallbackUrl ??= url;
+            if (!OperatingSystem.IsLinux())
+            {
+                fallbackName ??= name;
+                fallbackUrl ??= url;
+            }
         }
 
         return (fallbackName, fallbackUrl);
     }
 
-    private static string GetRuntimeToken()
+    private static string? GetRuntimeToken()
     {
+        if (OperatingSystem.IsLinux())
+        {
+            return RuntimeInformation.ProcessArchitecture == Architecture.X64
+                ? "linux-x64"
+                : null;
+        }
+
         string architectureToken = RuntimeInformation.ProcessArchitecture switch
         {
             Architecture.Arm64 => "arm64",
@@ -244,8 +257,6 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
 
         if (OperatingSystem.IsWindows())
             return $"win-{architectureToken}";
-        if (OperatingSystem.IsLinux())
-            return $"linux-{architectureToken}";
 
         return architectureToken;
     }

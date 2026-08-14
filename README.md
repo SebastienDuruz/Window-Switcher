@@ -192,6 +192,8 @@ Source and directly distributed builds use the GitHub release updater. Builds la
 
 ## Linux setup
 
+Window Switcher supports Linux on x86-64 systems through the `linux-x64` runtime. Linux ARM64 is not supported.
+
 ### Linux runtime dependencies
 
 Window discovery, focus, and renaming require [`wmctrl`](https://linux.die.net/man/1/wmctrl). Wayland previews also require PipeWire and an XDG Desktop Portal ScreenCast backend suitable for the desktop environment.
