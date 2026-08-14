@@ -1,20 +1,19 @@
 using System.Diagnostics;
-using Avalonia.Media.Imaging;
+using System.Runtime.CompilerServices;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
-internal sealed class X11PreviewFrameProvider
-    : IPreviewFrameProvider,
-        IStreamingPreviewFrameProvider
+internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 {
     private static readonly TimeSpan TargetFrameInterval = TimeSpan.FromMilliseconds(40);
     private readonly object _sessionsSync = new();
     private readonly Dictionary<string, X11WindowCaptureSession> _sessions = new(
         StringComparer.Ordinal
     );
+    private readonly NativeFrameBufferPool _bufferPool = new(maximumBuffers: 3);
     private bool _disposed;
 
     public X11PreviewFrameProvider(WinAccessorBase accessorBase)
@@ -27,33 +26,10 @@ internal sealed class X11PreviewFrameProvider
         return X11WindowCaptureSession.IsSupported();
     }
 
-    public Task<Bitmap?> RequestAsync(
+    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (_disposed || string.IsNullOrWhiteSpace(windowId))
-            return Task.FromResult<Bitmap?>(null);
-        if (cancellationToken.IsCancellationRequested)
-            return Task.FromResult<Bitmap?>(null);
-
-        X11WindowCaptureSession? session = GetOrCreateSession(windowId);
-        if (session is null)
-            return Task.FromResult<Bitmap?>(null);
-
-        Bitmap? frame = session.CaptureFrame(request);
-        if (frame is null)
-            RemoveSession(windowId, session);
-
-        return Task.FromResult(frame);
-    }
-
-    public async IAsyncEnumerable<Bitmap> StreamAsync(
-        string windowId,
-        ScreenshotRequest request,
-        [System.Runtime.CompilerServices.EnumeratorCancellation]
-            CancellationToken cancellationToken = default
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
         if (_disposed || string.IsNullOrWhiteSpace(windowId))
@@ -63,7 +39,7 @@ internal sealed class X11PreviewFrameProvider
         if (session is null)
             yield break;
 
-        Bitmap? initialFrame = session.CaptureFrame(request);
+        NativeBgraPreviewFrame? initialFrame = session.CaptureFrame(request, _bufferPool);
         if (initialFrame is not null)
         {
             yield return initialFrame;
@@ -102,7 +78,7 @@ internal sealed class X11PreviewFrameProvider
                 yield break;
             }
 
-            Bitmap? frame = session.CaptureFrame(request);
+            NativeBgraPreviewFrame? frame = session.CaptureFrame(request, _bufferPool);
             if (frame is not null)
             {
                 yield return frame;
@@ -144,6 +120,7 @@ internal sealed class X11PreviewFrameProvider
 
         _disposed = true;
         DisposeSessions();
+        _bufferPool.Dispose();
     }
 
     public ValueTask DisposeAsync()
@@ -153,6 +130,7 @@ internal sealed class X11PreviewFrameProvider
 
         _disposed = true;
         DisposeSessions();
+        _bufferPool.Dispose();
         return ValueTask.CompletedTask;
     }
 

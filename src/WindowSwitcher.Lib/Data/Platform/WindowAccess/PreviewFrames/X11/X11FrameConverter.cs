@@ -1,14 +1,16 @@
 using System.Runtime.InteropServices;
-using Avalonia;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 internal static class X11FrameConverter
 {
-    public static Bitmap? CreateBitmap(IntPtr imagePtr, ScreenshotRequest request)
+    public static NativeBgraPreviewFrame? CreateFrame(
+        IntPtr imagePtr,
+        ScreenshotRequest request,
+        NativeFrameBufferPool bufferPool
+    )
     {
         if (imagePtr == IntPtr.Zero)
             return null;
@@ -50,7 +52,27 @@ internal static class X11FrameConverter
         Marshal.Copy(image.Data, source, 0, sourceBytes);
 
         ConvertToBgra(source, destination, image, colorMasks, width, height, destinationStride);
-        return CreateBitmapFromBgra(destination, width, height, destinationStride);
+        NativeFrameBufferPool.Lease? lease = bufferPool.TryRent(destinationBytes);
+        if (lease is null)
+            return null;
+
+        try
+        {
+            Marshal.Copy(destination, 0, lease.Pointer, destinationBytes);
+            return new NativeBgraPreviewFrame(
+                lease.Pointer,
+                destinationBytes,
+                width,
+                height,
+                destinationStride,
+                lease.Dispose
+            );
+        }
+        catch
+        {
+            lease.Dispose();
+            return null;
+        }
     }
 
     private static bool TryNormalizeColorMasks(XImage image, out ColorMasks masks)
@@ -180,55 +202,6 @@ internal static class X11FrameConverter
 
         ulong value = (pixel & mask) >> shift;
         return (byte)Math.Min(255, value * 255 / max);
-    }
-
-    private static Bitmap? CreateBitmapFromBgra(
-        byte[] bytes,
-        int widthPx,
-        int heightPx,
-        int sourceStride
-    )
-    {
-        try
-        {
-            var bitmap = new WriteableBitmap(
-                new PixelSize(widthPx, heightPx),
-                new Vector(96, 96),
-                PixelFormat.Bgra8888,
-                AlphaFormat.Opaque
-            );
-            using ILockedFramebuffer framebuffer = bitmap.Lock();
-            IntPtr destination = framebuffer.Address;
-            if (destination == IntPtr.Zero)
-            {
-                bitmap.Dispose();
-                return null;
-            }
-
-            int destinationStride = framebuffer.RowBytes;
-            if (destinationStride == sourceStride)
-            {
-                Marshal.Copy(bytes, 0, destination, bytes.Length);
-            }
-            else
-            {
-                for (int row = 0; row < heightPx; row++)
-                {
-                    Marshal.Copy(
-                        bytes,
-                        row * sourceStride,
-                        IntPtr.Add(destination, row * destinationStride),
-                        sourceStride
-                    );
-                }
-            }
-
-            return bitmap;
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private readonly record struct ColorMasks(ulong Red, ulong Green, ulong Blue);

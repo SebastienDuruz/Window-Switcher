@@ -158,8 +158,22 @@ public sealed class PipeWireInteropTests
         var channel = new LatestFrameChannel();
         bool firstReleased = false;
         bool secondReleased = false;
-        var first = new NativeBgraPreviewFrame(IntPtr.Zero, 4, 1, 1, () => firstReleased = true);
-        var second = new NativeBgraPreviewFrame(IntPtr.Zero, 4, 1, 1, () => secondReleased = true);
+        var first = new NativeBgraPreviewFrame(
+            IntPtr.Zero,
+            4,
+            1,
+            1,
+            4,
+            () => firstReleased = true
+        );
+        var second = new NativeBgraPreviewFrame(
+            IntPtr.Zero,
+            4,
+            1,
+            1,
+            4,
+            () => secondReleased = true
+        );
 
         channel.Publish(first);
         channel.Publish(second);

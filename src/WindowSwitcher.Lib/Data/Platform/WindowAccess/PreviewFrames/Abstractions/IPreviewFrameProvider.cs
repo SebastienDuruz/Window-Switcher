@@ -1,4 +1,3 @@
-using Avalonia.Media.Imaging;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
@@ -6,9 +5,10 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractio
 public interface IPreviewFrameProvider : IDisposable, IAsyncDisposable
 {
     /// <summary>
-    /// Requests a preview frame for the specified window.
+    /// Streams disposable native BGRA frames for the specified window.
     /// </summary>
-    Task<Bitmap?> RequestAsync(
+    /// <remarks>The caller owns every returned frame and must dispose it after copying.</remarks>
+    IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
         CancellationToken cancellationToken = default

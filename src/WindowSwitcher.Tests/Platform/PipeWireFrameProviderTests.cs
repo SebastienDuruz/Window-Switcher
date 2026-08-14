@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Avalonia.Media.Imaging;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
@@ -40,9 +39,15 @@ public sealed class PipeWireFrameProviderTests
         using var cache = new WaylandScreenCastMemoryCache();
         await using var provider = CreateProvider(portal, cache);
 
-        Task<Bitmap?> first = provider.RequestAsync("42", new ScreenshotRequest());
+        await using IAsyncEnumerator<NativeBgraPreviewFrame> firstEnumerator = provider
+            .StreamAsync("42", new ScreenshotRequest())
+            .GetAsyncEnumerator();
+        Task<bool> first = firstEnumerator.MoveNextAsync().AsTask();
         await portal.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        Task<Bitmap?> second = provider.RequestAsync("42", new ScreenshotRequest());
+        await using IAsyncEnumerator<NativeBgraPreviewFrame> secondEnumerator = provider
+            .StreamAsync("42", new ScreenshotRequest())
+            .GetAsyncEnumerator();
+        Task<bool> second = secondEnumerator.MoveNextAsync().AsTask();
         portal.Release.TrySetResult();
 
         _ = await Task.WhenAll(first, second);
@@ -62,7 +67,7 @@ public sealed class PipeWireFrameProviderTests
         cache.SetRestoreToken(aliases, "restore-1");
         await using var provider = CreateProvider(portal, cache);
 
-        _ = await provider.RequestAsync("42", new ScreenshotRequest());
+        await StartStreamAsync(provider, "42");
 
         Assert.Equal("restore-1", portal.RestoreToken);
         Assert.Null(cache.TakeRestoreToken(aliases));
@@ -102,7 +107,7 @@ public sealed class PipeWireFrameProviderTests
         var notifications = new List<PreviewSelectionPromptEventArgs>();
         provider.SelectionPromptChanged += (_, eventArgs) => notifications.Add(eventArgs);
 
-        _ = await provider.RequestAsync("84", new ScreenshotRequest());
+        await StartStreamAsync(provider, "84");
 
         Assert.Null(portal.RestoreToken);
         Assert.Equal("84", accessor.RaisedWindowId);
@@ -127,7 +132,7 @@ public sealed class PipeWireFrameProviderTests
         using var cache = new WaylandScreenCastMemoryCache();
         await using var provider = CreateProvider(accessor, portal, cache);
 
-        _ = await provider.RequestAsync("42", new ScreenshotRequest());
+        await StartStreamAsync(provider, "42");
 
         Assert.Equal("42", accessor.RaisedWindowId);
         Assert.True(accessor.WasRaisedBefore(() => portal.OpenSequence));
@@ -145,7 +150,7 @@ public sealed class PipeWireFrameProviderTests
         var notifications = new List<PreviewSelectionPromptEventArgs>();
         provider.SelectionPromptChanged += (_, eventArgs) => notifications.Add(eventArgs);
 
-        _ = await provider.RequestAsync("42", new ScreenshotRequest());
+        await StartStreamAsync(provider, "42");
 
         Assert.Equal(
             [
@@ -178,6 +183,14 @@ public sealed class PipeWireFrameProviderTests
     )
     {
         return CreateProvider(new FakeWinAccessor(), portal, cache);
+    }
+
+    private static async Task StartStreamAsync(PipeWireFrameProvider provider, string windowId)
+    {
+        await using IAsyncEnumerator<NativeBgraPreviewFrame> enumerator = provider
+            .StreamAsync(windowId, new ScreenshotRequest())
+            .GetAsyncEnumerator();
+        _ = await enumerator.MoveNextAsync();
     }
 
     private static PipeWireFrameProvider CreateProvider(

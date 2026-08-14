@@ -72,6 +72,17 @@ public partial class MainWindow : Window, IFloatingWindowHost
             new ConfigFileWindowFilterSettingsProvider(),
             dispatcher
         );
+        FiltersWindow = new FiltersWindow(
+            _configurationService.GetWhitelistPrefixes().ToList(),
+            _configurationService.GetBlacklistPrefixes().ToList()
+        );
+        SettingsWindow = new SettingsWindow(ApplySettings);
+        KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
+        AppInfoWindow = new AppInfoWindow(RequestApplicationShutdown)
+        {
+            Title = $"About {StaticData.AppName}",
+        };
+        RenameWindow = new RenameWindow();
         _mainWindowViewModel = new MainWindowViewModel(
             ViewModel,
             openFilters: () => FiltersWindow.ShowPrefixesTab(),
@@ -95,17 +106,6 @@ public partial class MainWindow : Window, IFloatingWindowHost
         DataContext = _mainWindowViewModel;
         Title = StaticData.AppName;
 
-        FiltersWindow = new FiltersWindow(
-            _configurationService.GetWhitelistPrefixes().ToList(),
-            _configurationService.GetBlacklistPrefixes().ToList()
-        );
-        SettingsWindow = new SettingsWindow(ApplySettings);
-        KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
-        AppInfoWindow = new AppInfoWindow(RequestApplicationShutdown)
-        {
-            Title = $"About {StaticData.AppName}",
-        };
-        RenameWindow = new RenameWindow();
         _windowKeybindActivator =
             AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _previewCoordinator = new FloatingPreviewCoordinator(

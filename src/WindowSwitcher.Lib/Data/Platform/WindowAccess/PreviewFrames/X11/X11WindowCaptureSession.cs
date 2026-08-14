@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using Avalonia.Media.Imaging;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
@@ -117,7 +117,10 @@ internal sealed class X11WindowCaptureSession : IDisposable
         }
     }
 
-    public Bitmap? CaptureFrame(ScreenshotRequest request)
+    public NativeBgraPreviewFrame? CaptureFrame(
+        ScreenshotRequest request,
+        NativeFrameBufferPool bufferPool
+    )
     {
         lock (_sync)
         {
@@ -128,9 +131,9 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 return null;
 
             if (_shmImage != IntPtr.Zero)
-                return CaptureShmFrame(request);
+                return CaptureShmFrame(request, bufferPool);
 
-            return CaptureXImageFrame(request);
+            return CaptureXImageFrame(request, bufferPool);
         }
     }
 
@@ -416,7 +419,10 @@ internal sealed class X11WindowCaptureSession : IDisposable
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private Bitmap? CaptureShmFrame(ScreenshotRequest request)
+    private NativeBgraPreviewFrame? CaptureShmFrame(
+        ScreenshotRequest request,
+        NativeFrameBufferPool bufferPool
+    )
     {
         try
         {
@@ -433,7 +439,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 return null;
 
             _ = X11Native.XSync(_display, discard: 0);
-            return X11FrameConverter.CreateBitmap(_shmImage, request);
+            return X11FrameConverter.CreateFrame(_shmImage, request, bufferPool);
         }
         catch
         {
@@ -442,7 +448,10 @@ internal sealed class X11WindowCaptureSession : IDisposable
         }
     }
 
-    private Bitmap? CaptureXImageFrame(ScreenshotRequest request)
+    private NativeBgraPreviewFrame? CaptureXImageFrame(
+        ScreenshotRequest request,
+        NativeFrameBufferPool bufferPool
+    )
     {
         IntPtr image = IntPtr.Zero;
         try
@@ -460,7 +469,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
             if (image == IntPtr.Zero)
                 return null;
 
-            return X11FrameConverter.CreateBitmap(image, request);
+            return X11FrameConverter.CreateFrame(image, request, bufferPool);
         }
         catch
         {
