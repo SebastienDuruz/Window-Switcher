@@ -23,7 +23,9 @@ public sealed class RuntimePreviewFrameProviderFactory(
     private readonly PlatformCapabilityStatus _capabilityStatus =
         capabilityStatus ?? new PlatformCapabilityStatus();
     private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProvider.IsSupported;
-    private readonly Func<bool> _supportsPipeWire = LibPipeWireNative.IsAvailable;
+    private readonly Func<bool> _supportsLibPipeWire = LibPipeWireNative.IsAvailable;
+    private readonly Func<bool> _supportsNativePipeWireAdapter =
+        WindowSwitcherPipeWireNative.IsAvailable;
     private readonly Func<LinuxSessionKind> _sessionKindResolver =
         LinuxSessionDetector.GetSessionKind;
     private readonly Func<string, string?> _environmentResolver =
@@ -32,7 +34,8 @@ public sealed class RuntimePreviewFrameProviderFactory(
     internal RuntimePreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
         Func<bool> supportsX11PreviewCapture,
-        Func<bool> supportsPipeWire,
+        Func<bool> supportsLibPipeWire,
+        Func<bool> supportsNativePipeWireAdapter,
         Func<LinuxSessionKind> sessionKindResolver,
         Func<string, string?>? environmentResolver = null,
         PlatformCapabilityStatus? capabilityStatus = null
@@ -40,10 +43,12 @@ public sealed class RuntimePreviewFrameProviderFactory(
         : this(linuxDependencies, capabilityStatus)
     {
         ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
-        ArgumentNullException.ThrowIfNull(supportsPipeWire);
+        ArgumentNullException.ThrowIfNull(supportsLibPipeWire);
+        ArgumentNullException.ThrowIfNull(supportsNativePipeWireAdapter);
         ArgumentNullException.ThrowIfNull(sessionKindResolver);
         _supportsX11PreviewCapture = supportsX11PreviewCapture;
-        _supportsPipeWire = supportsPipeWire;
+        _supportsLibPipeWire = supportsLibPipeWire;
+        _supportsNativePipeWireAdapter = supportsNativePipeWireAdapter;
         _sessionKindResolver = sessionKindResolver;
         if (environmentResolver is not null)
             _environmentResolver = environmentResolver;
@@ -96,16 +101,26 @@ public sealed class RuntimePreviewFrameProviderFactory(
     )
     {
         bool hasXWayland = !string.IsNullOrWhiteSpace(_environmentResolver("DISPLAY"));
-        bool available = _supportsPipeWire();
-        if (!available)
+        bool hasLibPipeWire = _supportsLibPipeWire();
+        bool hasNativeAdapter = _supportsNativePipeWireAdapter();
+        if (!hasLibPipeWire)
             _linuxDependencies.ReportMissingOnce(LibPipeWireNative.LibraryName);
+        if (!hasNativeAdapter)
+            _linuxDependencies.ReportMissingOnce(WindowSwitcherPipeWireNative.LibraryName);
 
-        string? failure = available ? null : $"{LibPipeWireNative.LibraryName} is unavailable.";
+        var failures = new List<string>();
+        if (!hasLibPipeWire)
+            failures.Add($"{LibPipeWireNative.LibraryName} is unavailable.");
+        if (!hasNativeAdapter)
+            failures.Add($"{WindowSwitcherPipeWireNative.LibraryName} is unavailable.");
         if (!hasXWayland)
-        {
-            const string xWaylandFailure = "DISPLAY is unavailable; XWayland window discovery is disabled.";
-            failure = failure is null ? xWaylandFailure : $"{xWaylandFailure} {failure}";
-        }
+            failures.Insert(
+                0,
+                "DISPLAY is unavailable; XWayland window discovery is disabled."
+            );
+
+        bool available = hasLibPipeWire && hasNativeAdapter;
+        string? failure = failures.Count == 0 ? null : string.Join(' ', failures);
 
         _capabilityStatus.Update(
             new PlatformCapabilitySnapshot(

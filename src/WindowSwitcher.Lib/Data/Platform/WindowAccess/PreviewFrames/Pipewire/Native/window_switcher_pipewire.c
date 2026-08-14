@@ -546,11 +546,6 @@ WS_EXPORT int ws_pipewire_stream_update_target(struct ws_pipewire_stream *captur
     return result;
 }
 
-WS_EXPORT int ws_pipewire_stream_is_faulted(const struct ws_pipewire_stream *capture)
-{
-    return !capture || capture->faulted;
-}
-
 WS_EXPORT void ws_pipewire_stream_destroy(struct ws_pipewire_stream *capture)
 {
     destroy_capture(capture);
