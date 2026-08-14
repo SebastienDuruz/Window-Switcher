@@ -8,7 +8,7 @@ using WindowSwitcher.Lib.Models;
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
 [SupportedOSPlatform("windows")]
-public class WindowsWinAccessor : WinAccessorBase
+internal sealed class WindowsWinAccessor : WinAccessorBase
 {
     private const uint GwOwner = 4;
     private const int SwRestore = 9;

@@ -3,7 +3,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// Describes one Linux evdev node and metadata obtained via ioctl probing.
 /// </summary>
-public sealed record InputDeviceInfo
+internal sealed record InputDeviceInfo
 {
     /// <summary>
     /// Absolute device path, typically <c>/dev/input/eventX</c>.

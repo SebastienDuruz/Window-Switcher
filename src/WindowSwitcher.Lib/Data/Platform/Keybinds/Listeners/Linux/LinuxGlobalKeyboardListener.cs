@@ -15,7 +15,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 /// Linux implementation backed by evdev device grabs plus a uinput virtual keyboard.
 /// </summary>
 [SupportedOSPlatform("linux")]
-public sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
+internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 {
     private static readonly TimeSpan DefaultReconciliationInterval = TimeSpan.FromSeconds(2);
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);

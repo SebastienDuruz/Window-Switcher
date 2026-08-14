@@ -11,7 +11,7 @@
         CanResize="False"
         Topmost="True"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
-        SystemDecorations="Full"
+        WindowDecorations="Full"
         Title="Settings"
         x:DataType="viewModels:SettingsViewModel">
         <Window.Resources>

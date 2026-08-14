@@ -20,7 +20,7 @@ public sealed class PrefixListViewModelTests
         sut.AddCommand.Execute(null);
 
         Assert.Contains("visual studio", sut.Prefixes);
-        Assert.True(service.Prefixes.Contains("visual studio"));
+        Assert.Contains("visual studio", service.Prefixes);
         Assert.Equal(string.Empty, sut.NewPrefix);
     }
 

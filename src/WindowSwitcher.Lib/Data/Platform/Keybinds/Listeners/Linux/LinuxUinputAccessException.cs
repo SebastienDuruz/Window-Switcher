@@ -3,7 +3,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 /// <summary>
 /// Indicates that Linux keyboard reinjection cannot use uinput.
 /// </summary>
-public sealed class LinuxUinputAccessException : InvalidOperationException
+internal sealed class LinuxUinputAccessException : InvalidOperationException
 {
     /// <summary>
     /// Creates a categorized uinput access error.
@@ -23,7 +23,7 @@ public sealed class LinuxUinputAccessException : InvalidOperationException
 /// <summary>
 /// Describes why Linux uinput reinjection is unavailable.
 /// </summary>
-public enum LinuxUinputFailureKind
+internal enum LinuxUinputFailureKind
 {
     /// <summary>The uinput device node does not exist.</summary>
     Missing,

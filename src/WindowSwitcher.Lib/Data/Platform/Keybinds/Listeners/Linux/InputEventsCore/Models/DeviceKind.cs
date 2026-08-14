@@ -3,7 +3,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsC
 /// <summary>
 /// High-level classification inferred from Linux input capabilities.
 /// </summary>
-public enum DeviceKind
+internal enum DeviceKind
 {
     /// <summary>
     /// Device exposes keyboard-like key codes.

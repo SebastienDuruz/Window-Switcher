@@ -3,7 +3,7 @@
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 
 [DBusInterface("org.freedesktop.portal.ScreenCast")]
-public interface IPipeWirePortalScreenCast : IDBusObject
+internal interface IPipeWirePortalScreenCast : IDBusObject
 {
     Task<ObjectPath> CreateSessionAsync(IDictionary<string, object> options);
     Task<ObjectPath> SelectSourcesAsync(
