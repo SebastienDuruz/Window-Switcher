@@ -54,8 +54,8 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 | Platform | Window discovery and control | Preview technology | Global shortcuts | Status |
 | --- | --- | --- | --- | --- |
 | Windows | Native Windows APIs | DWM thumbnails | Low-level keyboard hook | Supported |
-| Linux on X11 | `wmctrl` | XComposite/XDamage | evdev + `uinput`; permissions required | Supported |
-| Linux on Wayland | `wmctrl`; **XWayland windows only** | PipeWire through the XDG ScreenCast portal | evdev + `uinput`; permissions required | Partially supported |
+| Linux on X11 | Native EWMH | XComposite/XDamage | evdev + `uinput`; permissions required | Supported |
+| Linux on Wayland | Native EWMH; **XWayland windows only** | PipeWire through the XDG ScreenCast portal | evdev + `uinput`; permissions required | Partially supported |
 | macOS | — | — | — | Not implemented |
 
 ### Known limitations
@@ -196,17 +196,17 @@ Window Switcher supports Linux on x86-64 systems through the `linux-x64` runtime
 
 ### Linux runtime dependencies
 
-Window discovery, focus, and renaming require [`wmctrl`](https://linux.die.net/man/1/wmctrl). Wayland previews also require PipeWire and an XDG Desktop Portal ScreenCast backend suitable for the desktop environment.
+Window discovery, focus, and renaming use the X11 EWMH protocol directly. Wayland previews also require PipeWire and an XDG Desktop Portal ScreenCast backend suitable for the desktop environment.
 
-| Distribution | Window control | Wayland preview runtime |
-| --- | --- | --- |
-| Debian / Ubuntu | `sudo apt install wmctrl` | `sudo apt install libpipewire-0.3-0 xdg-desktop-portal` |
-| Arch Linux | `sudo pacman -S wmctrl` | `sudo pacman -S pipewire xdg-desktop-portal` |
-| Fedora | `sudo dnf install wmctrl` | `sudo dnf install pipewire-libs xdg-desktop-portal` |
+| Distribution | Wayland preview runtime |
+| --- | --- |
+| Debian / Ubuntu | `sudo apt install libpipewire-0.3-0 xdg-desktop-portal` |
+| Arch Linux | `sudo pacman -S pipewire xdg-desktop-portal` |
+| Fedora | `sudo dnf install pipewire-libs xdg-desktop-portal` |
 
 Package names and portal backends vary by distribution and desktop environment. KDE commonly uses `xdg-desktop-portal-kde`, while GNOME commonly uses `xdg-desktop-portal-gnome` in addition to the base portal package.
 
-On Wayland, `wmctrl` can enumerate only XWayland windows. Installing more portal packages does not enable native Wayland window discovery.
+On Wayland, EWMH can enumerate only XWayland windows. Installing more portal packages does not enable native Wayland window discovery.
 
 ### Linux build dependencies
 
@@ -318,7 +318,7 @@ On Windows, the equivalent Nuke option is:
 
 1. Confirm that at least one non-empty entry exists under `Config > Filters > Prefixes`.
 2. Check that the window title contains that entry and is not an exact blacklist match.
-3. On Linux, install `wmctrl` and confirm that `wmctrl -l -p` lists the target window.
+3. On Linux, confirm that the desktop window manager exposes the EWMH `_NET_CLIENT_LIST` property and that the target is an X11 or XWayland window.
 4. On Wayland, confirm that the target application is using XWayland. Native Wayland windows are not discoverable.
 
 ### A preview is blank or unavailable

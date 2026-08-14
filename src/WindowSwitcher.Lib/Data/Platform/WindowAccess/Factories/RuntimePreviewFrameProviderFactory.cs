@@ -21,23 +21,28 @@ public sealed class RuntimePreviewFrameProviderFactory(
         linuxDependencies ?? LinuxDependencies.Instance;
     private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProviderSupport;
     private readonly Func<bool> _supportsPipeWire = LibPipeWireNative.IsAvailable;
+    private readonly Func<string?> _sessionTypeResolver = LinuxSessionDetector.GetSessionType;
 
     internal RuntimePreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
-        Func<bool> supportsX11PreviewCapture
+        Func<bool> supportsX11PreviewCapture,
+        Func<string?>? sessionTypeResolver = null
     )
         : this(linuxDependencies)
     {
         ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
         _supportsX11PreviewCapture = supportsX11PreviewCapture;
+        if (sessionTypeResolver is not null)
+            _sessionTypeResolver = sessionTypeResolver;
     }
 
     internal RuntimePreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
         Func<bool> supportsX11PreviewCapture,
-        Func<bool> supportsPipeWire
+        Func<bool> supportsPipeWire,
+        Func<string?>? sessionTypeResolver = null
     )
-        : this(linuxDependencies, supportsX11PreviewCapture)
+        : this(linuxDependencies, supportsX11PreviewCapture, sessionTypeResolver)
     {
         ArgumentNullException.ThrowIfNull(supportsPipeWire);
         _supportsPipeWire = supportsPipeWire;
@@ -54,7 +59,8 @@ public sealed class RuntimePreviewFrameProviderFactory(
         return new LinuxPreviewFrameProviderFactory(
             _linuxDependencies,
             _supportsX11PreviewCapture,
-            _supportsPipeWire
+            _supportsPipeWire,
+            _sessionTypeResolver
         ).Create(accessorBase);
     }
 

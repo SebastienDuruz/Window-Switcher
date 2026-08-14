@@ -8,32 +8,13 @@ namespace WindowSwitcher.Tests.Platform;
 public sealed class LinuxWinAccessorFactoryTests
 {
     [Fact]
-    public void Create_ReturnsWaylandAccessor_WhenSessionIsWayland()
+    public void Create_ReturnsSingleEwmhAccessor()
     {
-        var factory = new LinuxWinAccessorFactory(() => "wayland");
+        var factory = new LinuxWinAccessorFactory();
 
         WinAccessorBase accessor = factory.Create();
 
-        Assert.IsType<WaylandWinAccessor>(accessor);
-    }
-
-    [Fact]
-    public void Create_ReturnsX11Accessor_WhenSessionIsX11()
-    {
-        var factory = new LinuxWinAccessorFactory(() => "x11");
-
-        WinAccessorBase accessor = factory.Create();
-
-        Assert.IsType<X11WinAccessor>(accessor);
-    }
-
-    [Fact]
-    public void Create_ReturnsX11Accessor_WhenSessionIsUnknown()
-    {
-        var factory = new LinuxWinAccessorFactory(() => null);
-
-        WinAccessorBase accessor = factory.Create();
-
-        Assert.IsType<X11WinAccessor>(accessor);
+        Assert.IsType<X11EwmhWindowAccessor>(accessor);
+        Assert.IsAssignableFrom<IDisposable>(accessor).Dispose();
     }
 }

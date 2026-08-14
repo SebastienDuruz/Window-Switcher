@@ -21,23 +21,28 @@ public sealed class LinuxPreviewFrameProviderFactory(
         linuxDependencies ?? LinuxDependencies.Instance;
     private readonly Func<bool> _supportsX11PreviewCapture = X11PreviewFrameProvider.IsSupported;
     private readonly Func<bool> _supportsPipeWire = LibPipeWireNative.IsAvailable;
+    private readonly Func<string?> _sessionTypeResolver = LinuxSessionDetector.GetSessionType;
 
     internal LinuxPreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
-        Func<bool> supportsX11PreviewCapture
+        Func<bool> supportsX11PreviewCapture,
+        Func<string?>? sessionTypeResolver = null
     )
         : this(linuxDependencies)
     {
         ArgumentNullException.ThrowIfNull(supportsX11PreviewCapture);
         _supportsX11PreviewCapture = supportsX11PreviewCapture;
+        if (sessionTypeResolver is not null)
+            _sessionTypeResolver = sessionTypeResolver;
     }
 
     internal LinuxPreviewFrameProviderFactory(
         ILinuxDependencyRegistry? linuxDependencies,
         Func<bool> supportsX11PreviewCapture,
-        Func<bool> supportsPipeWire
+        Func<bool> supportsPipeWire,
+        Func<string?>? sessionTypeResolver = null
     )
-        : this(linuxDependencies, supportsX11PreviewCapture)
+        : this(linuxDependencies, supportsX11PreviewCapture, sessionTypeResolver)
     {
         ArgumentNullException.ThrowIfNull(supportsPipeWire);
         _supportsPipeWire = supportsPipeWire;
@@ -48,7 +53,8 @@ public sealed class LinuxPreviewFrameProviderFactory(
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
 
-        if (accessorBase is X11WinAccessor)
+        string sessionType = NormalizeSessionType(_sessionTypeResolver());
+        if (!string.Equals(sessionType, "wayland", StringComparison.Ordinal))
             return _supportsX11PreviewCapture()
                 ? new X11PreviewFrameProvider(accessorBase)
                 : new NoOpPreviewFrameProvider();
@@ -59,5 +65,10 @@ public sealed class LinuxPreviewFrameProviderFactory(
             return new NoOpPreviewFrameProvider();
 
         return new PipeWireFrameProvider(accessorBase);
+    }
+
+    private static string NormalizeSessionType(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
     }
 }

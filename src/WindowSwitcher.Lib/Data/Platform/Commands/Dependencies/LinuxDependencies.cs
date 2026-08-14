@@ -24,11 +24,6 @@ public static class LinuxDependencies
     }
 
     /// <summary>
-    /// Gets whether <c>wmctrl</c> is available.
-    /// </summary>
-    public static bool IsWmctrlAvailable => Registry.IsWmctrlAvailable;
-
-    /// <summary>
     /// Returns missing dependencies already reported to the application.
     /// </summary>
     public static IReadOnlyCollection<string> GetReportedMissing()

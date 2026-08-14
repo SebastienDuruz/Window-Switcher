@@ -55,7 +55,8 @@ public sealed class PipeWireFrameProvider
             new PipeWireNativeStreamFactory(),
             TracePipeWireDiagnostics.Instance,
             WaylandScreenCastMemoryCache.Shared
-        ) { }
+        )
+    { }
 
     internal PipeWireFrameProvider(
         WinAccessorBase accessorBase,
@@ -331,7 +332,11 @@ public sealed class PipeWireFrameProvider
         bool selectionPromptRaised = false;
         try
         {
-            IReadOnlyList<string> restoreKeys = BuildRestoreKeys(windowId);
+            IReadOnlyList<string> restoreKeys = await BuildRestoreKeysAsync(
+                    windowId,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
             string? restoreToken = _restoreTokenCache.TakeRestoreToken(restoreKeys);
             bool pickerExpected = string.IsNullOrWhiteSpace(restoreToken);
             if (pickerExpected)
@@ -404,7 +409,9 @@ public sealed class PipeWireFrameProvider
     {
         try
         {
-            await _accessor.RaiseWindowAsync(windowId, cancellationToken).ConfigureAwait(false);
+            _ = await _accessor
+                .TryActivateWindowAsync(windowId, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -490,7 +497,10 @@ public sealed class PipeWireFrameProvider
         }
     }
 
-    private IReadOnlyList<string> BuildRestoreKeys(string windowId)
+    private async Task<IReadOnlyList<string>> BuildRestoreKeysAsync(
+        string windowId,
+        CancellationToken cancellationToken
+    )
     {
         var keys = new List<string>();
         var unique = new HashSet<string>(StringComparer.Ordinal);
@@ -506,7 +516,9 @@ public sealed class PipeWireFrameProvider
 
         try
         {
-            IReadOnlyCollection<WindowConfig> windows = _accessor.GetWindows();
+            IReadOnlyCollection<WindowConfig> windows = await _accessor
+                .GetWindowsAsync(cancellationToken)
+                .ConfigureAwait(false);
             WindowConfig? selected = windows.FirstOrDefault(window =>
                 string.Equals(window.WindowId, windowId, StringComparison.OrdinalIgnoreCase)
             );

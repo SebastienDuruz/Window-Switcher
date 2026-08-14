@@ -18,7 +18,7 @@ public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
     {
         string[] statuses =
         [
-            $"wmctrl: {(LinuxDependencies.IsWmctrlAvailable ? "OK" : "missing")}",
+            "window-control: EWMH",
             $"xcomposite: {(X11PreviewFrameProvider.IsSupported() ? "OK" : "missing")}",
             $"libpipewire: {(LibPipeWireNative.IsAvailable() ? "OK" : "missing")}",
         ];

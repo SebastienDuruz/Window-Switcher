@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using Tmds.DBus;
@@ -296,19 +295,24 @@ public sealed class PipeWireFrameProviderTests
             return _raiseSequence > 0 && _raiseSequence <= getOtherSequence();
         }
 
-        public override ObservableCollection<WindowConfig> GetWindows()
-        {
-            return new ObservableCollection<WindowConfig>(_windows);
-        }
+        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(_windows);
 
-        public override void RaiseWindow(string windowId)
+        public override Task<bool> TryActivateWindowAsync(
+            string windowId,
+            CancellationToken cancellationToken = default
+        )
         {
             RaisedWindowId = windowId;
             _raiseSequence = Stopwatch.GetTimestamp();
+            return Task.FromResult(true);
         }
 
-        public override Bitmap? TakeScreenshot(string windowId) => null;
-
-        public override void RenameWindowTitle(string windowId, string windowTitle) { }
+        public override Task<bool> TryRenameWindowAsync(
+            string windowId,
+            string windowTitle,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(true);
     }
 }

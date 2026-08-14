@@ -11,6 +11,11 @@ internal static class X11Native
     public const int IpcPrivate = 0;
     public const int IpcCreat = 0x200;
     public const int IpcRmId = 0;
+    public const int Success = 0;
+    public const int PropModeReplace = 0;
+    public const int ClientMessage = 33;
+    public const nint SubstructureNotifyMask = 1 << 19;
+    public const nint SubstructureRedirectMask = 1 << 20;
     public const ulong AllPlanes = ulong.MaxValue;
 
     private static readonly XErrorHandler ErrorHandler = IgnoreXError;
@@ -49,6 +54,9 @@ internal static class X11Native
     [DllImport("libX11.so.6")]
     public static extern int XDefaultScreen(IntPtr display);
 
+    [DllImport("libX11.so.6")]
+    public static extern IntPtr XDefaultRootWindow(IntPtr display);
+
     [DllImport("libX11.so.6", CharSet = CharSet.Ansi)]
     public static extern IntPtr XInternAtom(IntPtr display, string atomName, int onlyIfExists);
 
@@ -60,6 +68,46 @@ internal static class X11Native
 
     [DllImport("libX11.so.6")]
     public static extern int XFlush(IntPtr display);
+
+    [DllImport("libX11.so.6")]
+    public static extern int XFree(IntPtr data);
+
+    [DllImport("libX11.so.6")]
+    public static extern int XGetWindowProperty(
+        IntPtr display,
+        IntPtr window,
+        IntPtr property,
+        nint longOffset,
+        nint longLength,
+        int delete,
+        IntPtr requestedType,
+        out IntPtr actualType,
+        out int actualFormat,
+        out nuint itemCount,
+        out nuint bytesAfter,
+        out IntPtr propertyData
+    );
+
+    [DllImport("libX11.so.6")]
+    public static extern int XChangeProperty(
+        IntPtr display,
+        IntPtr window,
+        IntPtr property,
+        IntPtr type,
+        int format,
+        int mode,
+        byte[] data,
+        int elementCount
+    );
+
+    [DllImport("libX11.so.6")]
+    public static extern int XSendEvent(
+        IntPtr display,
+        IntPtr window,
+        int propagate,
+        nint eventMask,
+        ref XClientMessageEvent sendEvent
+    );
 
     [DllImport("libX11.so.6")]
     public static extern int XFreePixmap(IntPtr display, IntPtr pixmap);
@@ -260,6 +308,29 @@ internal struct XImage
     public ulong RedMask;
     public ulong GreenMask;
     public ulong BlueMask;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XClientMessageEvent
+{
+    public int Type;
+    public nuint Serial;
+    public int SendEvent;
+    public IntPtr Display;
+    public IntPtr Window;
+    public IntPtr MessageType;
+    public int Format;
+    public XClientMessageData Data;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct XClientMessageData
+{
+    public nint Data0;
+    public nint Data1;
+    public nint Data2;
+    public nint Data3;
+    public nint Data4;
 }
 
 [StructLayout(LayoutKind.Sequential, Size = 192)]
