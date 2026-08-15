@@ -5,10 +5,10 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractio
 public interface IPreviewFrameProvider : IDisposable, IAsyncDisposable
 {
     /// <summary>
-    /// Streams disposable native BGRA frames for the specified window.
+    /// Streams disposable CPU or GPU-backed preview frames for the specified window.
     /// </summary>
-    /// <remarks>The caller owns every returned frame and must dispose it after copying.</remarks>
-    IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
+    /// <remarks>The caller owns every returned frame and must dispose it after rendering.</remarks>
+    IAsyncEnumerable<PreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
         CancellationToken cancellationToken = default

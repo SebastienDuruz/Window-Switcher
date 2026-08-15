@@ -2,13 +2,12 @@
 using System.Threading;
 using Avalonia;
 using WindowSwitcher.Hosting;
+using WindowSwitcher.Lib.Data.Platform.Graphics;
 
 namespace WindowSwitcher;
 
 static class Program
 {
-    private static Mutex mutex = new Mutex(true, "{8A6F0BA4-B5B1-45fd-A8CF-71F04B6BDE8F}");
-
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -16,6 +15,7 @@ static class Program
     public static void Main(string[] args)
     {
         AppServiceProvider.Initialize();
+        using var mutex = new Mutex(false, "{8A6F0BA4-B5B1-45fd-A8CF-71F04B6BDE8F}");
 
         // Only one instance of the app running !
         if (mutex.WaitOne(TimeSpan.Zero, true))
@@ -48,13 +48,21 @@ static class Program
 
     private static X11RenderingMode[] CreateLinuxRenderingModes()
     {
-        return
-        [
-            X11RenderingMode.Vulkan,
-            X11RenderingMode.Egl,
-            X11RenderingMode.Glx,
-            X11RenderingMode.Software,
-        ];
+        return LinuxEglPlatformConfigurator.IsX11Configured
+            ?
+            [
+                X11RenderingMode.Egl,
+                X11RenderingMode.Vulkan,
+                X11RenderingMode.Glx,
+                X11RenderingMode.Software,
+            ]
+            :
+            [
+                X11RenderingMode.Vulkan,
+                X11RenderingMode.Egl,
+                X11RenderingMode.Glx,
+                X11RenderingMode.Software,
+            ];
     }
 
     private static Win32RenderingMode[] CreateWindowsRenderingModes()

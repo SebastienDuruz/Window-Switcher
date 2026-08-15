@@ -13,25 +13,7 @@ public sealed class NativePreviewFrameTests
         IntPtr destination = Marshal.AllocHGlobal(20);
         try
         {
-            byte[] sourceBytes =
-            [
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                90,
-                91,
-                92,
-                93,
-                94,
-                95,
-                96,
-                97,
-            ];
+            byte[] sourceBytes = [1, 2, 3, 4, 5, 6, 7, 8, 90, 91, 92, 93, 94, 95, 96, 97];
             Marshal.Copy(sourceBytes, 0, source, sourceBytes.Length);
             using var frame = new NativeBgraPreviewFrame(
                 source,
@@ -61,14 +43,7 @@ public sealed class NativePreviewFrameTests
     public void Dispose_ReleasesLeaseOnlyOnce()
     {
         int releases = 0;
-        var frame = new NativeBgraPreviewFrame(
-            IntPtr.Zero,
-            0,
-            0,
-            0,
-            0,
-            () => releases++
-        );
+        var frame = new NativeBgraPreviewFrame(IntPtr.Zero, 0, 0, 0, 0, () => releases++);
 
         frame.Dispose();
         frame.Dispose();
@@ -76,4 +51,29 @@ public sealed class NativePreviewFrameTests
         Assert.Equal(1, releases);
     }
 
+    [Fact]
+    public void DmaBufDispose_ReleasesPipeWireLeaseOnlyOnce()
+    {
+        int releases = 0;
+        var frame = new LinuxDmaBufPreviewFrame(
+            fileDescriptor: 12,
+            offset: 64,
+            stride: 4096,
+            widthPx: 640,
+            heightPx: 360,
+            drmFormat: 0x34325241,
+            modifier: LinuxDmaBufPreviewFrame.InvalidModifier,
+            release: () => releases++
+        );
+
+        frame.Dispose();
+        frame.Dispose();
+
+        Assert.Equal(1, releases);
+        Assert.Equal(12, frame.FileDescriptor);
+        Assert.Equal(64, frame.Offset);
+        Assert.Equal(4096, frame.Stride);
+        Assert.Equal(640, frame.WidthPx);
+        Assert.Equal(360, frame.HeightPx);
+    }
 }

@@ -2,8 +2,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 
@@ -11,7 +11,8 @@ internal interface IPipeWireNativeStream : IDisposable
 {
     void UpdateTargetDimensions(int width, int height);
     void SetActive(bool active);
-    IAsyncEnumerable<NativeBgraPreviewFrame> ReadFramesAsync(CancellationToken cancellationToken);
+    void DisableDmaBuf();
+    IAsyncEnumerable<PreviewFrame> ReadFramesAsync(CancellationToken cancellationToken);
 }
 
 internal interface IPipeWireNativeStreamFactory
@@ -56,7 +57,6 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private const int BufferPoolSize = 3;
     private const int MaximumOutputFrameBytes = 16 * 1024 * 1024;
     private const int MaximumInputFrameBytes = 128 * 1024 * 1024;
-    private const uint MaximumFramesPerSecond = 20;
 
     private readonly object _syncRoot = new();
     private readonly LatestFrameChannel _frames = new();
@@ -121,13 +121,24 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 return null;
 
             created._selfHandle = GCHandle.Alloc(created, GCHandleType.Normal);
+            PipeWireDmaBufFormatModifier[] dmaBufCapabilities =
+                PipeWireDmaBufCapabilities.Current.ToArray();
+            uint[] dmaBufFormats = dmaBufCapabilities
+                .Select(capability => capability.DrmFormat)
+                .ToArray();
+            ulong[] dmaBufModifiers = dmaBufCapabilities
+                .Select(capability => capability.Modifier)
+                .ToArray();
             diagnostics.Information("initialisation du backend PipeWire natif");
             created._nativeStream = WindowSwitcherPipeWireNative.CreateStream(
                 fileDescriptor,
                 pipeWireNodeId,
                 checked((uint)width),
                 checked((uint)height),
-                MaximumFramesPerSecond,
+                PreviewFrameTiming.FramesPerSecond,
+                dmaBufFormats,
+                dmaBufModifiers,
+                checked((uint)dmaBufCapabilities.Length),
                 created._frameCallback,
                 created._stateCallback,
                 GCHandle.ToIntPtr(created._selfHandle)
@@ -171,8 +182,11 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
         if (
             stream != IntPtr.Zero
-            && WindowSwitcherPipeWireNative.UpdateTarget(stream, checked((uint)width), checked((uint)height))
-                < 0
+            && WindowSwitcherPipeWireNative.UpdateTarget(
+                stream,
+                checked((uint)width),
+                checked((uint)height)
+            ) < 0
         )
             MarkFaulted("PipeWire format renegotiation failed");
     }
@@ -187,20 +201,37 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             stream = _nativeStream;
         }
 
-        if (stream != IntPtr.Zero && WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0) < 0)
+        if (
+            stream != IntPtr.Zero
+            && WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0) < 0
+        )
             MarkFaulted("PipeWire could not change stream activity");
         if (!active)
             _frames.Drain();
     }
 
-    public async IAsyncEnumerable<NativeBgraPreviewFrame> ReadFramesAsync(
+    public void DisableDmaBuf()
+    {
+        IntPtr stream;
+        lock (_syncRoot)
+        {
+            if (_disposed)
+                return;
+            stream = _nativeStream;
+        }
+
+        if (stream != IntPtr.Zero && WindowSwitcherPipeWireNative.SetDmaBufEnabled(stream, 0) < 0)
+            MarkFaulted("PipeWire could not renegotiate CPU preview buffers");
+    }
+
+    public async IAsyncEnumerable<PreviewFrame> ReadFramesAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken
     )
     {
         SetActive(true);
         while (await _frames.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            while (_frames.Reader.TryRead(out NativeBgraPreviewFrame? frame))
+            while (_frames.Reader.TryRead(out PreviewFrame? frame))
                 yield return frame;
         }
     }
@@ -209,14 +240,55 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         IntPtr userData,
         IntPtr source,
         uint accessibleSize,
+        int dmaBufFileDescriptor,
+        uint offset,
         int sourceStride,
         uint sourceWidth,
         uint sourceHeight,
-        WindowSwitcherPipeWireNative.PixelFormat pixelFormat
+        WindowSwitcherPipeWireNative.PixelFormat pixelFormat,
+        uint drmFormat,
+        ulong modifier,
+        IntPtr frameLease
     )
     {
+        bool dmaBufPublished = false;
         try
         {
+            if (frameLease != IntPtr.Zero)
+            {
+                if (
+                    dmaBufFileDescriptor < 0
+                    || offset > int.MaxValue
+                    || sourceStride <= 0
+                    || sourceWidth is 0 or > int.MaxValue
+                    || sourceHeight is 0 or > int.MaxValue
+                    || drmFormat == 0
+                )
+                    return;
+
+                lock (_syncRoot)
+                {
+                    if (_disposed)
+                        return;
+                }
+
+                _frames.Publish(
+                    new LinuxDmaBufPreviewFrame(
+                        dmaBufFileDescriptor,
+                        checked((int)offset),
+                        sourceStride,
+                        checked((int)sourceWidth),
+                        checked((int)sourceHeight),
+                        drmFormat,
+                        modifier,
+                        () => WindowSwitcherPipeWireNative.ReleaseFrame(frameLease)
+                    )
+                );
+                dmaBufPublished = true;
+                ReportFirstPublishedFrame("première frame DMA-BUF publiée par le backend PipeWire");
+                return;
+            }
+
             if (
                 source == IntPtr.Zero
                 || accessibleSize == 0
@@ -285,13 +357,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                     lease.Dispose
                 )
             );
-            lock (_syncRoot)
-            {
-                if (_framePublishedReported)
-                    return;
-                _framePublishedReported = true;
-            }
-            _diagnostics.Information("première frame CPU publiée par le backend PipeWire");
+            ReportFirstPublishedFrame("première frame CPU publiée par le backend PipeWire");
         }
         catch (Exception exception)
         {
@@ -301,6 +367,22 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             }
             catch { }
         }
+        finally
+        {
+            if (frameLease != IntPtr.Zero && !dmaBufPublished)
+                WindowSwitcherPipeWireNative.ReleaseFrame(frameLease);
+        }
+    }
+
+    private void ReportFirstPublishedFrame(string message)
+    {
+        lock (_syncRoot)
+        {
+            if (_framePublishedReported)
+                return;
+            _framePublishedReported = true;
+        }
+        _diagnostics.Information(message);
     }
 
     private void OnStateChanged(IntPtr userData, int state, string? message)
@@ -402,25 +484,24 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
 internal sealed class LatestFrameChannel
 {
-    private readonly Channel<NativeBgraPreviewFrame> _channel =
-        Channel.CreateBounded<NativeBgraPreviewFrame>(
-            new BoundedChannelOptions(1)
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = false,
-                SingleWriter = true,
-                AllowSynchronousContinuations = false,
-            }
-        );
+    private readonly Channel<PreviewFrame> _channel = Channel.CreateBounded<PreviewFrame>(
+        new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = false,
+            SingleWriter = true,
+            AllowSynchronousContinuations = false,
+        }
+    );
 
-    internal ChannelReader<NativeBgraPreviewFrame> Reader => _channel.Reader;
+    internal ChannelReader<PreviewFrame> Reader => _channel.Reader;
 
-    internal void Publish(NativeBgraPreviewFrame frame)
+    internal void Publish(PreviewFrame frame)
     {
         ArgumentNullException.ThrowIfNull(frame);
         while (!_channel.Writer.TryWrite(frame))
         {
-            if (_channel.Reader.TryRead(out NativeBgraPreviewFrame? replaced))
+            if (_channel.Reader.TryRead(out PreviewFrame? replaced))
             {
                 replaced.Dispose();
                 continue;
@@ -432,7 +513,7 @@ internal sealed class LatestFrameChannel
 
     internal void Drain()
     {
-        while (_channel.Reader.TryRead(out NativeBgraPreviewFrame? frame))
+        while (_channel.Reader.TryRead(out PreviewFrame? frame))
             frame.Dispose();
     }
 

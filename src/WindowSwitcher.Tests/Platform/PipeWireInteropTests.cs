@@ -171,13 +171,7 @@ public sealed class PipeWireInteropTests
     [Fact]
     public void BgraFrameCopier_ReusesPrecomputedBilinearCoordinates()
     {
-        byte[] sourceBytes =
-        [
-            1, 2, 3, 255,
-            4, 5, 6, 255,
-            7, 8, 9, 255,
-            10, 11, 12, 255,
-        ];
+        byte[] sourceBytes = [1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255];
         IntPtr source = Marshal.AllocHGlobal(sourceBytes.Length);
         IntPtr destination = Marshal.AllocHGlobal(3 * 3 * 4);
         BgraScalePlan? plan = null;
@@ -229,14 +223,7 @@ public sealed class PipeWireInteropTests
         var channel = new LatestFrameChannel();
         bool firstReleased = false;
         bool secondReleased = false;
-        var first = new NativeBgraPreviewFrame(
-            IntPtr.Zero,
-            4,
-            1,
-            1,
-            4,
-            () => firstReleased = true
-        );
+        var first = new NativeBgraPreviewFrame(IntPtr.Zero, 4, 1, 1, 4, () => firstReleased = true);
         var second = new NativeBgraPreviewFrame(
             IntPtr.Zero,
             4,
@@ -250,7 +237,7 @@ public sealed class PipeWireInteropTests
         channel.Publish(second);
 
         Assert.True(firstReleased);
-        Assert.True(channel.Reader.TryRead(out NativeBgraPreviewFrame? actual));
+        Assert.True(channel.Reader.TryRead(out PreviewFrame? actual));
         NativeBgraPreviewFrame actualFrame = Assert.IsType<NativeBgraPreviewFrame>(actual);
         Assert.Same(second, actualFrame);
         actualFrame.Dispose();

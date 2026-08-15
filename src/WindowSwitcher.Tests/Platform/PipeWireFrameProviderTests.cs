@@ -48,12 +48,12 @@ public sealed class PipeWireFrameProviderTests
         using var cache = new WaylandScreenCastMemoryCache();
         await using var provider = CreateProvider(portal, cache);
 
-        await using IAsyncEnumerator<NativeBgraPreviewFrame> firstEnumerator = provider
+        await using IAsyncEnumerator<PreviewFrame> firstEnumerator = provider
             .StreamAsync("42", new ScreenshotRequest())
             .GetAsyncEnumerator();
         Task<bool> first = firstEnumerator.MoveNextAsync().AsTask();
         await portal.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        await using IAsyncEnumerator<NativeBgraPreviewFrame> secondEnumerator = provider
+        await using IAsyncEnumerator<PreviewFrame> secondEnumerator = provider
             .StreamAsync("42", new ScreenshotRequest())
             .GetAsyncEnumerator();
         Task<bool> second = secondEnumerator.MoveNextAsync().AsTask();
@@ -219,7 +219,7 @@ public sealed class PipeWireFrameProviderTests
 
     private static async Task StartStreamAsync(PipeWireFrameProvider provider, string windowId)
     {
-        await using IAsyncEnumerator<NativeBgraPreviewFrame> enumerator = provider
+        await using IAsyncEnumerator<PreviewFrame> enumerator = provider
             .StreamAsync(windowId, new ScreenshotRequest())
             .GetAsyncEnumerator();
         _ = await enumerator.MoveNextAsync();

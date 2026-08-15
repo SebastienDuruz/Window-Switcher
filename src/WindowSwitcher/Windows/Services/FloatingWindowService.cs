@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using WindowSwitcher.Controls;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
@@ -19,12 +20,14 @@ internal sealed class FloatingWindowService
     private const double PreviewBorderThickness = 2;
     private const int PreviewRequestTimeoutMs = 1_500;
     private const int ResizePreviewRefreshDebounceMs = 250;
+    private static readonly TimeSpan GpuInitializationTimeout = TimeSpan.FromSeconds(1);
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
     private readonly IFloatingPreviewPolicy _floatingPreviewPolicy;
     private readonly INativeThumbnailRenderer _nativeThumbnailRenderer;
     private readonly Image _windowScreenshot;
+    private readonly DmaBufPreviewControl _dmaBufPreview;
     private readonly Border _previewBorder;
     private readonly CancellationTokenSource _cts = new();
     private readonly Lock _previewOperationCancellationSync = new();
@@ -33,7 +36,7 @@ internal sealed class FloatingWindowService
     private readonly Lock _resizePreviewRefreshSync = new();
     private CancellationTokenSource? _previewOperationCancellation = new();
     private CancellationTokenSource? _resizePreviewRefreshCancellation;
-    private NativeBgraPreviewFrame? _pendingFrame;
+    private PreviewFrame? _pendingFrame;
     private WriteableBitmap? _streamBitmapA;
     private WriteableBitmap? _streamBitmapB;
     private PixelSize _streamBitmapSize;
@@ -55,6 +58,7 @@ internal sealed class FloatingWindowService
         IFloatingPreviewPolicy floatingPreviewPolicy,
         INativeThumbnailRenderer nativeThumbnailRenderer,
         Image windowScreenshot,
+        DmaBufPreviewControl dmaBufPreview,
         Border previewBorder
     )
     {
@@ -64,6 +68,7 @@ internal sealed class FloatingWindowService
         ArgumentNullException.ThrowIfNull(floatingPreviewPolicy);
         ArgumentNullException.ThrowIfNull(nativeThumbnailRenderer);
         ArgumentNullException.ThrowIfNull(windowScreenshot);
+        ArgumentNullException.ThrowIfNull(dmaBufPreview);
         ArgumentNullException.ThrowIfNull(previewBorder);
 
         _ownerWindow = ownerWindow;
@@ -72,6 +77,8 @@ internal sealed class FloatingWindowService
         _floatingPreviewPolicy = floatingPreviewPolicy;
         _nativeThumbnailRenderer = nativeThumbnailRenderer;
         _windowScreenshot = windowScreenshot;
+        _dmaBufPreview = dmaBufPreview;
+        _dmaBufPreview.ImportFailed += OnDmaBufImportFailed;
         _previewBorder = previewBorder;
         _previewCaptureEnabled = ReadPreviewCaptureEnabled() ? 1 : 0;
         _previewCaptureSuspendedWhileDisabled = !IsPreviewCaptureEnabled();
@@ -111,6 +118,10 @@ internal sealed class FloatingWindowService
         Canvas.SetTop(_windowScreenshot, top);
         _windowScreenshot.Width = previewWidth;
         _windowScreenshot.Height = previewHeight;
+        Canvas.SetLeft(_dmaBufPreview, left);
+        Canvas.SetTop(_dmaBufPreview, top);
+        _dmaBufPreview.Width = previewWidth;
+        _dmaBufPreview.Height = previewHeight;
 
         double scale = _ownerWindow.RenderScaling > 0 ? _ownerWindow.RenderScaling : 1;
         Volatile.Write(ref _targetScreenshotWidthPx, (int)Math.Round(previewWidth * scale));
@@ -123,11 +134,13 @@ internal sealed class FloatingWindowService
             return;
 
         _isClosing = true;
+        _dmaBufPreview.ImportFailed -= OnDmaBufImportFailed;
         CancelPendingResizePreviewRefresh(executeRefresh: false);
         _cts.Cancel();
         CancelPreviewOperations(recreateTokenSource: false);
-        _previewFrameProvider.ForgetWindow(windowId);
         DisposePendingFrame();
+        _dmaBufPreview.ClearFrame();
+        _previewFrameProvider.ForgetWindow(windowId);
         if (_floatingPreviewPolicy.UseNativeThumbnailPreview)
             UnregisterWindowThumbnail();
         _windowScreenshot.Source = null;
@@ -175,6 +188,7 @@ internal sealed class FloatingWindowService
         try
         {
             await Task.Delay(Random.Shared.Next(0, 400), cancellationToken).ConfigureAwait(false);
+            await ConfigureGpuFrameSupportAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -198,7 +212,7 @@ internal sealed class FloatingWindowService
                     TimeoutMs: PreviewRequestTimeoutMs
                 );
                 await foreach (
-                    NativeBgraPreviewFrame frame in _previewFrameProvider.StreamAsync(
+                    PreviewFrame frame in _previewFrameProvider.StreamAsync(
                         _windowConfig.WindowId,
                         request,
                         operationToken
@@ -225,6 +239,27 @@ internal sealed class FloatingWindowService
 
     private static int? PositiveOrNull(int value) => value > 0 ? value : null;
 
+    private async Task ConfigureGpuFrameSupportAsync(CancellationToken cancellationToken)
+    {
+        if (_previewFrameProvider is not IPreviewGpuFallback gpuFallback)
+            return;
+        bool available = await _dmaBufPreview
+            .WaitForAvailabilityAsync(GpuInitializationTimeout, cancellationToken)
+            .ConfigureAwait(false);
+        if (!available)
+        {
+            _dmaBufPreview.DisableRendering();
+            gpuFallback.DisableGpuFrames(_windowConfig.WindowId);
+        }
+    }
+
+    private void OnDmaBufImportFailed(object? sender, EventArgs eventArgs)
+    {
+        _dmaBufPreview.DisableRendering();
+        if (_previewFrameProvider is IPreviewGpuFallback gpuFallback)
+            gpuFallback.DisableGpuFrames(_windowConfig.WindowId);
+    }
+
     private static async Task DelayAfterFailureAsync(CancellationToken cancellationToken)
     {
         try
@@ -234,12 +269,9 @@ internal sealed class FloatingWindowService
         catch (OperationCanceledException) { }
     }
 
-    private void QueueLatestFrame(
-        NativeBgraPreviewFrame frame,
-        CancellationToken cancellationToken
-    )
+    private void QueueLatestFrame(PreviewFrame frame, CancellationToken cancellationToken)
     {
-        NativeBgraPreviewFrame? disposeNow;
+        PreviewFrame? disposeNow;
         bool scheduleDrain = false;
         lock (_pendingFrameSync)
         {
@@ -271,7 +303,7 @@ internal sealed class FloatingWindowService
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                NativeBgraPreviewFrame? frame;
+                PreviewFrame? frame;
                 lock (_pendingFrameSync)
                 {
                     frame = _pendingFrame;
@@ -305,12 +337,10 @@ internal sealed class FloatingWindowService
         }
     }
 
-    private async Task ApplyFrameAsync(
-        NativeBgraPreviewFrame frame,
-        CancellationToken cancellationToken
-    )
+    private async Task ApplyFrameAsync(PreviewFrame frame, CancellationToken cancellationToken)
     {
         bool lockTaken = false;
+        bool ownershipTransferred = false;
         try
         {
             await _previewUpdateSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -322,13 +352,25 @@ internal sealed class FloatingWindowService
             {
                 if (_isClosing || cancellationToken.IsCancellationRequested)
                     return;
+                if (frame is LinuxDmaBufPreviewFrame dmaBufFrame)
+                {
+                    _windowScreenshot.Source = null;
+                    DisposeStreamBitmaps();
+                    _dmaBufPreview.Present(dmaBufFrame);
+                    ownershipTransferred = true;
+                    _isPreviewSurfaceCleared = false;
+                    return;
+                }
+                if (frame is not NativeBgraPreviewFrame cpuFrame)
+                    return;
+                _dmaBufPreview.ClearFrame();
                 WriteableBitmap? bitmap = GetNextStreamBitmap(frame.WidthPx, frame.HeightPx);
                 if (bitmap is null)
                     return;
                 using ILockedFramebuffer framebuffer = bitmap.Lock();
                 if (
                     framebuffer.Address != IntPtr.Zero
-                    && frame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes)
+                    && cpuFrame.TryCopyTo(framebuffer.Address, framebuffer.RowBytes)
                 )
                 {
                     _windowScreenshot.Source = bitmap;
@@ -338,7 +380,8 @@ internal sealed class FloatingWindowService
         }
         finally
         {
-            frame.Dispose();
+            if (!ownershipTransferred)
+                frame.Dispose();
             if (lockTaken)
                 _previewUpdateSemaphore.Release();
         }
@@ -376,6 +419,7 @@ internal sealed class FloatingWindowService
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 _windowScreenshot.Source = null;
+                _dmaBufPreview.ClearFrame();
                 DisposeStreamBitmaps();
                 _isPreviewSurfaceCleared = true;
             });
@@ -390,7 +434,7 @@ internal sealed class FloatingWindowService
 
     private void DisposePendingFrame()
     {
-        NativeBgraPreviewFrame? frame;
+        PreviewFrame? frame;
         lock (_pendingFrameSync)
         {
             frame = _pendingFrame;
@@ -523,8 +567,7 @@ internal sealed class FloatingWindowService
         }
     }
 
-    private bool IsPreviewCaptureEnabled() =>
-        Volatile.Read(ref _previewCaptureEnabled) != 0;
+    private bool IsPreviewCaptureEnabled() => Volatile.Read(ref _previewCaptureEnabled) != 0;
 
     private static bool ReadPreviewCaptureEnabled() =>
         ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
