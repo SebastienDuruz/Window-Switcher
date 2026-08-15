@@ -4,6 +4,7 @@ using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 using WindowSwitcher.Lib.Models;
 using Xunit;
 
@@ -11,6 +12,14 @@ namespace WindowSwitcher.Tests.Platform;
 
 public sealed class PipeWireFrameProviderTests
 {
+    [Fact]
+    public void PortalDbusContracts_ArePublicForRuntimeProxyGeneration()
+    {
+        Assert.True(typeof(IPipeWirePortalRequest).IsPublic);
+        Assert.True(typeof(IPipeWirePortalScreenCast).IsPublic);
+        Assert.True(typeof(IPipeWirePortalSession).IsPublic);
+    }
+
     [Fact]
     public void PortalStartResult_ExtractsLastPipeWireNodeId()
     {
@@ -139,6 +148,29 @@ public sealed class PipeWireFrameProviderTests
     }
 
     [Fact]
+    public async Task MissingRestoreToken_RepeatedPortalFailureRaisesTargetOnlyOnce()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var portal = new RecordingPortalClient();
+        var accessor = new FakeWinAccessor();
+        using var cache = new WaylandScreenCastMemoryCache();
+        await using var provider = CreateProvider(accessor, portal, cache);
+
+        await StartStreamAsync(provider, "42");
+        await StartStreamAsync(provider, "42");
+
+        Assert.Equal(2, portal.OpenCount);
+        Assert.Equal(1, accessor.ActivationCount);
+
+        provider.ResetSelection("42");
+        await StartStreamAsync(provider, "42");
+
+        Assert.Equal(2, accessor.ActivationCount);
+    }
+
+    [Fact]
     public async Task MissingRestoreToken_ReportsSelectionPromptLifetime()
     {
         if (!OperatingSystem.IsLinux())
@@ -237,14 +269,18 @@ public sealed class PipeWireFrameProviderTests
 
     private sealed class RecordingPortalClient : IPipeWirePortalClient
     {
+        private int _openCount;
+
         internal string? RestoreToken { get; private set; }
         internal long OpenSequence { get; private set; }
+        internal int OpenCount => Volatile.Read(ref _openCount);
 
         public Task<PortalCapture?> OpenAsync(
             string? restoreToken,
             CancellationToken cancellationToken
         )
         {
+            Interlocked.Increment(ref _openCount);
             RestoreToken = restoreToken;
             OpenSequence = Stopwatch.GetTimestamp();
             return Task.FromResult<PortalCapture?>(null);
@@ -284,6 +320,7 @@ public sealed class PipeWireFrameProviderTests
     private sealed class FakeWinAccessor : WinAccessorBase
     {
         private readonly IReadOnlyCollection<WindowConfig> _windows;
+        private int _activationCount;
         private long _raiseSequence;
 
         internal FakeWinAccessor(params WindowConfig[] windows)
@@ -303,6 +340,7 @@ public sealed class PipeWireFrameProviderTests
         }
 
         internal string? RaisedWindowId { get; private set; }
+        internal int ActivationCount => Volatile.Read(ref _activationCount);
 
         internal bool WasRaisedBefore(Func<long> getOtherSequence)
         {
@@ -318,6 +356,7 @@ public sealed class PipeWireFrameProviderTests
             CancellationToken cancellationToken = default
         )
         {
+            Interlocked.Increment(ref _activationCount);
             RaisedWindowId = windowId;
             _raiseSequence = Stopwatch.GetTimestamp();
             return Task.FromResult(true);

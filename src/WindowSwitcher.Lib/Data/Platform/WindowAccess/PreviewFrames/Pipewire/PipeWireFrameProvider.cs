@@ -32,6 +32,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
     private readonly Dictionary<string, CancellationTokenSource> _creationCancellation = new(
         StringComparer.Ordinal
     );
+    private readonly HashSet<string> _selectionActivationAttempted = new(StringComparer.Ordinal);
     private readonly HashSet<Task> _portalCloseTasks = [];
     private bool _disposed;
     private Task _shutdownTask = Task.CompletedTask;
@@ -132,6 +133,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
         CancellationTokenSource? creationCancellation = null;
         lock (_capturesSync)
         {
+            _selectionActivationAttempted.Remove(windowId);
             _creationCancellation.TryGetValue(windowId, out creationCancellation);
             if (_captures.TryGetValue(windowId, out capture))
             {
@@ -169,6 +171,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
                 return;
             windowIds = _captures
                 .Keys.Concat(_creationTasks.Keys)
+                .Concat(_selectionActivationAttempted)
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
         }
@@ -239,6 +242,9 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
         CancellationToken cancellationToken
     )
     {
+        // Ensure the task is registered before a synchronously failing portal client can clean it up.
+        await Task.Yield();
+
         CaptureContext? created = null;
         try
         {
@@ -306,8 +312,11 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
             {
                 selectionPromptRaised = true;
                 NotifySelectionPrompt(windowId, isPending: true);
-                await RaiseTargetBeforePickerAsync(windowId, cancellationToken)
-                    .ConfigureAwait(false);
+                if (TryMarkSelectionActivationAttempted(windowId))
+                {
+                    await RaiseTargetBeforePickerAsync(windowId, cancellationToken)
+                        .ConfigureAwait(false);
+                }
             }
             portalCapture = await _portalClient
                 .OpenAsync(restoreToken, cancellationToken)
@@ -363,6 +372,12 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
         {
             _diagnostics.Error("preview selection indicator callback failed", exception);
         }
+    }
+
+    private bool TryMarkSelectionActivationAttempted(string windowId)
+    {
+        lock (_capturesSync)
+            return !_disposed && _selectionActivationAttempted.Add(windowId);
     }
 
     private async Task RaiseTargetBeforePickerAsync(
@@ -562,6 +577,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
             cancellations = _creationCancellation.Values.ToList();
             creations = _creationTasks.Values.ToList();
             _captures.Clear();
+            _selectionActivationAttempted.Clear();
             shutdownCompletion = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously
             );
