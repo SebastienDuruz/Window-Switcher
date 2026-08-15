@@ -8,7 +8,6 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 {
-    private static readonly TimeSpan TargetFrameInterval = TimeSpan.FromMilliseconds(40);
     private readonly object _sessionsSync = new();
     private readonly Dictionary<string, X11WindowCaptureSession> _sessions = new(
         StringComparer.Ordinal
@@ -26,7 +25,7 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
         return X11WindowCaptureSession.IsSupported();
     }
 
-    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
+    public async IAsyncEnumerable<PreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -97,7 +96,7 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
     )
     {
         TimeSpan elapsed = Stopwatch.GetElapsedTime(lastFrameTimestamp);
-        TimeSpan remaining = TargetFrameInterval - elapsed;
+        TimeSpan remaining = PreviewFrameTiming.FrameInterval - elapsed;
         return remaining <= TimeSpan.Zero
             ? Task.CompletedTask
             : Task.Delay(remaining, cancellationToken);

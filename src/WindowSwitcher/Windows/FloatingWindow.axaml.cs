@@ -85,6 +85,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             _floatingPreviewPolicy,
             nativeThumbnailRenderer,
             WindowScreenshot,
+            DmaBufPreview,
             PreviewBorder
         );
 
@@ -118,6 +119,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
 
         WindowScreenshot.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
+        DmaBufPreview.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
         FloatingWindowContextMenu.Items.Add(
             new MenuItem()
             {

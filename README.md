@@ -64,6 +64,7 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - Fullscreen applications are not supported.
 - Linux global shortcuts are optional and remain unavailable until the user can read `/dev/input/event*` and write to `/dev/uinput` or `/dev/input/uinput`.
 - Wayland preview capture may show a desktop portal selection prompt.
+- Linux previews use the same 20 FPS target for every window. The active-window highlight does not change capture cadence.
 
 The application still runs when optional preview or keyboard dependencies are unavailable. Open `Help > About` to see the active preview mode and dependency status.
 
@@ -213,6 +214,17 @@ Window discovery, focus, and renaming use the X11 EWMH protocol directly. Waylan
 Package names and portal backends vary by distribution and desktop environment. KDE commonly uses `xdg-desktop-portal-kde`, while GNOME commonly uses `xdg-desktop-portal-gnome` in addition to the base portal package.
 
 On Wayland, EWMH can enumerate only XWayland windows. Installing more portal packages does not enable native Wayland window discovery.
+
+### Linux preview rendering
+
+PipeWire previews attempt to import DMA-BUF frames directly into EGL for zero-copy GPU rendering.
+This path requires Avalonia to start with its EGL/X11 renderer and a compatible EGL driver. Set
+`EGL_PLATFORM=x11` in the launcher or development run configuration **before** starting the
+process. Window Switcher does not restart itself or create a child process to apply this setting.
+
+If EGL or DMA-BUF import is unavailable, the application remains usable and automatically falls
+back to CPU-backed preview frames. This fallback affects the transfer path, not the uniform 20 FPS
+target.
 
 ### Linux build dependencies
 
@@ -371,6 +383,17 @@ cd Window-Switcher
 dotnet restore Window-Switcher.slnx
 dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj
 ```
+
+On Linux, launch with EGL selected before process startup to enable the PipeWire DMA-BUF
+zero-copy path:
+
+```bash
+EGL_PLATFORM=x11 dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj
+```
+
+For Rider, add `EGL_PLATFORM=x11` to the **Environment variables** field of the WindowSwitcher
+Run/Debug configuration. The application uses a normal single-process startup and does not alter
+the IDE diagnostics or debugger environment.
 
 The standard source build includes Sentry. Add `-p:EnableSentryTelemetry=false` to the `dotnet restore`, `build`, or `run` command when a Sentry-free build is required.
 

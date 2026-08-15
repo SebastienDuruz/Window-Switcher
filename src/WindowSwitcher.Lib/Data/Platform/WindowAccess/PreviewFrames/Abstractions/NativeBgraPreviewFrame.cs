@@ -3,7 +3,7 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractio
 /// <summary>
 /// Represents one leased native BGRA preview frame.
 /// </summary>
-public sealed class NativeBgraPreviewFrame : IDisposable
+public sealed class NativeBgraPreviewFrame : PreviewFrame
 {
     private Action? _release;
 
@@ -39,12 +39,12 @@ public sealed class NativeBgraPreviewFrame : IDisposable
     /// <summary>
     /// Gets the frame width in pixels.
     /// </summary>
-    public int WidthPx { get; }
+    public override int WidthPx { get; }
 
     /// <summary>
     /// Gets the frame height in pixels.
     /// </summary>
-    public int HeightPx { get; }
+    public override int HeightPx { get; }
 
     /// <summary>
     /// Gets the number of source bytes between two adjacent rows.
@@ -104,7 +104,7 @@ public sealed class NativeBgraPreviewFrame : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose()
+    public override void Dispose()
     {
         Interlocked.Exchange(ref _release, null)?.Invoke();
     }

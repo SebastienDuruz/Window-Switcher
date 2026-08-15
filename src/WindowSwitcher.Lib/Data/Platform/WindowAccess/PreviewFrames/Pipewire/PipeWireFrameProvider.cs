@@ -2,8 +2,8 @@ using System.Collections;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -13,7 +13,10 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 /// <summary>
 /// Captures Wayland window previews through the ScreenCast portal and libpipewire.
 /// </summary>
-internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSelectionReset
+internal sealed class PipeWireFrameProvider
+    : IPreviewFrameProvider,
+        IPreviewSelectionReset,
+        IPreviewGpuFallback
 {
     private const int DefaultWidth = 640;
     private const int DefaultHeight = 360;
@@ -33,6 +36,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
         StringComparer.Ordinal
     );
     private readonly HashSet<string> _selectionActivationAttempted = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _gpuFramesDisabled = new(StringComparer.Ordinal);
     private readonly HashSet<Task> _portalCloseTasks = [];
     private bool _disposed;
     private Task _shutdownTask = Task.CompletedTask;
@@ -51,8 +55,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
             new PipeWireNativeStreamFactory(),
             TracePlatformDiagnostics.Instance,
             WaylandScreenCastMemoryCache.Shared
-        )
-    { }
+        ) { }
 
     internal PipeWireFrameProvider(
         WinAccessorBase accessorBase,
@@ -75,7 +78,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
+    public async IAsyncEnumerable<PreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -91,9 +94,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
             if (capture is null)
                 yield break;
 
-            await foreach (
-                NativeBgraPreviewFrame frame in capture.Stream.ReadFramesAsync(cancellationToken)
-            )
+            await foreach (PreviewFrame frame in capture.Stream.ReadFramesAsync(cancellationToken))
                 yield return frame;
 
             if (cancellationToken.IsCancellationRequested)
@@ -124,6 +125,20 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
     }
 
     /// <inheritdoc />
+    public void DisableGpuFrames(string windowId)
+    {
+        if (string.IsNullOrWhiteSpace(windowId))
+            return;
+        CaptureContext? capture;
+        lock (_capturesSync)
+        {
+            _gpuFramesDisabled.Add(windowId);
+            _captures.TryGetValue(windowId, out capture);
+        }
+        capture?.Stream.DisableDmaBuf();
+    }
+
+    /// <inheritdoc />
     public void ForgetWindow(string windowId)
     {
         if (string.IsNullOrWhiteSpace(windowId))
@@ -134,6 +149,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
         lock (_capturesSync)
         {
             _selectionActivationAttempted.Remove(windowId);
+            _gpuFramesDisabled.Remove(windowId);
             _creationCancellation.TryGetValue(windowId, out creationCancellation);
             if (_captures.TryGetValue(windowId, out capture))
             {
@@ -341,6 +357,12 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
                 portalCapture.RemoteHandle.Dispose();
                 return null;
             }
+
+            bool disableGpuFrames;
+            lock (_capturesSync)
+                disableGpuFrames = _gpuFramesDisabled.Contains(windowId);
+            if (disableGpuFrames)
+                stream.DisableDmaBuf();
 
             var capture = new CaptureContext(portalCapture.SessionPath, stream, width, height);
             portalCapture = null;
@@ -577,6 +599,7 @@ internal sealed class PipeWireFrameProvider : IPreviewFrameProvider, IPreviewSel
             cancellations = _creationCancellation.Values.ToList();
             creations = _creationTasks.Values.ToList();
             _captures.Clear();
+            _gpuFramesDisabled.Clear();
             _selectionActivationAttempted.Clear();
             shutdownCompletion = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously

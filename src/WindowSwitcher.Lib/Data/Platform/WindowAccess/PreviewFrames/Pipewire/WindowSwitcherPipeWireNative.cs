@@ -19,10 +19,15 @@ internal static class WindowSwitcherPipeWireNative
         IntPtr userData,
         IntPtr data,
         uint accessibleSize,
+        int dmaBufFileDescriptor,
+        uint offset,
         int stride,
         uint width,
         uint height,
-        PixelFormat pixelFormat
+        PixelFormat pixelFormat,
+        uint drmFormat,
+        ulong modifier,
+        IntPtr frameLease
     );
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -60,6 +65,9 @@ internal static class WindowSwitcherPipeWireNative
         uint targetWidth,
         uint targetHeight,
         uint maximumFramerate,
+        [In] uint[] dmaBufFormats,
+        [In] ulong[] dmaBufModifiers,
+        uint dmaBufCapabilityCount,
         FrameCallback frameCallback,
         StateCallback stateCallback,
         IntPtr userData
@@ -75,6 +83,13 @@ internal static class WindowSwitcherPipeWireNative
     [DllImport(
         LibraryName,
         CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "ws_pipewire_stream_set_dma_buf_enabled"
+    )]
+    internal static extern int SetDmaBufEnabled(IntPtr stream, int enabled);
+
+    [DllImport(
+        LibraryName,
+        CallingConvention = CallingConvention.Cdecl,
         EntryPoint = "ws_pipewire_stream_update_target"
     )]
     internal static extern int UpdateTarget(IntPtr stream, uint width, uint height);
@@ -85,4 +100,11 @@ internal static class WindowSwitcherPipeWireNative
         EntryPoint = "ws_pipewire_stream_destroy"
     )]
     internal static extern void DestroyStream(IntPtr stream);
+
+    [DllImport(
+        LibraryName,
+        CallingConvention = CallingConvention.Cdecl,
+        EntryPoint = "ws_pipewire_frame_release"
+    )]
+    internal static extern void ReleaseFrame(IntPtr frameLease);
 }

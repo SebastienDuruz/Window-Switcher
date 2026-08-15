@@ -6,11 +6,10 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
 
 internal sealed class NoOpPreviewFrameProvider : IPreviewFrameProvider
 {
-    public async IAsyncEnumerable<NativeBgraPreviewFrame> StreamAsync(
+    public async IAsyncEnumerable<PreviewFrame> StreamAsync(
         string windowId,
         ScreenshotRequest request,
-        [EnumeratorCancellation]
-        CancellationToken cancellationToken = default
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
         cancellationToken.ThrowIfCancellationRequested();
