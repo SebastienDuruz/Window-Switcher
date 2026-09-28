@@ -12,6 +12,9 @@ using static Nuke.Common.Assert;
 /// </summary>
 sealed class Build : NukeBuild
 {
+    private const string AppImageUpdateInformation =
+        "gh-releases-zsync|SebastienDuruz|Window-Switcher|latest|WindowSwitcher-*-x86_64.AppImage.zsync";
+
     /// <summary>
     /// Executes the default target graph.
     /// </summary>
@@ -216,10 +219,13 @@ sealed class Build : NukeBuild
             MakeExecutable(appDir / "AppRun");
 
             var appImageTool = await ResolveAppImageToolAsync();
-            var outputFile = EffectiveAppImageOutDir / $"WindowSwitcher-{EffectiveVersion}-{ToAppImageArchitecture(LinuxRuntime)}.AppImage";
+            var outputFileName = $"WindowSwitcher-{EffectiveVersion}-{ToAppImageArchitecture(LinuxRuntime)}.AppImage";
+            var outputFile = EffectiveAppImageOutDir / outputFileName;
+            var zsyncFile = EffectiveAppImageOutDir / $"{outputFileName}.zsync";
+            var generatedZsyncFile = RootDirectory / $"{outputFileName}.zsync";
             var toolArguments = appImageTool.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase)
-                ? $"--appimage-extract-and-run {appDir} {outputFile}"
-                : $"{appDir} {outputFile}";
+                ? $"--appimage-extract-and-run -u \"{AppImageUpdateInformation}\" \"{appDir}\" \"{outputFile}\""
+                : $"-u \"{AppImageUpdateInformation}\" \"{appDir}\" \"{outputFile}\"";
 
             ProcessTasks.StartProcess(
                     appImageTool,
@@ -231,8 +237,14 @@ sealed class Build : NukeBuild
                     })
                 .AssertZeroExitCode();
 
+            True(
+                File.Exists(generatedZsyncFile),
+                $"AppImage zsync file was not generated at: {generatedZsyncFile}");
+            File.Move(generatedZsyncFile, zsyncFile, overwrite: true);
+
             MakeExecutable(outputFile);
             True(File.Exists(outputFile), $"AppImage was not created at: {outputFile}");
+            True(File.Exists(zsyncFile), $"AppImage zsync file was not created at: {zsyncFile}");
             AssertElfX64(outputFile);
         });
 
