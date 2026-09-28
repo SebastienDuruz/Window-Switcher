@@ -67,9 +67,10 @@ public sealed class LinuxGlobalKeyboardListenerTests
             ProductId = LinuxUinputKeyboardForwarder.ProductId,
         };
 
-        InputDeviceInfo[] selected = LinuxGlobalKeyboardListener.SelectKeyboardDevices(
-            [virtualKeyboard, physical]
-        );
+        InputDeviceInfo[] selected = LinuxGlobalKeyboardListener.SelectKeyboardDevices([
+            virtualKeyboard,
+            physical,
+        ]);
 
         Assert.Equal([physical], selected);
     }
@@ -86,9 +87,10 @@ public sealed class LinuxGlobalKeyboardListenerTests
 
         string ordered = LinuxGlobalKeyboardListener.BuildDeviceSignature([first, second]);
         string reversed = LinuxGlobalKeyboardListener.BuildDeviceSignature([second, first]);
-        string changedSignature = LinuxGlobalKeyboardListener.BuildDeviceSignature(
-            [changed, second]
-        );
+        string changedSignature = LinuxGlobalKeyboardListener.BuildDeviceSignature([
+            changed,
+            second,
+        ]);
 
         Assert.Equal(ordered, reversed);
         Assert.NotEqual(ordered, changedSignature);
@@ -100,8 +102,10 @@ public sealed class LinuxGlobalKeyboardListenerTests
         InputDeviceInfo first = CreateKeyboard("/dev/input/event1", [0, 30, 31]);
         InputDeviceInfo second = CreateKeyboard("/dev/input/event2", [31, 32, 0x300]);
 
-        IReadOnlyCollection<ushort> keyCodes =
-            LinuxUinputKeyboardForwarder.CollectKeyCodes([first, second]);
+        IReadOnlyCollection<ushort> keyCodes = LinuxUinputKeyboardForwarder.CollectKeyCodes([
+            first,
+            second,
+        ]);
 
         Assert.Equal([30, 31, 32], keyCodes);
     }
@@ -135,7 +139,8 @@ public sealed class LinuxGlobalKeyboardListenerTests
         );
 
         LinuxUinputAccessException actual = await Assert.ThrowsAsync<LinuxUinputAccessException>(
-            () => listener.StartAsync()
+            () =>
+                listener.StartAsync()
         );
 
         Assert.Same(failure, actual);
@@ -246,13 +251,7 @@ public sealed class LinuxGlobalKeyboardListenerTests
         ILinuxInputDeviceDiscovery discovery,
         ILinuxKeyboardForwarderFactory forwarderFactory,
         TimeSpan reconciliationInterval
-    ) =>
-        new(
-            discovery,
-            forwarderFactory,
-            new RecordingDiagnostics(),
-            reconciliationInterval
-        );
+    ) => new(discovery, forwarderFactory, new RecordingDiagnostics(), reconciliationInterval);
 
     private static InputDeviceInfo CreateKeyboard(string path, ushort[] keyCodes) =>
         new()
@@ -271,8 +270,7 @@ public sealed class LinuxGlobalKeyboardListenerTests
             Value = 1,
         };
 
-    private static NativeInputEvent Sync() =>
-        new() { Type = LinuxInputConstants.EvSyn };
+    private static NativeInputEvent Sync() => new() { Type = LinuxInputConstants.EvSyn };
 
     private sealed class SequenceDiscovery(params IReadOnlyList<InputDeviceInfo>[] snapshots)
         : ILinuxInputDeviceDiscovery
@@ -285,9 +283,8 @@ public sealed class LinuxGlobalKeyboardListenerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             int index = Interlocked.Increment(ref _index) - 1;
-            IReadOnlyList<InputDeviceInfo> snapshot = snapshots.Length == 0
-                ? []
-                : snapshots[Math.Min(index, snapshots.Length - 1)];
+            IReadOnlyList<InputDeviceInfo> snapshot =
+                snapshots.Length == 0 ? [] : snapshots[Math.Min(index, snapshots.Length - 1)];
             return Task.FromResult(snapshot);
         }
     }
@@ -316,8 +313,7 @@ public sealed class LinuxGlobalKeyboardListenerTests
         }
     }
 
-    private sealed class FailingForwarderFactory(Exception failure)
-        : ILinuxKeyboardForwarderFactory
+    private sealed class FailingForwarderFactory(Exception failure) : ILinuxKeyboardForwarderFactory
     {
         public Task<ILinuxKeyboardForwarder> CreateAsync(
             IReadOnlyCollection<InputDeviceInfo> keyboardDevices,
@@ -383,7 +379,9 @@ public sealed class LinuxGlobalKeyboardListenerTests
     private sealed class RecordingDiagnostics : IPlatformDiagnostics
     {
         public void Information(string message) { }
+
         public void Warning(string message) { }
+
         public void Error(string message, Exception? exception = null) { }
     }
 }

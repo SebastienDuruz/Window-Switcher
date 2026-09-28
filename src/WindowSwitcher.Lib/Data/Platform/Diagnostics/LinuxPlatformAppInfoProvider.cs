@@ -9,8 +9,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Diagnostics;
 /// <summary>
 /// Linux diagnostics provider for application info view.
 /// </summary>
-public sealed class LinuxPlatformAppInfoProvider
-    : IPlatformAppInfoProvider
+public sealed class LinuxPlatformAppInfoProvider : IPlatformAppInfoProvider
 {
     private readonly PlatformCapabilityStatus _capabilityStatus;
 
@@ -53,9 +52,7 @@ public sealed class LinuxPlatformAppInfoProvider
             ProcessArchitecture: RuntimeInformation.ProcessArchitecture.ToString(),
             UiBackend: FormatSession(capability.Session),
             ConfigPath: ConfigFileAccessor.GetInstance().GetFilePath(),
-            PreviewMode: capability.PreviewAvailable
-                ? capability.PreviewBackend
-                : "Unavailable",
+            PreviewMode: capability.PreviewAvailable ? capability.PreviewBackend : "Unavailable",
             DependencyStatus: string.Join(Environment.NewLine, statuses)
         );
     }

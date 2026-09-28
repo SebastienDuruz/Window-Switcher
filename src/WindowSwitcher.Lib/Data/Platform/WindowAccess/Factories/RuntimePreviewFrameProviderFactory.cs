@@ -90,9 +90,7 @@ public sealed class RuntimePreviewFrameProviderFactory(
                 available ? null : "XComposite or XDamage is unavailable."
             )
         );
-        return available
-            ? new X11PreviewFrameProvider(accessor)
-            : new NoOpPreviewFrameProvider();
+        return available ? new X11PreviewFrameProvider(accessor) : new NoOpPreviewFrameProvider();
     }
 
     private IPreviewFrameProvider CreateWaylandProvider(
@@ -114,10 +112,7 @@ public sealed class RuntimePreviewFrameProviderFactory(
         if (!hasNativeAdapter)
             failures.Add($"{WindowSwitcherPipeWireNative.LibraryName} is unavailable.");
         if (!hasXWayland)
-            failures.Insert(
-                0,
-                "DISPLAY is unavailable; XWayland window discovery is disabled."
-            );
+            failures.Insert(0, "DISPLAY is unavailable; XWayland window discovery is disabled.");
 
         bool available = hasLibPipeWire && hasNativeAdapter;
         string? failure = failures.Count == 0 ? null : string.Join(' ', failures);

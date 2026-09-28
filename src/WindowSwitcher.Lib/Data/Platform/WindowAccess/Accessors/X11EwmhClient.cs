@@ -27,7 +27,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
             try
             {
                 IntPtr windowType = GetAtom("WINDOW");
-                if (!TryReadProperty(
+                if (
+                    !TryReadProperty(
                         _rootWindow,
                         GetAtom("_NET_CLIENT_LIST"),
                         windowType,
@@ -35,7 +36,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                         out int format,
                         out nuint itemCount,
                         out IntPtr data
-                    ))
+                    )
+                )
                 {
                     if (!_ewmhUnavailableReported)
                     {
@@ -76,12 +78,13 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                     FreePropertyData(data);
                 }
             }
-            catch (Exception exception) when (
-                exception is DllNotFoundException
-                    or EntryPointNotFoundException
-                    or BadImageFormatException
-                    or OverflowException
-            )
+            catch (Exception exception)
+                when (exception
+                        is DllNotFoundException
+                            or EntryPointNotFoundException
+                            or BadImageFormatException
+                            or OverflowException
+                )
             {
                 TracePlatformDiagnostics.Instance.Error(
                     "X11 EWMH window discovery failed",
@@ -219,11 +222,12 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 return true;
             }
         }
-        catch (Exception exception) when (
-            exception is DllNotFoundException
-                or EntryPointNotFoundException
-                or BadImageFormatException
-        )
+        catch (Exception exception)
+            when (exception
+                    is DllNotFoundException
+                        or EntryPointNotFoundException
+                        or BadImageFormatException
+            )
         {
             TracePlatformDiagnostics.Instance.Error("X11 EWMH connection failed", exception);
         }
@@ -255,7 +259,12 @@ internal sealed class X11EwmhClient : IX11EwmhClient
 
     private string ReadWindowTitle(uint windowId)
     {
-        string value = ReadTextProperty(windowId, "_NET_WM_VISIBLE_NAME", "UTF8_STRING", Encoding.UTF8);
+        string value = ReadTextProperty(
+            windowId,
+            "_NET_WM_VISIBLE_NAME",
+            "UTF8_STRING",
+            Encoding.UTF8
+        );
         if (!string.IsNullOrWhiteSpace(value))
             return value;
 
@@ -273,7 +282,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
     )
     {
         IntPtr requestedType = requestedTypeName is null ? IntPtr.Zero : GetAtom(requestedTypeName);
-        if (!TryReadProperty(
+        if (
+            !TryReadProperty(
                 (IntPtr)windowId,
                 GetAtom(propertyName),
                 requestedType,
@@ -281,7 +291,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 out int format,
                 out nuint itemCount,
                 out IntPtr data
-            ))
+            )
+        )
             return string.Empty;
 
         try
@@ -302,7 +313,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
 
     private uint ReadWindowProcessId(uint windowId)
     {
-        if (!TryReadProperty(
+        if (
+            !TryReadProperty(
                 (IntPtr)windowId,
                 GetAtom("_NET_WM_PID"),
                 GetAtom("CARDINAL"),
@@ -310,7 +322,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 out int format,
                 out nuint itemCount,
                 out IntPtr data
-            ))
+            )
+        )
             return 0;
 
         try
@@ -325,7 +338,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
 
     private uint ReadActiveWindowId()
     {
-        if (!TryReadProperty(
+        if (
+            !TryReadProperty(
                 _rootWindow,
                 GetAtom("_NET_ACTIVE_WINDOW"),
                 GetAtom("WINDOW"),
@@ -333,7 +347,8 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 out int format,
                 out nuint itemCount,
                 out IntPtr data
-            ))
+            )
+        )
             return 0;
 
         try

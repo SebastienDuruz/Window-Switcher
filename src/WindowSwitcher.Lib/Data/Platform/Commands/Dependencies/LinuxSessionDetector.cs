@@ -41,10 +41,7 @@ public static class LinuxSessionDetector
         };
     }
 
-    internal static LinuxSessionKind Detect(
-        Func<string, string?> environmentResolver,
-        bool isLinux
-    )
+    internal static LinuxSessionKind Detect(Func<string, string?> environmentResolver, bool isLinux)
     {
         ArgumentNullException.ThrowIfNull(environmentResolver);
         if (!isLinux)

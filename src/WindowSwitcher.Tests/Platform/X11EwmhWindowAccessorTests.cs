@@ -28,10 +28,7 @@ public sealed class X11EwmhWindowAccessorTests
         )
             Assert.NotEmpty(windows);
 
-        Assert.All(
-            windows,
-            window => Assert.Matches("^0x[0-9a-f]{8}$", window.WindowId)
-        );
+        Assert.All(windows, window => Assert.Matches("^0x[0-9a-f]{8}$", window.WindowId));
     }
 
     [Fact]

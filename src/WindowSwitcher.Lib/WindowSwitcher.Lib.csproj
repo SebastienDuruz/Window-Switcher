@@ -16,8 +16,12 @@
 
     <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
         <PipeWireNativeSource>$(MSBuildProjectDirectory)/Data/Platform/WindowAccess/PreviewFrames/Pipewire/Native/window_switcher_pipewire.c</PipeWireNativeSource>
-        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</PipeWireNativeRuntimeIdentifier>
-        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PipeWireNativeRuntimeIdentifier>
+        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''"
+            >linux-x64</PipeWireNativeRuntimeIdentifier
+        >
+        <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''"
+            >$(RuntimeIdentifier)</PipeWireNativeRuntimeIdentifier
+        >
         <PipeWireNativeIntermediateDirectory>$(BaseIntermediateOutputPath)$(Configuration)/$(TargetFramework)/$(PipeWireNativeRuntimeIdentifier)/native</PipeWireNativeIntermediateDirectory>
         <PipeWireNativeOutput>$(PipeWireNativeIntermediateDirectory)/libwindowswitcher-pipewire.so</PipeWireNativeOutput>
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);GetPipeWireNativeBuildOutput</TargetsForTfmSpecificBuildOutput>

@@ -115,7 +115,9 @@ public sealed class WindowKeybindActivatorTests
 
         _ = await sut.TryActivateTargetAsync(WindowTargetKeyFactory.Create(terminal));
 
-        bool activated = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.FocusActiveClientTargetId);
+        bool activated = await sut.TryActivateTargetAsync(
+            KeybindBuiltInTargets.FocusActiveClientTargetId
+        );
 
         Assert.True(activated);
         Assert.Equal(new[] { "w-2", "w-2" }, accessor.RaisedWindowIds);
@@ -128,7 +130,9 @@ public sealed class WindowKeybindActivatorTests
         var accessor = new FakeWinAccessor(editor);
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
-        bool activated = await sut.TryActivateTargetAsync(KeybindBuiltInTargets.FocusActiveClientTargetId);
+        bool activated = await sut.TryActivateTargetAsync(
+            KeybindBuiltInTargets.FocusActiveClientTargetId
+        );
 
         Assert.False(activated);
         Assert.Empty(accessor.RaisedWindowIds);
@@ -171,7 +175,9 @@ public sealed class WindowKeybindActivatorTests
         var sut = new WindowKeybindActivator(accessor, SelectAll);
 
         Assert.False(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.NextClientTargetId));
-        Assert.False(await sut.TryActivateTargetAsync(KeybindBuiltInTargets.PreviousClientTargetId));
+        Assert.False(
+            await sut.TryActivateTargetAsync(KeybindBuiltInTargets.PreviousClientTargetId)
+        );
         Assert.Empty(accessor.RaisedWindowIds);
     }
 

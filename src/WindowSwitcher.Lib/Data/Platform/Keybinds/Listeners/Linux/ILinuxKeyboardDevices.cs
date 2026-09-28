@@ -1,5 +1,5 @@
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 

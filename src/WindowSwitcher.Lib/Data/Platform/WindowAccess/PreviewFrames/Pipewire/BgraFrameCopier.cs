@@ -123,12 +123,7 @@ internal static class BgraFrameCopier
 
         if (
             scalePlan is null
-            || !scalePlan.Matches(
-                sourceWidth,
-                sourceHeight,
-                destinationWidth,
-                destinationHeight
-            )
+            || !scalePlan.Matches(sourceWidth, sourceHeight, destinationWidth, destinationHeight)
         )
         {
             scalePlan = BgraScalePlan.Create(
@@ -215,15 +210,16 @@ internal static class BgraFrameCopier
                 for (int channel = 0; channel < 4; channel++)
                 {
                     int inputChannel = MapInputChannel(format, channel);
-                    output[channel] = inputChannel < 0
-                        ? (byte)255
-                        : Interpolate(
-                            firstRow,
-                            secondRow,
-                            horizontalPoint,
-                            verticalPoint.Weight,
-                            inputChannel
-                        );
+                    output[channel] =
+                        inputChannel < 0
+                            ? (byte)255
+                            : Interpolate(
+                                firstRow,
+                                secondRow,
+                                horizontalPoint,
+                                verticalPoint.Weight,
+                                inputChannel
+                            );
                 }
             }
         }
@@ -243,11 +239,12 @@ internal static class BgraFrameCopier
         double bottom =
             secondRow[horizontal.First * 4 + channel] * (1 - horizontal.Weight)
             + secondRow[horizontal.Second * 4 + channel] * horizontal.Weight;
-        return (byte)Math.Clamp(
-            (int)Math.Round(top * (1 - verticalWeight) + bottom * verticalWeight),
-            0,
-            255
-        );
+        return (byte)
+            Math.Clamp(
+                (int)Math.Round(top * (1 - verticalWeight) + bottom * verticalWeight),
+                0,
+                255
+            );
     }
 
     private static int MapInputChannel(
@@ -264,8 +261,8 @@ internal static class BgraFrameCopier
             return -1;
         if (
             format
-                is WindowSwitcherPipeWireNative.PixelFormat.Bgra
-                    or WindowSwitcherPipeWireNative.PixelFormat.Bgrx
+            is WindowSwitcherPipeWireNative.PixelFormat.Bgra
+                or WindowSwitcherPipeWireNative.PixelFormat.Bgrx
         )
             return outputChannel;
         return outputChannel switch
