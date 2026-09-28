@@ -188,11 +188,13 @@ sealed class Build : NukeBuild
             var appDirApplications = appDir / "usr/share/applications";
             var appDirIcons = appDir / "usr/share/icons/hicolor/256x256/apps";
             var appDirLicenses = appDir / "usr/share/licenses/windowswitcher";
+            var appDirMetainfo = appDir / "usr/share/metainfo";
 
             Directory.CreateDirectory(appDirBin);
             Directory.CreateDirectory(appDirApplications);
             Directory.CreateDirectory(appDirIcons);
             Directory.CreateDirectory(appDirLicenses);
+            Directory.CreateDirectory(appDirMetainfo);
 
             CopyDirectoryContents(EffectiveLinuxPublishDir, appDirBin);
             File.Copy(RootDirectory / "LICENSE", appDirLicenses / "LICENSE", overwrite: true);
@@ -205,6 +207,10 @@ sealed class Build : NukeBuild
             var desktopSource = LinuxPackagingDirectory / "windowswitcher.desktop";
             File.Copy(desktopSource, appDir / "windowswitcher.desktop", overwrite: true);
             File.Copy(desktopSource, appDirApplications / "windowswitcher.desktop", overwrite: true);
+            File.Copy(
+                LinuxPackagingDirectory / "io.github.SebastienDuruz.WindowSwitcher.metainfo.xml",
+                appDirMetainfo / "io.github.SebastienDuruz.WindowSwitcher.metainfo.xml",
+                overwrite: true);
             File.Copy(LinuxPackagingDirectory / "AppRun", appDir / "AppRun", overwrite: true);
 
             MakeExecutable(appDir / "AppRun");
@@ -273,7 +279,7 @@ sealed class Build : NukeBuild
     }
 
     /// <summary>
-    /// Resolves appimagetool from explicit path, PATH, or auto-download.
+    /// Resolves appimagetool from an explicit path or the modern release stream.
     /// </summary>
     async Task<string> ResolveAppImageToolAsync()
     {
@@ -283,14 +289,10 @@ sealed class Build : NukeBuild
             return AppImageToolPath;
         }
 
-        var discovered = FindExecutableOnPath("appimagetool");
-        if (!string.IsNullOrWhiteSpace(discovered))
-            return discovered;
-
         Directory.CreateDirectory(ToolsDirectory);
 
         var arch = ToAppImageArchitecture(LinuxRuntime);
-        var outputPath = ToolsDirectory / $"appimagetool-{arch}.AppImage";
+        var outputPath = ToolsDirectory / $"appimagetool-modern-{arch}.AppImage";
         if (File.Exists(outputPath))
             return outputPath;
 
@@ -388,7 +390,7 @@ sealed class Build : NukeBuild
 
         return architecture switch
         {
-            "x86_64" => "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage",
+            "x86_64" => "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage",
             _ => throw new Exception($"Unsupported AppImage architecture: {architecture}")
         };
     }
