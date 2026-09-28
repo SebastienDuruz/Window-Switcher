@@ -455,8 +455,8 @@ Nuke is the release-artifact entry point. Packaging is host-specific: build Wind
 | --- | --- | --- |
 | `Restore` | Windows or Linux | Restored project dependencies |
 | `Compile` | Windows or Linux | Compiled application |
-| `Installer` | Windows | `build/artifacts/installer/WindowSwitcher-setup-<version>-<win-runtime>.exe` |
-| `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-<linux-runtime>.AppImage` |
+| `Installer` | Windows | `build/artifacts/installer/WindowSwitcher-setup-<version>-<x86_64\|arm64>.exe` |
+| `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-x86_64.AppImage` |
 | `Artifacts` | Windows or Linux | Artifact appropriate for the current host |
 
 ### Commands
