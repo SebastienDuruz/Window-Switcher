@@ -454,7 +454,7 @@ Nuke is the release-artifact entry point. Packaging is host-specific: build Wind
 | `Restore` | Windows or Linux | Restored project dependencies |
 | `Compile` | Windows or Linux | Compiled application |
 | `Installer` | Windows | `build/artifacts/installer/WindowSwitcher-setup-<version>-<x86_64\|arm64>.exe` |
-| `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-x86_64.AppImage` |
+| `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-x86_64.AppImage` and matching `.AppImage.zsync` |
 | `Artifacts` | Windows or Linux | Artifact appropriate for the current host |
 
 ### Commands
@@ -482,7 +482,9 @@ Useful options:
 - `--distribution-channel <name>` and `--package-kind <name>` label packaged builds.
 - `--makensis-path <path>` selects a specific NSIS compiler.
 
-On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime.
+On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime and GitHub Releases update information for AppImageUpdate-compatible delta updates.
+
+Publish both the versioned `.AppImage` and its matching `.AppImage.zsync` as GitHub Release assets. The embedded `gh-releases-zsync` feed resolves the latest stable release using the `WindowSwitcher-*-x86_64.AppImage.zsync` asset pattern.
 
 Build-labelled `windows_store` packages use store-managed updates instead of the GitHub release updater. Packaging resources live under `build/assets/installer/` and `build/assets/packaging/linux/`; generated artifacts remain under `build/artifacts/`.
 
