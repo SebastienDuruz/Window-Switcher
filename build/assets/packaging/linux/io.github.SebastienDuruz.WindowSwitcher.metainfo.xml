@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.SebastienDuruz.WindowSwitcher</id>
+  <name>Window Switcher</name>
+  <summary>Keep selected windows visible as live previews</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.sebastienduruz">
+    <name>Sébastien Duruz</name>
+  </developer>
+  <url type="homepage">https://github.com/SebastienDuruz/Window-Switcher</url>
+  <url type="bugtracker">https://github.com/SebastienDuruz/Window-Switcher/issues</url>
+  <url type="vcs-browser">https://github.com/SebastienDuruz/Window-Switcher</url>
+  <launchable type="desktop-id">windowswitcher.desktop</launchable>
+  <provides>
+    <binary>WindowSwitcher</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <description>
+    <p>
+      Window Switcher keeps selected application windows visible as live,
+      always-on-top previews and lets you activate them with one click or a
+      global shortcut.
+    </p>
+    <p>
+      It is designed for multibox, multi-client, monitoring, and other
+      workflows where several windows must remain easy to see and activate.
+    </p>
+  </description>
+</component>

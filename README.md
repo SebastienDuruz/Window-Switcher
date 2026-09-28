@@ -427,8 +427,6 @@ Run commands from the repository root:
 | `make clean` | `dotnet clean Window-Switcher.slnx` | Clean build outputs. |
 | `make format` | `dotnet csharpier format .` | Format the repository. |
 | `make format-check` | `dotnet csharpier check .` | Check formatting without changing files. |
-| `make artifacts` | — | Build the release artifact for the current host OS. |
-| `make installer` | — | Build the Windows installer on Windows. |
 | `make appimage` | — | Build the AppImage on Linux. |
 
 The application version is defined once as `WindowSwitcherVersion` in `Directory.Build.props`.
@@ -484,7 +482,7 @@ Useful options:
 - `--distribution-channel <name>` and `--package-kind <name>` label packaged builds.
 - `--makensis-path <path>` selects a specific NSIS compiler.
 
-On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target finds `appimagetool` on `PATH` or downloads it to `build/artifacts/tools/`.
+On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime.
 
 Build-labelled `windows_store` packages use store-managed updates instead of the GitHub release updater. Packaging resources live under `build/assets/installer/` and `build/assets/packaging/linux/`; generated artifacts remain under `build/artifacts/`.
 

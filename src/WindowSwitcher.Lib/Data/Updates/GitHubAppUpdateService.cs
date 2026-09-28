@@ -222,10 +222,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
             if (!name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            if (
-                name.Contains(runtimeToken, StringComparison.OrdinalIgnoreCase)
-                && name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
-            )
+            if (name.Contains(runtimeToken, StringComparison.OrdinalIgnoreCase))
             {
                 return (name, url);
             }
