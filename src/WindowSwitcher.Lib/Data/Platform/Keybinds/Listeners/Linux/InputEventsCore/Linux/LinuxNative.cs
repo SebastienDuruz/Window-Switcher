@@ -32,11 +32,7 @@ internal static class LinuxNative
     private static extern nint ReadInternal(int fd, byte[] buffer, nuint count);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "write")]
-    private static extern nint WriteInternal(
-        int fd,
-        in NativeInputEvent buffer,
-        nuint count
-    );
+    private static extern nint WriteInternal(int fd, in NativeInputEvent buffer, nuint count);
 
     [DllImport("libc", SetLastError = true, EntryPoint = "close")]
     private static extern int CloseInternal(int fd);

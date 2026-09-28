@@ -275,6 +275,7 @@ internal static class X11FrameConverter
     }
 
     private readonly record struct ChannelLayout(ulong Mask, int Shift, ulong Maximum);
+
     private readonly record struct ColorLayout(
         ChannelLayout Red,
         ChannelLayout Green,

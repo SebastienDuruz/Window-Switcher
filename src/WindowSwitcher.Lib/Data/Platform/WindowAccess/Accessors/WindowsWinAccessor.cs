@@ -139,7 +139,10 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!IntPtr.TryParse(windowId, out IntPtr windowHandle) || windowHandle == IntPtr.Zero)
+                if (
+                    !IntPtr.TryParse(windowId, out IntPtr windowHandle)
+                    || windowHandle == IntPtr.Zero
+                )
                     return false;
 
                 BringWindowToFront(windowHandle);

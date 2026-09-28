@@ -19,10 +19,8 @@ public sealed class PlatformServiceCollectionExtensionsTests
 
         WinAccessorBase firstAccessor = provider.GetRequiredService<WinAccessorBase>();
         WinAccessorBase secondAccessor = provider.GetRequiredService<WinAccessorBase>();
-        IPreviewFrameProvider firstPreview =
-            provider.GetRequiredService<IPreviewFrameProvider>();
-        IPreviewFrameProvider secondPreview =
-            provider.GetRequiredService<IPreviewFrameProvider>();
+        IPreviewFrameProvider firstPreview = provider.GetRequiredService<IPreviewFrameProvider>();
+        IPreviewFrameProvider secondPreview = provider.GetRequiredService<IPreviewFrameProvider>();
         IWindowKeybindActivator firstActivator =
             provider.GetRequiredService<IWindowKeybindActivator>();
         IWindowKeybindActivator secondActivator =

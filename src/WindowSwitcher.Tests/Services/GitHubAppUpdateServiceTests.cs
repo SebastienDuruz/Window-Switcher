@@ -54,11 +54,15 @@ public sealed class GitHubAppUpdateServiceTests
         {
             bool isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
             Assert.Equal(
-                isArm64 ? "WindowSwitcher-setup-1.0.0-arm64.exe" : "WindowSwitcher-setup-1.0.0-x86_64.exe",
+                isArm64
+                    ? "WindowSwitcher-setup-1.0.0-arm64.exe"
+                    : "WindowSwitcher-setup-1.0.0-x86_64.exe",
                 result.AssetName
             );
             Assert.Equal(
-                isArm64 ? "https://example.invalid/windows-arm64.exe" : "https://example.invalid/windows.exe",
+                isArm64
+                    ? "https://example.invalid/windows-arm64.exe"
+                    : "https://example.invalid/windows.exe",
                 result.AssetDownloadUrl
             );
         }
@@ -77,7 +81,10 @@ public sealed class GitHubAppUpdateServiceTests
         string assetName
     )
     {
-        if (!OperatingSystem.IsLinux() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
+        if (
+            !OperatingSystem.IsLinux()
+            || RuntimeInformation.ProcessArchitecture != Architecture.X64
+        )
             return;
 
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

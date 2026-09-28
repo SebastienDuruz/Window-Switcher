@@ -67,8 +67,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
                 .Where(window => window.ProcessId != currentProcessId)
                 .Select(window =>
                 {
-                    int processId =
-                        window.ProcessId <= int.MaxValue ? (int)window.ProcessId : 0;
+                    int processId = window.ProcessId <= int.MaxValue ? (int)window.ProcessId : 0;
                     return new WindowConfig
                     {
                         WindowId = FormatWindowId(window.WindowId),
@@ -201,9 +200,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         {
             throw;
         }
-        catch (Exception exception) when (
-            exception is IOException or UnauthorizedAccessException
-        )
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return string.Empty;
         }

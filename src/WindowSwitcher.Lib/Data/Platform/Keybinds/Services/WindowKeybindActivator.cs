@@ -93,9 +93,11 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        if (!await _accessor
+        if (
+            !await _accessor
                 .TryActivateWindowAsync(matchingWindow.WindowId, cancellationToken)
-                .ConfigureAwait(false))
+                .ConfigureAwait(false)
+        )
             return false;
         lock (_syncRoot)
         {
@@ -151,9 +153,11 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
             target = orderedCandidates[nextIndex];
         }
 
-        if (!await _accessor
+        if (
+            !await _accessor
                 .TryActivateWindowAsync(target.WindowId, cancellationToken)
-                .ConfigureAwait(false))
+                .ConfigureAwait(false)
+        )
             return false;
         lock (_syncRoot)
         {
@@ -183,9 +187,11 @@ public sealed class WindowKeybindActivator : IWindowKeybindActivator
         if (matchingWindow is null)
             return false;
 
-        if (!await _accessor
+        if (
+            !await _accessor
                 .TryActivateWindowAsync(matchingWindow.WindowId, cancellationToken)
-                .ConfigureAwait(false))
+                .ConfigureAwait(false)
+        )
             return false;
         lock (_syncRoot)
         {

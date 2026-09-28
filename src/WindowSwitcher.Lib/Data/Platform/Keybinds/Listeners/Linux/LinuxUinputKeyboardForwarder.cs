@@ -137,7 +137,6 @@ internal sealed class LinuxUinputKeyboardForwarder : ILinuxKeyboardForwarder
             ThrowLastIoctlFailure("UI_DEV_SETUP");
         if (LinuxNative.Ioctl(_fileDescriptor, LinuxIoctl.UiDevCreate, 0) < 0)
             ThrowLastIoctlFailure("UI_DEV_CREATE");
-
     }
 
     internal static IReadOnlyCollection<ushort> CollectKeyCodes(

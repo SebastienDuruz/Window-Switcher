@@ -106,8 +106,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         DataContext = _mainWindowViewModel;
         Title = StaticData.AppName;
 
-        _windowKeybindActivator =
-            AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
+        _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _previewCoordinator = new FloatingPreviewCoordinator(
             _windowKeybindActivator,
             dispatcher,

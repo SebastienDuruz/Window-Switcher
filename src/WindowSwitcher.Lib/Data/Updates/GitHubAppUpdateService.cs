@@ -241,9 +241,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
     {
         if (OperatingSystem.IsLinux())
         {
-            return RuntimeInformation.ProcessArchitecture == Architecture.X64
-                ? "x86_64"
-                : null;
+            return RuntimeInformation.ProcessArchitecture == Architecture.X64 ? "x86_64" : null;
         }
 
         string architectureToken = RuntimeInformation.ProcessArchitecture switch
@@ -253,7 +251,9 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         };
 
         if (OperatingSystem.IsWindows())
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x86_64";
+            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? "arm64"
+                : "x86_64";
 
         return architectureToken;
     }

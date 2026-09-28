@@ -54,7 +54,6 @@ public static class PlatformServiceCollectionExtensions
             >();
             services.AddSingleton<IPlatformAppInfoProvider, LinuxPlatformAppInfoProvider>();
         }
-
         else
         {
             throw new PlatformNotSupportedException(

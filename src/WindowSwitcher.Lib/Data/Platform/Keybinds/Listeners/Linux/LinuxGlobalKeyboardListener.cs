@@ -1,13 +1,13 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading.Channels;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Discovery;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 
@@ -48,8 +48,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             new LinuxKeyboardForwarderFactory(),
             TracePlatformDiagnostics.Instance,
             DefaultReconciliationInterval
-        )
-    { }
+        ) { }
 
     internal LinuxGlobalKeyboardListener(
         ILinuxInputDeviceDiscovery discovery,
@@ -227,9 +226,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         throw new LinuxInputAccessException(deniedDevices.Select(device => device.Path).ToArray());
     }
 
-    internal static InputDeviceInfo[] SelectKeyboardDevices(
-        IReadOnlyList<InputDeviceInfo> devices
-    )
+    internal static InputDeviceInfo[] SelectKeyboardDevices(IReadOnlyList<InputDeviceInfo> devices)
     {
         ArgumentNullException.ThrowIfNull(devices);
         return devices
@@ -270,8 +267,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             try
             {
-                await Task.Delay(_reconciliationInterval, cancellationToken)
-                    .ConfigureAwait(false);
+                await Task.Delay(_reconciliationInterval, cancellationToken).ConfigureAwait(false);
                 IReadOnlyList<InputDeviceInfo> devices = await _discovery
                     .DiscoverAsync(cancellationToken)
                     .ConfigureAwait(false);
@@ -317,7 +313,11 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 return;
 
             await StopDeviceGenerationCoreAsync(CancellationToken.None).ConfigureAwait(false);
-            await StartDeviceGenerationAsync(keyboards, _runCts?.Token ?? cancellationToken, cancellationToken)
+            await StartDeviceGenerationAsync(
+                    keyboards,
+                    _runCts?.Token ?? cancellationToken,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
         }
         finally
@@ -362,7 +362,9 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             ChannelWriter<LinuxCaptureEvent> writer =
                 _channel?.Writer
-                ?? throw new InvalidOperationException("Linux keyboard event channel is unavailable.");
+                ?? throw new InvalidOperationException(
+                    "Linux keyboard event channel is unavailable."
+                );
             _forwarder = forwarder;
             Volatile.Write(ref _forwardingFailed, 0);
             _readerCts = readerCts;
@@ -447,8 +449,8 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         var completion = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
-        await channel.Writer
-            .WriteAsync(LinuxCaptureEvent.CreateBarrier(completion), cancellationToken)
+        await channel
+            .Writer.WriteAsync(LinuxCaptureEvent.CreateBarrier(completion), cancellationToken)
             .ConfigureAwait(false);
         await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -662,10 +664,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         Emit(eventArgs);
     }
 
-    internal void ProcessNativeEventForTesting(
-        string devicePath,
-        NativeInputEvent nativeEvent
-    )
+    internal void ProcessNativeEventForTesting(string devicePath, NativeInputEvent nativeEvent)
     {
         ProcessNativeEvent(LinuxCaptureEvent.CreateNative(devicePath, nativeEvent));
     }
@@ -727,10 +726,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
     }
 
-    private void ForwardCurrentEvent(
-        NativeInputEvent nativeEvent,
-        DeviceRoutingState routingState
-    )
+    private void ForwardCurrentEvent(NativeInputEvent nativeEvent, DeviceRoutingState routingState)
     {
         _forwarder?.Forward(nativeEvent);
         routingState.ShouldForwardSync = true;

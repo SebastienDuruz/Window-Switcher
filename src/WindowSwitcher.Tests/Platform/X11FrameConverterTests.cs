@@ -66,12 +66,7 @@ public sealed class X11FrameConverterTests
     public void CreateFrame_UsesNearestNeighborWhenResizing()
     {
         using var image = new XImageFixture(
-            [
-                1, 2, 3, 255,
-                4, 5, 6, 255,
-                7, 8, 9, 255,
-                10, 11, 12, 255,
-            ],
+            [1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255],
             width: 2,
             height: 2,
             stride: 8,
@@ -108,9 +103,7 @@ public sealed class X11FrameConverterTests
         try
         {
             Marshal.StructureToPtr(image, imagePointer, fDeleteOld: false);
-            Assert.Null(
-                X11FrameConverter.CreateFrame(imagePointer, new ScreenshotRequest(), pool)
-            );
+            Assert.Null(X11FrameConverter.CreateFrame(imagePointer, new ScreenshotRequest(), pool));
         }
         finally
         {
@@ -163,10 +156,7 @@ public sealed class X11FrameConverterTests
         Assert.False(fallbackCalled);
     }
 
-    private static byte[] Convert(
-        XImageFixture fixture,
-        ScreenshotRequest? request = null
-    )
+    private static byte[] Convert(XImageFixture fixture, ScreenshotRequest? request = null)
     {
         using var pool = new NativeFrameBufferPool(1);
         using NativeBgraPreviewFrame frame = Assert.IsType<NativeBgraPreviewFrame>(
@@ -181,8 +171,7 @@ public sealed class X11FrameConverterTests
         return bytes;
     }
 
-    private static NativeBgraPreviewFrame EmptyFrame() =>
-        new(IntPtr.Zero, 0, 0, 0, 0, () => { });
+    private static NativeBgraPreviewFrame EmptyFrame() => new(IntPtr.Zero, 0, 0, 0, 0, () => { });
 
     private sealed class XImageFixture : IDisposable
     {
