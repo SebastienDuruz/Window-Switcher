@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
 using WindowSwitcher.Lib.Data.Updates;
 using WindowSwitcher.Lib.Models;
@@ -21,11 +22,15 @@ public sealed class GitHubAppUpdateServiceTests
                   "body": "Important fixes",
                   "assets": [
                     {
-                      "name": "WindowSwitcher-setup-1.0.0-win-x64.exe",
+                      "name": "WindowSwitcher-setup-1.0.0-x86_64.exe",
                       "browser_download_url": "https://example.invalid/windows.exe"
                     },
                     {
-                      "name": "WindowSwitcher-1.0.0-linux-x64.AppImage",
+                      "name": "WindowSwitcher-setup-1.0.0-arm64.exe",
+                      "browser_download_url": "https://example.invalid/windows-arm64.exe"
+                    },
+                    {
+                      "name": "WindowSwitcher-1.0.0-x86_64.AppImage",
                       "browser_download_url": "https://example.invalid/linux.AppImage"
                     }
                   ]
@@ -46,9 +51,68 @@ public sealed class GitHubAppUpdateServiceTests
         Assert.True(result.CanStartUpdate);
         Assert.False(string.IsNullOrWhiteSpace(result.ReleaseNotes));
         if (OperatingSystem.IsWindows())
-            Assert.EndsWith(".exe", result.AssetName, StringComparison.OrdinalIgnoreCase);
+        {
+            bool isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+            Assert.Equal(
+                isArm64 ? "WindowSwitcher-setup-1.0.0-arm64.exe" : "WindowSwitcher-setup-1.0.0-x86_64.exe",
+                result.AssetName
+            );
+            Assert.Equal(
+                isArm64 ? "https://example.invalid/windows-arm64.exe" : "https://example.invalid/windows.exe",
+                result.AssetDownloadUrl
+            );
+        }
         else
-            Assert.EndsWith(".AppImage", result.AssetName, StringComparison.OrdinalIgnoreCase);
+        {
+            Assert.Equal("WindowSwitcher-1.0.0-x86_64.AppImage", result.AssetName);
+            Assert.Equal("https://example.invalid/linux.AppImage", result.AssetDownloadUrl);
+        }
+    }
+
+    [Theory]
+    [InlineData("WindowSwitcher-1.0.0-linux-x64.AppImage")]
+    [InlineData("WindowSwitcher-1.0.0-aarch64.AppImage")]
+    [InlineData("WindowSwitcher-1.0.0-x86_64.AppImage.zsync")]
+    public async Task CheckForUpdatesAsync_FallsBackToReleasePage_WhenLinuxAssetIsIncompatible(
+        string assetName
+    )
+    {
+        if (!OperatingSystem.IsLinux() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
+            return;
+
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                $$"""
+                {
+                  "tag_name": "v1.0.0",
+                  "html_url": "https://example.invalid/release",
+                  "assets": [
+                    {
+                      "name": "{{assetName}}",
+                      "browser_download_url": "https://example.invalid/incompatible"
+                    }
+                  ]
+                }
+                """,
+                Encoding.UTF8,
+                "application/json"
+            ),
+        });
+        var launcher = new CapturingLauncher();
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), launcher);
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("0.9.0");
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.Null(result.AssetName);
+        Assert.Null(result.AssetDownloadUrl);
+        Assert.True(result.CanStartUpdate);
+
+        UpdateLaunchResult launchResult = await sut.LaunchUpdateAsync(result);
+
+        Assert.True(launchResult.Launched);
+        Assert.Equal("https://example.invalid/release", launcher.LastTarget);
     }
 
     [Fact]

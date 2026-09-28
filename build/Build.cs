@@ -137,7 +137,7 @@ sealed class Build : NukeBuild
 
             Directory.CreateDirectory(EffectiveInstallerOutDir);
 
-            var installerFile = EffectiveInstallerOutDir / $"WindowSwitcher-setup-{EffectiveVersion}-{WindowsRuntime}.exe";
+            var installerFile = EffectiveInstallerOutDir / $"WindowSwitcher-setup-{EffectiveVersion}-{ToWindowsInstallerArchitecture(WindowsRuntime)}.exe";
             var publishGlob = EffectiveWindowsPublishDir / "*";
 
             var makensisArguments =
@@ -210,7 +210,7 @@ sealed class Build : NukeBuild
             MakeExecutable(appDir / "AppRun");
 
             var appImageTool = await ResolveAppImageToolAsync();
-            var outputFile = EffectiveAppImageOutDir / $"WindowSwitcher-{EffectiveVersion}-{LinuxRuntime}.AppImage";
+            var outputFile = EffectiveAppImageOutDir / $"WindowSwitcher-{EffectiveVersion}-{ToAppImageArchitecture(LinuxRuntime)}.AppImage";
             var toolArguments = appImageTool.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase)
                 ? $"--appimage-extract-and-run {appDir} {outputFile}"
                 : $"{appDir} {outputFile}";
@@ -354,6 +354,17 @@ sealed class Build : NukeBuild
 
         Directory.CreateDirectory(directory);
     }
+
+    /// <summary>
+    /// Maps Windows RID to installer architecture string.
+    /// </summary>
+    static string ToWindowsInstallerArchitecture(string runtime)
+        => runtime switch
+        {
+            "win-x64" => "x86_64",
+            "win-arm64" => "arm64",
+            _ => throw new ArgumentException($"Unsupported Windows runtime: {runtime}", nameof(runtime))
+        };
 
     /// <summary>
     /// Maps Linux RID to AppImage architecture string.
