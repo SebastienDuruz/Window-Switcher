@@ -26,8 +26,11 @@ sealed class Build : NukeBuild
     /// <summary>Optional version override. Defaults to Directory.Build.props.</summary>
     [Parameter] readonly string? Version;
 
-    /// <summary>Whether published binaries should be self-contained.</summary>
-    [Parameter] readonly bool SelfContained;
+    /// <summary>
+    /// Whether published binaries embed the .NET runtime. Enabled by default so packaged
+    /// builds start on machines without .NET installed; the AppImage target requires it.
+    /// </summary>
+    [Parameter] readonly bool SelfContained = true;
 
     /// <summary>Whether Sentry telemetry is compiled into the application.</summary>
     [Parameter] readonly bool EnableSentryTelemetry = true;
@@ -200,6 +203,7 @@ sealed class Build : NukeBuild
             Directory.CreateDirectory(appDirMetainfo);
 
             CopyPublishOutputToAppDir(EffectiveLinuxPublishDir, appDirBin);
+            AssertBundledDotNetHost(appDirBin);
             File.Copy(RootDirectory / "LICENSE", appDirLicenses / "LICENSE", overwrite: true);
 
             var iconSource = RootDirectory / "src/WindowSwitcher/Assets/WS_logo.png";
@@ -356,6 +360,18 @@ sealed class Build : NukeBuild
     {
         True(Directory.Exists(publishDirectory), $"Publish directory not found: {publishDirectory}");
         True(Directory.EnumerateFileSystemEntries(publishDirectory).Any(), $"dotnet publish produced no files in: {publishDirectory}");
+    }
+
+    /// <summary>
+    /// Asserts that the .NET host resolver is bundled, proving the output is self-contained.
+    /// Without it, the app cannot start on machines lacking a system-wide .NET runtime.
+    /// </summary>
+    static void AssertBundledDotNetHost(AbsolutePath binaryDirectory)
+    {
+        var hostResolver = binaryDirectory / "libhostfxr.so";
+        True(
+            File.Exists(hostResolver),
+            $"Bundled .NET host not found at: {hostResolver}. The AppImage must be published self-contained; do not pass --self-contained false.");
     }
 
     /// <summary>

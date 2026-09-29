@@ -481,6 +481,7 @@ Useful options:
 - `--enable-sentry-telemetry false` excludes Sentry.
 - `--distribution-channel <name>` and `--package-kind <name>` label packaged builds.
 - `--makensis-path <path>` selects a specific NSIS compiler.
+- `--self-contained false` publishes a framework-dependent build that requires the .NET 10 runtime on the target machine. Packaged builds are self-contained by default, and the AppImage target rejects framework-dependent output.
 
 On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime and GitHub Releases update information for AppImageUpdate-compatible delta updates.
 
