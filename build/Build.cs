@@ -199,7 +199,7 @@ sealed class Build : NukeBuild
             Directory.CreateDirectory(appDirLicenses);
             Directory.CreateDirectory(appDirMetainfo);
 
-            CopyDirectoryContents(EffectiveLinuxPublishDir, appDirBin);
+            CopyPublishOutputToAppDir(EffectiveLinuxPublishDir, appDirBin);
             File.Copy(RootDirectory / "LICENSE", appDirLicenses / "LICENSE", overwrite: true);
 
             var iconSource = RootDirectory / "src/WindowSwitcher/Assets/WS_logo.png";
@@ -447,9 +447,9 @@ sealed class Build : NukeBuild
     }
 
     /// <summary>
-    /// Recursively copies a directory tree into another directory.
+    /// Recursively copies publish output into an AppDir, excluding NativeAOT debug symbols.
     /// </summary>
-    static void CopyDirectoryContents(AbsolutePath sourceDirectory, AbsolutePath destinationDirectory)
+    static void CopyPublishOutputToAppDir(AbsolutePath sourceDirectory, AbsolutePath destinationDirectory)
     {
         foreach (var sourcePath in Directory.EnumerateFileSystemEntries(sourceDirectory, "*", SearchOption.AllDirectories))
         {
@@ -461,6 +461,9 @@ sealed class Build : NukeBuild
                 Directory.CreateDirectory(destinationPath);
                 continue;
             }
+
+            if (Path.GetExtension(sourcePath).Equals(".dbg", StringComparison.OrdinalIgnoreCase))
+                continue;
 
             var destinationParent = Path.GetDirectoryName(destinationPath) ?? destinationDirectory.ToString();
             Directory.CreateDirectory(destinationParent);
