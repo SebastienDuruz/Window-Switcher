@@ -8,11 +8,12 @@ namespace WindowSwitcher.ViewModels;
 
 /// <summary>
 /// Backs a single prefix list (whitelist or blacklist) and exposes the add/remove
-/// operations through commands. Selecting an entry removes it.
+/// operations through commands.
 /// </summary>
 public partial class PrefixListViewModel : ObservableObject
 {
     private readonly IPrefixListService _prefixListService;
+    private readonly IViewModelDispatcher _dispatcher;
 
     public ObservableCollection<string> Prefixes { get; }
 
@@ -25,11 +26,16 @@ public partial class PrefixListViewModel : ObservableObject
 
     public IRelayCommand AddCommand { get; }
 
-    public PrefixListViewModel(IPrefixListService prefixListService)
+    public PrefixListViewModel(
+        IPrefixListService prefixListService,
+        IViewModelDispatcher dispatcher
+    )
     {
         ArgumentNullException.ThrowIfNull(prefixListService);
+        ArgumentNullException.ThrowIfNull(dispatcher);
 
         _prefixListService = prefixListService;
+        _dispatcher = dispatcher;
         Prefixes = new ObservableCollection<string>(prefixListService.GetPrefixes());
         AddCommand = new RelayCommand(AddPrefix, () => !string.IsNullOrWhiteSpace(NewPrefix));
     }
@@ -53,7 +59,7 @@ public partial class PrefixListViewModel : ObservableObject
         if (value is null)
             return;
 
-        RemoveSelectedPrefix(value);
+        _dispatcher.Post(() => RemoveSelectedPrefix(value));
     }
 
     private void AddPrefix()
@@ -67,7 +73,8 @@ public partial class PrefixListViewModel : ObservableObject
         if (!_prefixListService.TryRemovePrefix(value, out _))
             return;
 
-        SelectedPrefix = null;
         Prefixes.Remove(value);
+        if (SelectedPrefix == value)
+            SelectedPrefix = null;
     }
 }

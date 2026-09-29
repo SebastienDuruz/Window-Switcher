@@ -17,10 +17,12 @@ public partial class FiltersWindow : Window
 
         ViewModel = new FiltersViewModel(
             new PrefixListViewModel(
-                new PrefixListService(whitelistPrefixes, StaticData.PrefixWindowType.whitelist)
+                new PrefixListService(whitelistPrefixes, StaticData.PrefixWindowType.whitelist),
+                new AvaloniaViewModelDispatcher()
             ),
             new PrefixListViewModel(
-                new PrefixListService(blacklistPrefixes, StaticData.PrefixWindowType.blacklist)
+                new PrefixListService(blacklistPrefixes, StaticData.PrefixWindowType.blacklist),
+                new AvaloniaViewModelDispatcher()
             )
         );
         DataContext = ViewModel;
