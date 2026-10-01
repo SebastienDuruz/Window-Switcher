@@ -17,9 +17,6 @@ public sealed class GlobalWindowKeybindRuntimeService
     private readonly IWindowKeybindManager _keybindManager;
     private readonly IWindowKeybindActivator _activator;
     private readonly HashSet<KeybindModifier> _pressedModifiers = [];
-    private readonly HashSet<KeybindModifier> _bufferedModifiers = [];
-    private readonly HashSet<KeybindModifier> _consumedModifiers = [];
-    private readonly HashSet<KeybindPrimaryKey> _pressedPrimaryKeys = [];
     private readonly HashSet<KeybindPrimaryKey> _consumedPrimaryKeys = [];
     private KeybindFilterCatalogSnapshot _catalogSnapshot = KeybindFilterCatalogSnapshot.Empty;
     private bool _isDisposed;
@@ -103,25 +100,16 @@ public sealed class GlobalWindowKeybindRuntimeService
                     out ResolvedGlobalKeyEvent resolvedEvent
                 )
             )
+                return KeyboardFilterDecision.Forward();
+
+            if (resolvedEvent.Modifier.HasValue)
             {
-                if (_consumedModifiers.Count > 0)
-                    return KeyboardFilterDecision.Consume();
-
-                if (_bufferedModifiers.Count > 0)
-                {
-                    ClearBufferedStateUnsafe();
-                    return KeyboardFilterDecision.Forward(
-                        flushBufferedEvents: true,
-                        forwardCurrentEventViaForwarder: true
-                    );
-                }
-
+                // Modifiers are always forwarded so the system never sees them stuck or delayed.
+                ApplyModifierStateUnsafe(resolvedEvent.Modifier.Value, resolvedEvent.State);
                 return KeyboardFilterDecision.Forward();
             }
 
-            return resolvedEvent.Modifier.HasValue
-                ? ProcessModifierEventUnsafe(resolvedEvent.Modifier.Value, resolvedEvent)
-                : ProcessPrimaryEventUnsafe(resolvedEvent.PrimaryKey, resolvedEvent);
+            return ProcessPrimaryEventUnsafe(resolvedEvent.PrimaryKey, resolvedEvent);
         }
     }
 
@@ -158,153 +146,40 @@ public sealed class GlobalWindowKeybindRuntimeService
         GC.SuppressFinalize(this);
     }
 
-    private KeyboardFilterDecision ProcessModifierEventUnsafe(
-        KeybindModifier modifier,
-        ResolvedGlobalKeyEvent resolvedEvent
-    )
-    {
-        ApplyModifierStateUnsafe(modifier, resolvedEvent.State);
-
-        if (_consumedModifiers.Contains(modifier))
-        {
-            if (resolvedEvent.State == GlobalKeyState.Up)
-                _consumedModifiers.Remove(modifier);
-
-            return KeyboardFilterDecision.Consume();
-        }
-
-        if (_consumedModifiers.Count > 0)
-        {
-            if (resolvedEvent.State == GlobalKeyState.Down)
-                _consumedModifiers.Add(modifier);
-
-            return KeyboardFilterDecision.Consume();
-        }
-
-        if (resolvedEvent.IsRepeat)
-            return _bufferedModifiers.Contains(modifier)
-                ? KeyboardFilterDecision.Consume()
-                : KeyboardFilterDecision.Forward();
-
-        if (resolvedEvent.State == GlobalKeyState.Up)
-        {
-            if (_bufferedModifiers.Count > 0)
-            {
-                ClearBufferedStateUnsafe();
-                return KeyboardFilterDecision.Forward(
-                    flushBufferedEvents: true,
-                    forwardCurrentEventViaForwarder: true
-                );
-            }
-
-            return KeyboardFilterDecision.Forward();
-        }
-
-        if (_catalogSnapshot.HasPotentialMatch(_pressedModifiers))
-        {
-            _bufferedModifiers.Add(modifier);
-            return KeyboardFilterDecision.Buffer();
-        }
-
-        if (_bufferedModifiers.Count > 0)
-        {
-            ClearBufferedStateUnsafe();
-            return KeyboardFilterDecision.Forward(
-                flushBufferedEvents: true,
-                forwardCurrentEventViaForwarder: true
-            );
-        }
-
-        return KeyboardFilterDecision.Forward();
-    }
-
     private KeyboardFilterDecision ProcessPrimaryEventUnsafe(
         KeybindPrimaryKey primaryKey,
         ResolvedGlobalKeyEvent resolvedEvent
     )
     {
         if (primaryKey == KeybindPrimaryKey.None)
-        {
-            if (_bufferedModifiers.Count > 0)
-            {
-                ClearBufferedStateUnsafe();
-                return KeyboardFilterDecision.Forward(
-                    flushBufferedEvents: true,
-                    forwardCurrentEventViaForwarder: true
-                );
-            }
+            return KeyboardFilterDecision.Forward();
 
-            return _consumedModifiers.Count > 0
-                ? KeyboardFilterDecision.Consume()
-                : KeyboardFilterDecision.Forward();
-        }
-
-        ApplyPrimaryStateUnsafe(primaryKey, resolvedEvent.State, resolvedEvent.IsRepeat);
-
-        if (_consumedPrimaryKeys.Contains(primaryKey))
-        {
-            if (resolvedEvent.State == GlobalKeyState.Up)
-                _consumedPrimaryKeys.Remove(primaryKey);
-
-            return KeyboardFilterDecision.Consume();
-        }
-
+        // Only the primary key of a matched shortcut is swallowed, from its press to its release.
         if (resolvedEvent.State == GlobalKeyState.Up)
         {
-            if (_bufferedModifiers.Count > 0)
-            {
-                ClearBufferedStateUnsafe();
-                return KeyboardFilterDecision.Forward(
-                    flushBufferedEvents: true,
-                    forwardCurrentEventViaForwarder: true
-                );
-            }
-
-            return _consumedModifiers.Count > 0
+            return _consumedPrimaryKeys.Remove(primaryKey)
                 ? KeyboardFilterDecision.Consume()
                 : KeyboardFilterDecision.Forward();
         }
 
         if (resolvedEvent.IsRepeat)
-            return _consumedModifiers.Count > 0
+        {
+            return _consumedPrimaryKeys.Contains(primaryKey)
                 ? KeyboardFilterDecision.Consume()
                 : KeyboardFilterDecision.Forward();
+        }
 
         KeyCombination combination = BuildCombination(primaryKey);
-        if (_catalogSnapshot.TryResolveTarget(combination, out string targetId))
-        {
-            foreach (KeybindModifier modifier in EnumerateCombinationModifiers(combination))
-                _consumedModifiers.Add(modifier);
+        if (!_catalogSnapshot.TryResolveTarget(combination, out string targetId))
+            return KeyboardFilterDecision.Forward();
 
-            _consumedPrimaryKeys.Add(primaryKey);
-            bool hadBufferedModifiers = _bufferedModifiers.Count > 0;
-            ClearBufferedStateUnsafe();
+        _consumedPrimaryKeys.Add(primaryKey);
+        _ = ActivateTargetAsync(targetId);
 
-            _ = ActivateTargetAsync(targetId);
-
-            return KeyboardFilterDecision.Consume(
-                discardBufferedEvents: hadBufferedModifiers,
-                matchedCombination: combination,
-                matchedTargetId: targetId
-            );
-        }
-
-        if (_consumedModifiers.Count > 0)
-        {
-            _consumedPrimaryKeys.Add(primaryKey);
-            return KeyboardFilterDecision.Consume();
-        }
-
-        if (_bufferedModifiers.Count > 0)
-        {
-            ClearBufferedStateUnsafe();
-            return KeyboardFilterDecision.Forward(
-                flushBufferedEvents: true,
-                forwardCurrentEventViaForwarder: true
-            );
-        }
-
-        return KeyboardFilterDecision.Forward();
+        return KeyboardFilterDecision.Consume(
+            matchedCombination: combination,
+            matchedTargetId: targetId
+        );
     }
 
     private async Task ActivateTargetAsync(string targetId)
@@ -330,21 +205,6 @@ public sealed class GlobalWindowKeybindRuntimeService
         );
     }
 
-    private IEnumerable<KeybindModifier> EnumerateCombinationModifiers(KeyCombination combination)
-    {
-        if (combination.Ctrl)
-            yield return KeybindModifier.Ctrl;
-
-        if (combination.Alt)
-            yield return KeybindModifier.Alt;
-
-        if (combination.Shift)
-            yield return KeybindModifier.Shift;
-
-        if (combination.Meta)
-            yield return KeybindModifier.Meta;
-    }
-
     private void ApplyModifierStateUnsafe(KeybindModifier modifier, GlobalKeyState state)
     {
         if (state == GlobalKeyState.Down)
@@ -356,34 +216,10 @@ public sealed class GlobalWindowKeybindRuntimeService
         _pressedModifiers.Remove(modifier);
     }
 
-    private void ApplyPrimaryStateUnsafe(
-        KeybindPrimaryKey primaryKey,
-        GlobalKeyState state,
-        bool isRepeat
-    )
-    {
-        if (state == GlobalKeyState.Up)
-        {
-            _pressedPrimaryKeys.Remove(primaryKey);
-            return;
-        }
-
-        if (!isRepeat)
-            _pressedPrimaryKeys.Add(primaryKey);
-    }
-
     private void ResetStateUnsafe()
     {
         _pressedModifiers.Clear();
-        _bufferedModifiers.Clear();
-        _consumedModifiers.Clear();
-        _pressedPrimaryKeys.Clear();
         _consumedPrimaryKeys.Clear();
-    }
-
-    private void ClearBufferedStateUnsafe()
-    {
-        _bufferedModifiers.Clear();
     }
 
     private void RefreshCatalogSnapshot()

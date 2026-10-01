@@ -169,7 +169,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             _processorTask = null;
             _reconciliationTask = null;
             runCts?.Dispose();
-            ResetBufferedState();
+            ResetRoutingState();
         }
         finally
         {
@@ -436,7 +436,8 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             _forwarder = null;
             readerCts?.Dispose();
             forwarder?.Dispose();
-            ResetBufferedState();
+            ResetRoutingState();
+            ResetFilterState();
         }
     }
 
@@ -692,38 +693,8 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         DeviceRoutingState routingState
     )
     {
-        if (decision.DiscardBufferedEvents)
-        {
-            routingState.BufferedEvents.Clear();
-            routingState.HasBufferedEvents = false;
-        }
-
-        if (decision.FlushBufferedEvents)
-        {
-            if (routingState.BufferedEvents.Count > 0)
-            {
-                _forwarder?.Forward(routingState.BufferedEvents);
-                routingState.ShouldForwardSync = true;
-            }
-
-            routingState.BufferedEvents.Clear();
-            routingState.HasBufferedEvents = false;
-        }
-
-        switch (decision.Routing)
-        {
-            case KeyboardEventRouting.Buffer:
-                routingState.BufferedEvents.Add(nativeEvent);
-                routingState.HasBufferedEvents = true;
-                break;
-
-            case KeyboardEventRouting.Consume:
-                break;
-
-            case KeyboardEventRouting.Forward:
-                ForwardCurrentEvent(nativeEvent, routingState);
-                break;
-        }
+        if (decision.Routing == KeyboardEventRouting.Forward)
+            ForwardCurrentEvent(nativeEvent, routingState);
     }
 
     private void ForwardCurrentEvent(NativeInputEvent nativeEvent, DeviceRoutingState routingState)
@@ -734,13 +705,10 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
     private void HandleSync(NativeInputEvent nativeEvent, DeviceRoutingState routingState)
     {
-        if (routingState.HasBufferedEvents)
-            routingState.BufferedEvents.Add(nativeEvent);
-
+        // A SYN_REPORT is only meaningful when at least one event of its frame reached the virtual keyboard.
         if (routingState.ShouldForwardSync)
             _forwarder?.Forward(nativeEvent);
 
-        routingState.HasBufferedEvents = false;
         routingState.ShouldForwardSync = false;
     }
 
@@ -760,10 +728,23 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
     }
 
-    private void ResetBufferedState()
+    private void ResetRoutingState()
     {
         _routingByDevice.Clear();
         Volatile.Write(ref _forwardingFailed, 0);
+    }
+
+    private void ResetFilterState()
+    {
+        // Key releases that happened while no reader was active are lost, so the filter must forget its key state.
+        try
+        {
+            InputFilter?.Reset();
+        }
+        catch (Exception exception)
+        {
+            _diagnostics.Error("Linux keyboard filter reset failed", exception);
+        }
     }
 
     private DeviceRoutingState GetRoutingState(string devicePath)
@@ -828,7 +809,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             _processorTask = null;
             _reconciliationTask = null;
             runCts?.Dispose();
-            ResetBufferedState();
+            ResetRoutingState();
         }
     }
 
@@ -866,8 +847,6 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
     private sealed class DeviceRoutingState
     {
-        internal List<NativeInputEvent> BufferedEvents { get; } = [];
-        internal bool HasBufferedEvents { get; set; }
         internal bool ShouldForwardSync { get; set; }
     }
 

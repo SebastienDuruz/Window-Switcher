@@ -11,12 +11,7 @@ public enum KeyboardEventRouting
     Forward,
 
     /// <summary>
-    /// Consume the current event now, but keep it buffered so it can be replayed later if needed.
-    /// </summary>
-    Buffer,
-
-    /// <summary>
-    /// Consume the current event and do not replay it.
+    /// Consume the current event so it never reaches the operating system.
     /// </summary>
     Consume,
 }

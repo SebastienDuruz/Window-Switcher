@@ -23,7 +23,7 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
     }
 
     [Fact]
-    public async Task ProcessEvent_BuffersModifierAndConsumesMatchingCombination()
+    public async Task ProcessEvent_ForwardsModifierAndConsumesOnlyPrimaryKey()
     {
         var listener = new FakeGlobalKeyboardListener();
         var manager = new FakeWindowKeybindManager();
@@ -47,17 +47,16 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
             CreateWindowsEvent("VK_12", GlobalKeyState.Up)
         );
 
-        Assert.Equal(KeyboardEventRouting.Buffer, altDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, altDown.Routing);
         Assert.Equal(KeyboardEventRouting.Consume, tabDown.Routing);
-        Assert.True(tabDown.DiscardBufferedEvents);
         Assert.Equal("builtin:next-client", tabDown.MatchedTargetId);
         Assert.Equal(KeyboardEventRouting.Consume, tabUp.Routing);
-        Assert.Equal(KeyboardEventRouting.Consume, altUp.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, altUp.Routing);
         Assert.Equal(new[] { "builtin:next-client" }, activator.ActivatedTargetIds);
     }
 
     [Fact]
-    public async Task ProcessEvent_FlushesBufferedPrefix_WhenCombinationDoesNotMatch()
+    public async Task ProcessEvent_ForwardsEverything_WhenCombinationDoesNotMatch()
     {
         var listener = new FakeGlobalKeyboardListener();
         var manager = new FakeWindowKeybindManager();
@@ -81,10 +80,8 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
             CreateWindowsEvent("VK_12", GlobalKeyState.Up)
         );
 
-        Assert.Equal(KeyboardEventRouting.Buffer, altDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, altDown.Routing);
         Assert.Equal(KeyboardEventRouting.Forward, xDown.Routing);
-        Assert.True(xDown.FlushBufferedEvents);
-        Assert.True(xDown.ForwardCurrentEventViaForwarder);
         Assert.Equal(KeyboardEventRouting.Forward, xUp.Routing);
         Assert.Equal(KeyboardEventRouting.Forward, altUp.Routing);
         Assert.Empty(activator.ActivatedTargetIds);
@@ -114,6 +111,154 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
         Assert.Equal(KeyboardEventRouting.Forward, beforeChange.Routing);
         Assert.Equal(KeyboardEventRouting.Consume, afterChange.Routing);
         Assert.Equal("builtin:previous-client", afterChange.MatchedTargetId);
+    }
+
+    [Fact]
+    public async Task ProcessEvent_ForwardsReleaseOfHeldKey_WhenReleasedDuringShortcut()
+    {
+        var listener = new FakeGlobalKeyboardListener();
+        var manager = new FakeWindowKeybindManager();
+        manager.SetBindings(
+            ("builtin:next-client", new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.F1 })
+        );
+        var activator = new FakeWindowKeybindActivator();
+        await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
+        await sut.StartAsync();
+
+        KeyboardFilterDecision wDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_57", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision ctrlDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision f1Down = sut.ProcessEvent(
+            CreateWindowsEvent("VK_70", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision wUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_57", GlobalKeyState.Up)
+        );
+        KeyboardFilterDecision ctrlUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Up)
+        );
+        KeyboardFilterDecision f1Up = sut.ProcessEvent(
+            CreateWindowsEvent("VK_70", GlobalKeyState.Up)
+        );
+
+        Assert.Equal(KeyboardEventRouting.Forward, wDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Consume, f1Down.Routing);
+        Assert.Equal("builtin:next-client", f1Down.MatchedTargetId);
+        Assert.Equal(KeyboardEventRouting.Forward, wUp.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlUp.Routing);
+        Assert.Equal(KeyboardEventRouting.Consume, f1Up.Routing);
+    }
+
+    [Fact]
+    public async Task ProcessEvent_ForwardsModifierRelease_WhenModifierWasAlreadyForwarded()
+    {
+        var listener = new FakeGlobalKeyboardListener();
+        var manager = new FakeWindowKeybindManager();
+        manager.SetBindings(
+            ("builtin:next-client", new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.F1 })
+        );
+        var activator = new FakeWindowKeybindActivator();
+        await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
+        await sut.StartAsync();
+
+        KeyboardFilterDecision ctrlDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision cDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_43", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision cUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_43", GlobalKeyState.Up)
+        );
+        KeyboardFilterDecision f1Down = sut.ProcessEvent(
+            CreateWindowsEvent("VK_70", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision ctrlUp = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Up)
+        );
+
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, cDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, cUp.Routing);
+        Assert.Equal(KeyboardEventRouting.Consume, f1Down.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlUp.Routing);
+    }
+
+    [Fact]
+    public async Task ProcessEvent_ForwardsModifierImmediately_WhenShortcutUsesIt()
+    {
+        var listener = new FakeGlobalKeyboardListener();
+        var manager = new FakeWindowKeybindManager();
+        manager.SetBindings(
+            ("builtin:next-client", new KeyCombination { Ctrl = true, Key = KeybindPrimaryKey.F1 })
+        );
+        var activator = new FakeWindowKeybindActivator();
+        await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
+        await sut.StartAsync();
+
+        KeyboardFilterDecision ctrlDown = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Down)
+        );
+        KeyboardFilterDecision ctrlRepeat = sut.ProcessEvent(
+            CreateWindowsEvent("VK_A2", GlobalKeyState.Down, isRepeat: true)
+        );
+
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlDown.Routing);
+        Assert.Equal(KeyboardEventRouting.Forward, ctrlRepeat.Routing);
+        Assert.Empty(activator.ActivatedTargetIds);
+    }
+
+    [Fact]
+    public async Task ProcessEvent_ConsumesOnlyRepeatsOfConsumedPrimaryKey()
+    {
+        var listener = new FakeGlobalKeyboardListener();
+        var manager = new FakeWindowKeybindManager();
+        manager.SetBindings(
+            ("builtin:previous-client", new KeyCombination { Key = KeybindPrimaryKey.F1 })
+        );
+        var activator = new FakeWindowKeybindActivator();
+        await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
+        await sut.StartAsync();
+
+        _ = sut.ProcessEvent(CreateWindowsEvent("VK_57", GlobalKeyState.Down));
+        _ = sut.ProcessEvent(CreateWindowsEvent("VK_70", GlobalKeyState.Down));
+        KeyboardFilterDecision f1Repeat = sut.ProcessEvent(
+            CreateWindowsEvent("VK_70", GlobalKeyState.Down, isRepeat: true)
+        );
+        KeyboardFilterDecision wRepeat = sut.ProcessEvent(
+            CreateWindowsEvent("VK_57", GlobalKeyState.Down, isRepeat: true)
+        );
+
+        Assert.Equal(KeyboardEventRouting.Consume, f1Repeat.Routing);
+        Assert.Null(f1Repeat.MatchedTargetId);
+        Assert.Equal(KeyboardEventRouting.Forward, wRepeat.Routing);
+        Assert.Equal(new[] { "builtin:previous-client" }, activator.ActivatedTargetIds);
+    }
+
+    [Fact]
+    public async Task Reset_ForgetsModifiersReleasedWhileInputWasUnavailable()
+    {
+        var listener = new FakeGlobalKeyboardListener();
+        var manager = new FakeWindowKeybindManager();
+        manager.SetBindings(
+            ("builtin:previous-client", new KeyCombination { Key = KeybindPrimaryKey.F1 })
+        );
+        var activator = new FakeWindowKeybindActivator();
+        await using var sut = new GlobalWindowKeybindRuntimeService(listener, manager, activator);
+        await sut.StartAsync();
+
+        _ = sut.ProcessEvent(CreateWindowsEvent("VK_A2", GlobalKeyState.Down));
+        sut.Reset();
+        KeyboardFilterDecision f1Down = sut.ProcessEvent(
+            CreateWindowsEvent("VK_70", GlobalKeyState.Down)
+        );
+
+        Assert.Equal(KeyboardEventRouting.Consume, f1Down.Routing);
+        Assert.Equal("builtin:previous-client", f1Down.MatchedTargetId);
     }
 
     private static GlobalKeyEventArgs CreateWindowsEvent(

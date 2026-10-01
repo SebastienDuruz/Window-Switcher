@@ -254,7 +254,7 @@ Sign out and back in after changing group membership, then restart Window Switch
 
 These permissions grant access to low-level input devices. Review your distribution's security guidance before enabling them. Previews and click-to-focus continue to work without global-keyboard access.
 
-The Linux listener reads evdev events and forwards them through `uinput`, allowing matching shortcuts to be intercepted without swallowing unrelated keyboard input.
+The Linux listener reads evdev events and forwards them through `uinput`, allowing matching shortcuts to be intercepted without swallowing unrelated keyboard input. Modifier keys are always forwarded immediately; only the primary key of a matched shortcut is intercepted, so holding Alt or Meta for a shortcut may still be seen by the desktop as a standalone modifier tap.
 
 ## Configuration and data
 

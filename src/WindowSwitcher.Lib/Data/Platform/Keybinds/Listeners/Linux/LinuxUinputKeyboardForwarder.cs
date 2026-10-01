@@ -50,14 +50,6 @@ internal sealed class LinuxUinputKeyboardForwarder : ILinuxKeyboardForwarder
         throw new IOException($"write(/dev/uinput) failed (errno={errno}).");
     }
 
-    public void Forward(IEnumerable<NativeInputEvent> nativeEvents)
-    {
-        ArgumentNullException.ThrowIfNull(nativeEvents);
-
-        foreach (NativeInputEvent nativeEvent in nativeEvents)
-            Forward(nativeEvent);
-    }
-
     public void Dispose()
     {
         if (_disposed)

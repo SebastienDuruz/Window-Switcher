@@ -191,6 +191,29 @@ public sealed class LinuxGlobalKeyboardListenerTests
     }
 
     [Fact]
+    public async Task Reconciliation_ResetsFilterStateWhenDeviceGenerationStops()
+    {
+        InputDeviceInfo first = CreateKeyboard("/definitely/missing-event1", [30]);
+        InputDeviceInfo changed = first with
+        {
+            Caps = new InputDeviceCapabilities(keyCodes: [30, 31]),
+        };
+        var filter = new ResetRecordingFilter();
+        await using var listener = CreateListener(
+            new SequenceDiscovery([first], [changed]),
+            new RecordingForwarderFactory(),
+            TimeSpan.FromMilliseconds(10)
+        );
+        listener.InputFilter = filter;
+
+        await listener.StartAsync();
+        await filter.ResetCalled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(filter.ResetCalled.Task.IsCompletedSuccessfully);
+        await listener.StopAsync();
+    }
+
+    [Fact]
     public async Task Routing_PreservesPerDeviceSyncAndConsumesOnlyTargetDevice()
     {
         InputDeviceInfo keyboard = CreateKeyboard("/definitely/missing-event1", [30]);
@@ -218,7 +241,7 @@ public sealed class LinuxGlobalKeyboardListenerTests
     }
 
     [Fact]
-    public async Task Routing_FlushesBufferedShortcutPrefixBeforeCurrentEventAndSync()
+    public async Task Routing_ForwardsModifierFrameAndDropsSyncOfConsumedPrimaryKeyFrame()
     {
         InputDeviceInfo keyboard = CreateKeyboard("/definitely/missing-event1", [30]);
         var forwarders = new RecordingForwarderFactory();
@@ -228,20 +251,20 @@ public sealed class LinuxGlobalKeyboardListenerTests
             TimeSpan.FromHours(1)
         );
         listener.InputFilter = new SequenceFilter(
-            KeyboardFilterDecision.Buffer(),
-            KeyboardFilterDecision.Forward(flushBufferedEvents: true)
+            KeyboardFilterDecision.Forward(),
+            KeyboardFilterDecision.Consume()
         );
         await listener.StartAsync();
         RecordingForwarder forwarder = Assert.Single(forwarders.Created);
 
         listener.ProcessNativeEventForTesting("device-a", KeyDown());
+        listener.ProcessNativeEventForTesting("device-a", Sync());
         listener.ProcessNativeEventForTesting("device-a", KeyDown());
         listener.ProcessNativeEventForTesting("device-a", Sync());
 
         Assert.Collection(
             forwarder.Events,
-            first => Assert.Equal(LinuxInputConstants.EvKey, first.Type),
-            second => Assert.Equal(LinuxInputConstants.EvKey, second.Type),
+            modifier => Assert.Equal(LinuxInputConstants.EvKey, modifier.Type),
             sync => Assert.Equal(LinuxInputConstants.EvSyn, sync.Type)
         );
         await listener.StopAsync();
@@ -340,9 +363,6 @@ public sealed class LinuxGlobalKeyboardListenerTests
 
         public void Forward(NativeInputEvent nativeEvent) => Events.Add(nativeEvent);
 
-        public void Forward(IEnumerable<NativeInputEvent> nativeEvents) =>
-            Events.AddRange(nativeEvents);
-
         public void Dispose()
         {
             if (IsDisposed)
@@ -374,6 +394,17 @@ public sealed class LinuxGlobalKeyboardListenerTests
         }
 
         public void Reset() => _index = 0;
+    }
+
+    private sealed class ResetRecordingFilter : IKeyboardInputFilter
+    {
+        internal TaskCompletionSource ResetCalled { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public KeyboardFilterDecision ProcessEvent(GlobalKeyEventArgs keyEvent) =>
+            KeyboardFilterDecision.Forward();
+
+        public void Reset() => ResetCalled.TrySetResult();
     }
 
     private sealed class RecordingDiagnostics : IPlatformDiagnostics
