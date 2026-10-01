@@ -11,7 +11,6 @@ internal interface ILinuxInputDeviceDiscovery
 internal interface ILinuxKeyboardForwarder : IDisposable
 {
     void Forward(NativeInputEvent nativeEvent);
-    void Forward(IEnumerable<NativeInputEvent> nativeEvents);
 }
 
 internal interface ILinuxKeyboardForwarderFactory

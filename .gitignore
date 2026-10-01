@@ -35,3 +35,4 @@ WindowSwitcherWinSetup/.vs/WindowSwitcherWinSetup/v17/.suo
 /build/artifacts
 .nuke/temp/
 *.user
+.vscode/settings.json

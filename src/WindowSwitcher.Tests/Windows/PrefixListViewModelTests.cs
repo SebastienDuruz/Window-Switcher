@@ -28,7 +28,10 @@ public sealed class PrefixListViewModelTests
     [Fact]
     public void AddCommand_DisabledWhenInputIsWhitespace()
     {
-        var sut = new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher());
+        var sut = new PrefixListViewModel(
+            new FakePrefixListService(),
+            new ImmediateViewModelDispatcher()
+        );
 
         sut.NewPrefix = "   ";
 
@@ -71,7 +74,10 @@ public sealed class FiltersViewModelTests
     public void ViewModel_WiresWhitelistAndBlacklist()
     {
         var sut = new FiltersViewModel(
-            new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher()),
+            new PrefixListViewModel(
+                new FakePrefixListService(),
+                new ImmediateViewModelDispatcher()
+            ),
             new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher())
         );
 
@@ -84,7 +90,10 @@ public sealed class FiltersViewModelTests
     public void SelectedTabIndex_CanBeSwitched()
     {
         var sut = new FiltersViewModel(
-            new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher()),
+            new PrefixListViewModel(
+                new FakePrefixListService(),
+                new ImmediateViewModelDispatcher()
+            ),
             new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher())
         );
 
