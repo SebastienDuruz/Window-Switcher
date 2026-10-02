@@ -21,6 +21,8 @@ internal sealed class PipeWireFrameProvider
     private const int DefaultWidth = 640;
     private const int DefaultHeight = 360;
     private const int RestartDelayMilliseconds = 300;
+    private static readonly TimeSpan SlowStreamTeardownThreshold = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ShutdownStreamTeardownTimeout = TimeSpan.FromSeconds(2);
     private readonly WinAccessorBase _accessor;
     private readonly IPipeWirePortalClient _portalClient;
     private readonly IPipeWireNativeStreamFactory _streamFactory;
@@ -38,6 +40,7 @@ internal sealed class PipeWireFrameProvider
     private readonly HashSet<string> _selectionActivationAttempted = new(StringComparer.Ordinal);
     private readonly HashSet<string> _gpuFramesDisabled = new(StringComparer.Ordinal);
     private readonly HashSet<Task> _portalCloseTasks = [];
+    private readonly HashSet<Task> _streamTeardownTasks = [];
     private bool _disposed;
     private Task _shutdownTask = Task.CompletedTask;
 
@@ -466,6 +469,21 @@ internal sealed class PipeWireFrameProvider
 
     private void DisposeStream(IPipeWireNativeStream stream)
     {
+        // Native teardown waits until every leased DMA-BUF frame is released. A leased frame can be
+        // waiting for the UI thread, which is usually the caller, so the caller must never block.
+        Task teardown = Task.Factory.StartNew(
+            () => DisposeStreamNow(stream),
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default
+        );
+        lock (_capturesSync)
+            _streamTeardownTasks.Add(teardown);
+        _ = ObserveStreamTeardownAsync(teardown);
+    }
+
+    private void DisposeStreamNow(IPipeWireNativeStream stream)
+    {
         try
         {
             stream.Dispose();
@@ -474,6 +492,24 @@ internal sealed class PipeWireFrameProvider
         {
             _diagnostics.Error("capture cleanup failed", exception);
         }
+    }
+
+    private async Task ObserveStreamTeardownAsync(Task teardown)
+    {
+        try
+        {
+            await teardown.WaitAsync(SlowStreamTeardownThreshold).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _diagnostics.Warning(
+                "PipeWire stream teardown is still waiting for preview frames to be released"
+            );
+            await teardown.ConfigureAwait(false);
+        }
+
+        lock (_capturesSync)
+            _streamTeardownTasks.Remove(teardown);
     }
 
     private async Task ObservePortalCloseAsync(Task closeTask)
@@ -657,11 +693,30 @@ internal sealed class PipeWireFrameProvider
                     )
                 )
                 .ConfigureAwait(false);
+            await WaitForStreamTeardownsAsync().ConfigureAwait(false);
         }
         finally
         {
             _portalClient.Dispose();
             _portalCreationGate.Dispose();
+        }
+    }
+
+    private async Task WaitForStreamTeardownsAsync()
+    {
+        Task[] teardowns;
+        lock (_capturesSync)
+            teardowns = _streamTeardownTasks.ToArray();
+
+        try
+        {
+            await Task.WhenAll(teardowns)
+                .WaitAsync(ShutdownStreamTeardownTimeout)
+                .ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _diagnostics.Warning("PipeWire stream teardown did not complete before shutdown");
         }
     }
 

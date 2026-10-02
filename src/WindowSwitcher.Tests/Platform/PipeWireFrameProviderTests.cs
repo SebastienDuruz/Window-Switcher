@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Tmds.DBus;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
@@ -194,6 +195,42 @@ public sealed class PipeWireFrameProviderTests
     }
 
     [Fact]
+    public async Task ForgetWindow_DoesNotWaitForLeasedFramesBeforeReturning()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var stream = new LeaseAwareNativeStream();
+        using var cache = new WaylandScreenCastMemoryCache();
+        await using var provider = new PipeWireFrameProvider(
+            new FakeWinAccessor(),
+            new CapturePortalClient(),
+            new SingleStreamFactory(stream),
+            new RecordingDiagnostics(),
+            cache
+        );
+        await using IAsyncEnumerator<PreviewFrame> frames = provider
+            .StreamAsync("42", new ScreenshotRequest())
+            .GetAsyncEnumerator();
+        Assert.True(await frames.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        PreviewFrame leasedFrame = frames.Current;
+
+        try
+        {
+            // The leased frame stands for a DMA-BUF frame still queued for the UI thread.
+            await Task.Run(() => provider.ForgetWindow("42")).WaitAsync(TimeSpan.FromSeconds(5));
+            await stream.DisposeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(stream.Disposed.Task.IsCompleted);
+        }
+        finally
+        {
+            leasedFrame.Dispose();
+        }
+
+        await stream.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public void ResetSelection_ClearsEveryAliasForTargetTokenOnly()
     {
         using var cache = new WaylandScreenCastMemoryCache();
@@ -290,6 +327,94 @@ public sealed class PipeWireFrameProviderTests
             Task.CompletedTask;
 
         public void Dispose() { }
+    }
+
+    private sealed class CapturePortalClient : IPipeWirePortalClient
+    {
+        public Task<PortalCapture?> OpenAsync(
+            string? restoreToken,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromResult<PortalCapture?>(
+                new PortalCapture(
+                    "/session/42",
+                    null,
+                    7,
+                    new CloseSafeHandle(new IntPtr(-1), ownsHandle: false)
+                )
+            );
+        }
+
+        public Task CloseAsync(string sessionPath, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public void Dispose() { }
+    }
+
+    private sealed class SingleStreamFactory(IPipeWireNativeStream stream)
+        : IPipeWireNativeStreamFactory
+    {
+        public Task<IPipeWireNativeStream?> CreateAsync(
+            CloseSafeHandle remoteHandle,
+            uint pipeWireNodeId,
+            int width,
+            int height,
+            CancellationToken cancellationToken
+        )
+        {
+            remoteHandle.Dispose();
+            return Task.FromResult<IPipeWireNativeStream?>(stream);
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the native stream, whose teardown waits until every leased frame is released.
+    /// </summary>
+    private sealed class LeaseAwareNativeStream : IPipeWireNativeStream
+    {
+        private readonly ManualResetEventSlim _leaseReleased = new(initialState: true);
+
+        internal TaskCompletionSource DisposeStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Disposed { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void UpdateTargetDimensions(int width, int height) { }
+
+        public void SetActive(bool active) { }
+
+        public void DisableDmaBuf() { }
+
+        public async IAsyncEnumerable<PreviewFrame> ReadFramesAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            _leaseReleased.Reset();
+            yield return new LeasedFrame(_leaseReleased.Set);
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+        }
+
+        public void Dispose()
+        {
+            DisposeStarted.TrySetResult();
+            _leaseReleased.Wait();
+            Disposed.TrySetResult();
+        }
+    }
+
+    private sealed class LeasedFrame(Action release) : PreviewFrame
+    {
+        private Action? _release = release;
+
+        public override int WidthPx => 1;
+
+        public override int HeightPx => 1;
+
+        public override void Dispose()
+        {
+            Interlocked.Exchange(ref _release, null)?.Invoke();
+        }
     }
 
     private sealed class UnusedNativeStreamFactory : IPipeWireNativeStreamFactory

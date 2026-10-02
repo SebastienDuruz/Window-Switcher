@@ -263,6 +263,24 @@ public sealed class PipeWireInteropTests
     }
 
     [Fact]
+    public void NativeFrameBufferPool_ReportsAvailabilityUntilEveryBufferIsLeased()
+    {
+        var pool = new NativeFrameBufferPool(maximumBuffers: 1);
+        Assert.True(pool.HasAvailableBuffer);
+
+        NativeFrameBufferPool.Lease lease = Assert.IsType<NativeFrameBufferPool.Lease>(
+            pool.TryRent(16)
+        );
+        Assert.False(pool.HasAvailableBuffer);
+
+        lease.Dispose();
+        Assert.True(pool.HasAvailableBuffer);
+
+        pool.Dispose();
+        Assert.False(pool.HasAvailableBuffer);
+    }
+
+    [Fact]
     public void RestoreTokenCache_ConsumesAllAliasesOnce()
     {
         using var cache = new WaylandScreenCastMemoryCache();
