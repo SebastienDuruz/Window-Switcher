@@ -5,14 +5,16 @@ using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
-internal sealed class X11WindowCaptureSession : IDisposable
+internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
 {
+    private const int BufferPoolSize = 3;
     private const int DamageEventOffset = 0;
     private const int ShmPermissions = 0x180;
     private const string DisableShmEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_SHM";
     private static readonly nint XImageDataOffset = Marshal.OffsetOf<XImage>(nameof(XImage.Data));
 
     private readonly object _sync = new();
+    private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
     private readonly IntPtr _display;
     private readonly IntPtr _window;
     private readonly int _damageEventType;
@@ -118,25 +120,28 @@ internal sealed class X11WindowCaptureSession : IDisposable
         }
     }
 
-    public NativeBgraPreviewFrame? CaptureFrame(
-        ScreenshotRequest request,
-        NativeFrameBufferPool bufferPool
-    )
+    public bool TryCaptureFrame(ScreenshotRequest request, out NativeBgraPreviewFrame? frame)
     {
+        frame = null;
         lock (_sync)
         {
             if (_disposed)
-                return null;
+                return false;
+
+            // The consumer still holds every buffer: skip this frame without reading the window back.
+            if (!_bufferPool.HasAvailableBuffer)
+                return true;
 
             if (!EnsureCaptureSurface())
-                return null;
+                return false;
 
-            return X11CaptureFallback.Capture(
+            frame = X11CaptureFallback.Capture(
                 _shmImage != IntPtr.Zero,
-                () => CaptureShmFrame(request, bufferPool),
+                () => CaptureShmFrame(request),
                 DisableSharedMemory,
-                () => CaptureXImageFrame(request, bufferPool)
+                () => CaptureXImageFrame(request)
             );
+            return frame is not null;
         }
     }
 
@@ -195,6 +200,8 @@ internal sealed class X11WindowCaptureSession : IDisposable
                 _ = X11Native.XCloseDisplay(_display);
             }
             catch { }
+
+            _bufferPool.Dispose();
         }
     }
 
@@ -422,10 +429,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private X11CaptureAttempt CaptureShmFrame(
-        ScreenshotRequest request,
-        NativeFrameBufferPool bufferPool
-    )
+    private X11CaptureAttempt CaptureShmFrame(ScreenshotRequest request)
     {
         try
         {
@@ -444,7 +448,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
             _ = X11Native.XSync(_display, discard: 0);
             return new X11CaptureAttempt(
                 BackendSucceeded: true,
-                X11FrameConverter.CreateFrame(_shmImage, request, bufferPool)
+                X11FrameConverter.CreateFrame(_shmImage, request, _bufferPool)
             );
         }
         catch
@@ -459,10 +463,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
         ReleaseShmImage();
     }
 
-    private NativeBgraPreviewFrame? CaptureXImageFrame(
-        ScreenshotRequest request,
-        NativeFrameBufferPool bufferPool
-    )
+    private NativeBgraPreviewFrame? CaptureXImageFrame(ScreenshotRequest request)
     {
         IntPtr image = IntPtr.Zero;
         try
@@ -480,7 +481,7 @@ internal sealed class X11WindowCaptureSession : IDisposable
             if (image == IntPtr.Zero)
                 return null;
 
-            return X11FrameConverter.CreateFrame(image, request, bufferPool);
+            return X11FrameConverter.CreateFrame(image, request, _bufferPool);
         }
         catch
         {

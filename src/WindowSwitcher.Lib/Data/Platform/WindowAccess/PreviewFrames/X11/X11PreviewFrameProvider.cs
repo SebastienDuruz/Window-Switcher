@@ -9,15 +9,22 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 {
     private readonly object _sessionsSync = new();
-    private readonly Dictionary<string, X11WindowCaptureSession> _sessions = new(
+    private readonly Dictionary<string, IX11WindowCaptureSession> _sessions = new(
         StringComparer.Ordinal
     );
-    private readonly NativeFrameBufferPool _bufferPool = new(maximumBuffers: 3);
+    private readonly Func<string, IX11WindowCaptureSession?> _sessionFactory;
     private bool _disposed;
 
     public X11PreviewFrameProvider(WinAccessorBase accessorBase)
+        : this(X11WindowCaptureSession.TryCreate)
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
+    }
+
+    internal X11PreviewFrameProvider(Func<string, IX11WindowCaptureSession?> sessionFactory)
+    {
+        ArgumentNullException.ThrowIfNull(sessionFactory);
+        _sessionFactory = sessionFactory;
     }
 
     public static bool IsSupported()
@@ -34,38 +41,31 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
         if (_disposed || string.IsNullOrWhiteSpace(windowId))
             yield break;
 
-        X11WindowCaptureSession? session = GetOrCreateSession(windowId);
+        IX11WindowCaptureSession? session = GetOrCreateSession(windowId);
         if (session is null)
             yield break;
 
-        NativeBgraPreviewFrame? initialFrame = session.CaptureFrame(request, _bufferPool);
-        if (initialFrame is not null)
-        {
-            yield return initialFrame;
-        }
-        else
-        {
-            RemoveSession(windowId, session);
-            yield break;
-        }
-
-        long lastFrameTimestamp = Stopwatch.GetTimestamp();
+        long lastFrameTimestamp = 0;
+        bool captureDue = true;
         while (!cancellationToken.IsCancellationRequested && !_disposed)
         {
-            bool hasDamage;
-            try
+            if (!captureDue)
             {
-                hasDamage = await session
-                    .WaitForDamageAsync(request.TimeoutMs, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                yield break;
-            }
+                bool hasDamage;
+                try
+                {
+                    hasDamage = await session
+                        .WaitForDamageAsync(request.TimeoutMs, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    yield break;
+                }
 
-            if (!hasDamage)
-                continue;
+                if (!hasDamage)
+                    continue;
+            }
 
             try
             {
@@ -77,16 +77,17 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
                 yield break;
             }
 
-            NativeBgraPreviewFrame? frame = session.CaptureFrame(request, _bufferPool);
-            if (frame is not null)
+            lastFrameTimestamp = Stopwatch.GetTimestamp();
+            if (!session.TryCaptureFrame(request, out NativeBgraPreviewFrame? frame))
             {
-                yield return frame;
-                lastFrameTimestamp = Stopwatch.GetTimestamp();
-                continue;
+                RemoveSession(windowId, session);
+                yield break;
             }
 
-            RemoveSession(windowId, session);
-            yield break;
+            // A skipped capture is retried on the next frame interval, even without new damage.
+            captureDue = frame is null;
+            if (frame is not null)
+                yield return frame;
         }
     }
 
@@ -119,7 +120,6 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 
         _disposed = true;
         DisposeSessions();
-        _bufferPool.Dispose();
     }
 
     public ValueTask DisposeAsync()
@@ -129,11 +129,10 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 
         _disposed = true;
         DisposeSessions();
-        _bufferPool.Dispose();
         return ValueTask.CompletedTask;
     }
 
-    private X11WindowCaptureSession? GetOrCreateSession(string windowId)
+    private IX11WindowCaptureSession? GetOrCreateSession(string windowId)
     {
         if (_disposed)
             return null;
@@ -142,10 +141,10 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
         {
             if (_disposed)
                 return null;
-            if (_sessions.TryGetValue(windowId, out X11WindowCaptureSession? existing))
+            if (_sessions.TryGetValue(windowId, out IX11WindowCaptureSession? existing))
                 return existing;
 
-            X11WindowCaptureSession? created = X11WindowCaptureSession.TryCreate(windowId);
+            IX11WindowCaptureSession? created = _sessionFactory(windowId);
             if (created is null)
                 return null;
 
@@ -159,12 +158,12 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
         RemoveSession(windowId, expectedSession: null);
     }
 
-    private void RemoveSession(string windowId, X11WindowCaptureSession? expectedSession)
+    private void RemoveSession(string windowId, IX11WindowCaptureSession? expectedSession)
     {
         if (string.IsNullOrWhiteSpace(windowId))
             return;
 
-        X11WindowCaptureSession? session = null;
+        IX11WindowCaptureSession? session = null;
         lock (_sessionsSync)
         {
             if (
@@ -185,14 +184,14 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
 
     private void DisposeSessions()
     {
-        List<X11WindowCaptureSession> sessions;
+        List<IX11WindowCaptureSession> sessions;
         lock (_sessionsSync)
         {
             sessions = _sessions.Values.ToList();
             _sessions.Clear();
         }
 
-        foreach (X11WindowCaptureSession session in sessions)
+        foreach (IX11WindowCaptureSession session in sessions)
             session.Dispose();
     }
 }

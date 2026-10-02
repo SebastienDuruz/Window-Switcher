@@ -8,6 +8,21 @@ internal sealed class NativeFrameBufferPool(int maximumBuffers) : IDisposable
     private readonly List<Entry> _entries = [];
     private bool _disposed;
 
+    internal bool HasAvailableBuffer
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return !_disposed
+                    && (
+                        _entries.Count < maximumBuffers
+                        || _entries.Exists(candidate => !candidate.IsLeased)
+                    );
+            }
+        }
+    }
+
     internal Lease? TryRent(int length)
     {
         if (length <= 0)
