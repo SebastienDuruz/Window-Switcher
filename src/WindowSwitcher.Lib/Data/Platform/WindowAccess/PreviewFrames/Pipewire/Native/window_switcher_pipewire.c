@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <pipewire/pipewire.h>
@@ -26,6 +27,7 @@
 
 #define WS_MAX_FRAME_BYTES (128u * 1024u * 1024u)
 #define WS_WAIT_TIMEOUT_NS (10ll * 1000ll * 1000ll * 1000ll)
+#define WS_FRAME_PACING_TOLERANCE_NS (2ull * 1000ull * 1000ull)
 #define WS_DRM_FORMAT_MOD_INVALID UINT64_MAX
 #define WS_FOURCC_CODE(a, b, c, d) \
     ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
@@ -75,6 +77,10 @@ struct ws_pipewire_stream {
     uint32_t target_width;
     uint32_t target_height;
     uint32_t maximum_framerate;
+    uint64_t frame_interval_ns;
+    uint64_t last_delivery_ns;
+    struct spa_source *pacing_timer;
+    struct pw_buffer *deferred_buffer;
     int sync_sequence;
     enum pw_stream_state state;
     bool core_synchronized;
@@ -167,6 +173,7 @@ static struct spa_pod *build_format(struct spa_pod_builder *builder,
     struct spa_rectangle maximum_resolution = SPA_RECTANGLE(8192, 4320);
     struct spa_fraction framerate = SPA_FRACTION(maximum_framerate, 1);
     struct spa_fraction minimum_framerate = SPA_FRACTION(0, 1);
+    struct spa_fraction lowest_maximum_framerate = SPA_FRACTION(1, 1);
     uint32_t first_modifier = UINT32_MAX;
 
     if (dma_buf) {
@@ -205,6 +212,10 @@ static struct spa_pod *build_format(struct spa_pod_builder *builder,
                         SPA_FORMAT_VIDEO_framerate,
                         SPA_POD_CHOICE_RANGE_Fraction(
                             &framerate, &minimum_framerate, &framerate),
+                        /* Screencast compositors pace their frames with maxFramerate. */
+                        SPA_FORMAT_VIDEO_maxFramerate,
+                        SPA_POD_CHOICE_RANGE_Fraction(
+                            &framerate, &lowest_maximum_framerate, &framerate),
                         0);
     return spa_pod_builder_pop(builder, &frame);
 }
@@ -380,14 +391,52 @@ static struct pw_buffer *find_latest_buffer(struct pw_stream *stream)
     }
 }
 
-static void on_process(void *user_data)
+static uint64_t monotonic_time_ns(void)
 {
-    struct ws_pipewire_stream *capture = user_data;
-    struct pw_buffer *pipewire_buffer = find_latest_buffer(capture->stream);
-    struct spa_buffer *buffer;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (uint64_t)now.tv_sec * SPA_NSEC_PER_SEC + (uint64_t)now.tv_nsec;
+}
+
+static bool buffer_carries_frame(struct ws_pipewire_stream *capture,
+                                 const struct pw_buffer *pipewire_buffer)
+{
+    struct spa_buffer *buffer = pipewire_buffer->buffer;
+    struct spa_meta_header *header;
     struct spa_data *data;
     struct spa_chunk *chunk;
-    struct spa_meta_header *header;
+
+    if (!buffer || buffer->n_datas != 1)
+        return false;
+
+    header = spa_buffer_find_meta_data(buffer, SPA_META_Header, sizeof(*header));
+    if (header && (header->flags & SPA_META_HEADER_FLAG_CORRUPTED))
+        return false;
+
+    data = &buffer->datas[0];
+    chunk = data->chunk;
+    if (!chunk || chunk->size == 0 ||
+        (chunk->flags & (SPA_CHUNK_FLAG_CORRUPTED | SPA_CHUNK_FLAG_EMPTY)))
+        return false;
+    if (data->type != SPA_DATA_DmaBuf && data->type != SPA_DATA_MemPtr &&
+        data->type != SPA_DATA_MemFd) {
+        if (!capture->unsupported_buffer_reported) {
+            capture->unsupported_buffer_reported = true;
+            report_state(capture, PW_STREAM_STATE_PAUSED, "Unsupported PipeWire buffer skipped");
+        }
+        return false;
+    }
+    return data->maxsize != 0;
+}
+
+/* Hands a buffer accepted by buffer_carries_frame to the frame callback. */
+static void deliver_frame(struct ws_pipewire_stream *capture,
+                          struct pw_buffer *pipewire_buffer,
+                          uint64_t now)
+{
+    struct spa_buffer *buffer = pipewire_buffer->buffer;
+    struct spa_data *data = &buffer->datas[0];
+    struct spa_chunk *chunk = data->chunk;
     struct spa_meta_region *crop;
     const uint8_t *source;
     uint32_t available;
@@ -400,33 +449,7 @@ static void on_process(void *user_data)
     uint64_t crop_offset;
     int32_t stride;
 
-    if (!pipewire_buffer)
-        return;
-
-    buffer = pipewire_buffer->buffer;
-    if (!buffer || buffer->n_datas != 1)
-        goto done;
-
-    header = spa_buffer_find_meta_data(buffer, SPA_META_Header, sizeof(*header));
-    if (header && (header->flags & SPA_META_HEADER_FLAG_CORRUPTED))
-        goto done;
-
-    data = &buffer->datas[0];
-    chunk = data->chunk;
-    if (!chunk || chunk->size == 0 ||
-        (chunk->flags & (SPA_CHUNK_FLAG_CORRUPTED | SPA_CHUNK_FLAG_EMPTY)))
-        goto done;
-    if (data->type != SPA_DATA_DmaBuf && data->type != SPA_DATA_MemPtr &&
-        data->type != SPA_DATA_MemFd) {
-        if (!capture->unsupported_buffer_reported) {
-            capture->unsupported_buffer_reported = true;
-            report_state(capture, PW_STREAM_STATE_PAUSED, "Unsupported PipeWire buffer skipped");
-        }
-        goto done;
-    }
-    if (data->maxsize == 0)
-        goto done;
-
+    capture->last_delivery_ns = now;
     offset = chunk->offset % data->maxsize;
     available = SPA_MIN(chunk->size, data->maxsize - offset);
     source = data->data ? SPA_PTROFF(data->data, offset, const uint8_t) : NULL;
@@ -508,10 +531,79 @@ done:
     pw_stream_queue_buffer(capture->stream, pipewire_buffer);
 }
 
+static void requeue_deferred_frame(struct ws_pipewire_stream *capture)
+{
+    if (!capture->deferred_buffer)
+        return;
+    pw_stream_queue_buffer(capture->stream, capture->deferred_buffer);
+    capture->deferred_buffer = NULL;
+}
+
+static void schedule_deferred_frame(struct ws_pipewire_stream *capture, uint64_t delay_ns)
+{
+    struct timespec delay = {
+        .tv_sec = (time_t)(delay_ns / SPA_NSEC_PER_SEC),
+        .tv_nsec = (long)(delay_ns % SPA_NSEC_PER_SEC),
+    };
+    pw_loop_update_timer(pw_thread_loop_get_loop(capture->thread_loop),
+                         capture->pacing_timer,
+                         &delay,
+                         NULL,
+                         false);
+}
+
+static void on_process(void *user_data)
+{
+    struct ws_pipewire_stream *capture = user_data;
+    struct pw_buffer *pipewire_buffer = find_latest_buffer(capture->stream);
+    uint64_t now;
+    uint64_t next_slot;
+
+    if (!pipewire_buffer)
+        return;
+    /* A buffer without picture must not replace the frame waiting for its slot. */
+    if (!buffer_carries_frame(capture, pipewire_buffer)) {
+        pw_stream_queue_buffer(capture->stream, pipewire_buffer);
+        return;
+    }
+
+    requeue_deferred_frame(capture);
+    now = monotonic_time_ns();
+    next_slot = capture->last_delivery_ns + capture->frame_interval_ns;
+    /* Producers may ignore the negotiated maxFramerate: the newest frame waits for the next
+     * slot, so previews never exceed the target rate and still end on the latest content. */
+    if (capture->last_delivery_ns != 0 && now + WS_FRAME_PACING_TOLERANCE_NS < next_slot) {
+        capture->deferred_buffer = pipewire_buffer;
+        schedule_deferred_frame(capture, next_slot - now);
+        return;
+    }
+    deliver_frame(capture, pipewire_buffer, now);
+}
+
+static void on_pacing_timer(void *user_data, uint64_t expirations)
+{
+    struct ws_pipewire_stream *capture = user_data;
+    struct pw_buffer *pipewire_buffer = capture->deferred_buffer;
+
+    (void)expirations;
+    if (!pipewire_buffer)
+        return;
+    capture->deferred_buffer = NULL;
+    deliver_frame(capture, pipewire_buffer, monotonic_time_ns());
+}
+
+static void on_remove_buffer(void *user_data, struct pw_buffer *pipewire_buffer)
+{
+    struct ws_pipewire_stream *capture = user_data;
+    if (capture->deferred_buffer == pipewire_buffer)
+        capture->deferred_buffer = NULL;
+}
+
 static const struct pw_stream_events stream_events = {
     PW_VERSION_STREAM_EVENTS,
     .state_changed = on_state_changed,
     .param_changed = on_parameter_changed,
+    .remove_buffer = on_remove_buffer,
     .process = on_process,
 };
 
@@ -554,6 +646,12 @@ static void destroy_capture(struct ws_pipewire_stream *capture)
 
     if (capture->thread_loop && capture->loop_started)
         pw_thread_loop_lock(capture->thread_loop);
+    capture->deferred_buffer = NULL;
+    if (capture->pacing_timer) {
+        pw_loop_destroy_source(pw_thread_loop_get_loop(capture->thread_loop),
+                               capture->pacing_timer);
+        capture->pacing_timer = NULL;
+    }
     if (capture->stream) {
         pw_stream_disconnect(capture->stream);
         pw_stream_destroy(capture->stream);
@@ -641,6 +739,7 @@ WS_EXPORT struct ws_pipewire_stream *ws_pipewire_stream_create(
     capture->target_width = target_width;
     capture->target_height = target_height;
     capture->maximum_framerate = maximum_framerate;
+    capture->frame_interval_ns = SPA_NSEC_PER_SEC / maximum_framerate;
     capture->state = PW_STREAM_STATE_UNCONNECTED;
     capture->dma_buf_enabled = dma_buf_capability_count > 0;
 
@@ -651,6 +750,14 @@ WS_EXPORT struct ws_pipewire_stream *ws_pipewire_stream_create(
     if (!capture->context || pw_thread_loop_start(capture->thread_loop) < 0)
         goto error;
     capture->loop_started = true;
+
+    pw_thread_loop_lock(capture->thread_loop);
+    capture->pacing_timer = pw_loop_add_timer(pw_thread_loop_get_loop(capture->thread_loop),
+                                              on_pacing_timer,
+                                              capture);
+    pw_thread_loop_unlock(capture->thread_loop);
+    if (!capture->pacing_timer)
+        goto error;
 
     duplicated_file_descriptor = fcntl(portal_file_descriptor, F_DUPFD_CLOEXEC, 5);
     if (duplicated_file_descriptor < 0)
@@ -708,6 +815,8 @@ WS_EXPORT int ws_pipewire_stream_set_active(struct ws_pipewire_stream *capture, 
     if (!capture || !capture->stream || !capture->thread_loop)
         return -EINVAL;
     pw_thread_loop_lock(capture->thread_loop);
+    if (!active)
+        requeue_deferred_frame(capture);
     result = pw_stream_set_active(capture->stream, active != 0);
     pw_thread_loop_unlock(capture->thread_loop);
     return result;
