@@ -235,9 +235,9 @@ public sealed class WindowKeybindActivatorTests
         public List<string> RaisedWindowIds { get; } = [];
         public bool CanActivate { get; init; } = true;
 
-        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        public override Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
-        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>(_windows);
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>?>(_windows);
 
         public override Task<bool> TryActivateWindowAsync(
             string windowId,
@@ -264,9 +264,9 @@ public sealed class WindowKeybindActivatorTests
 
         public List<string> RaisedWindowIds { get; } = [];
 
-        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        public override Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
-        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>(_windows);
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>?>(_windows);
 
         public override Task<bool> TryActivateWindowAsync(
             string windowId,

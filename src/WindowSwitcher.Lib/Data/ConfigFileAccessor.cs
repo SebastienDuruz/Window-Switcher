@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Models;
@@ -14,6 +15,9 @@ public class ConfigFileAccessor
     private ConfigFile _config;
     private ConfigLoadFailure? _lastReadFailure;
     private long _configVersion;
+
+    // Set at startup when an unreadable configuration file could not be moved aside.
+    private bool _persistenceSuspended;
 
     private ConfigFileAccessor()
     {
@@ -52,43 +56,31 @@ public class ConfigFileAccessor
         lock (_syncRoot)
         {
             bool shouldPersistConfig = false;
+            Exception? readFailure = null;
+            string readFailureReason = string.Empty;
             if (File.Exists(_filePath))
             {
-                try
+                ConfigFile? loadedConfig = TryReadConfigFile(
+                    out readFailure,
+                    out readFailureReason
+                );
+                if (loadedConfig is not null)
                 {
-                    string fileContents = File.ReadAllText(_filePath);
-                    _config =
-                        JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
+                    _config = loadedConfig;
                 }
-                catch (JsonException ex)
+                else
                 {
-                    RecordReadFailureLocked(ex, "invalid_json");
+                    // Never overwrite a file that could not be loaded: it is moved aside before
+                    // defaults are written, and nothing is persisted when it cannot be moved.
                     _config = new ConfigFile();
-                    WriteUserSettingsLocked();
-                }
-                catch (IOException ex)
-                {
-                    RecordReadFailureLocked(ex, "io_error");
-                    _config = new ConfigFile();
-                    WriteUserSettingsLocked();
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    RecordReadFailureLocked(ex, "access_denied");
-                    _config = new ConfigFile();
-                    WriteUserSettingsLocked();
-                }
-                catch (Exception ex)
-                {
-                    RecordReadFailureLocked(ex, "unexpected_error");
-                    _config = new ConfigFile();
-                    WriteUserSettingsLocked();
+                    shouldPersistConfig = TryMoveUnreadableConfigAside();
+                    _persistenceSuspended = !shouldPersistConfig;
                 }
             }
             else
             {
                 _config = new ConfigFile();
-                WriteUserSettingsLocked();
+                shouldPersistConfig = true;
             }
 
             string configJsonBeforeNormalization = SerializeConfig(_config);
@@ -102,8 +94,82 @@ public class ConfigFileAccessor
             )
                 shouldPersistConfig = true;
 
-            if (shouldPersistConfig)
-                WriteUserSettingsLocked();
+            bool persisted =
+                shouldPersistConfig && !_persistenceSuspended && TryWriteUserSettingsLocked();
+            if (readFailure is not null)
+                RecordReadFailureLocked(
+                    readFailure,
+                    readFailureReason,
+                    defaultsRestored: persisted
+                );
+        }
+    }
+
+    private ConfigFile? TryReadConfigFile(out Exception? failure, out string failureReason)
+    {
+        failure = null;
+        failureReason = string.Empty;
+        string fileContents;
+        try
+        {
+            fileContents = File.ReadAllText(_filePath);
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            failureReason = exception switch
+            {
+                IOException => "io_error",
+                UnauthorizedAccessException => "access_denied",
+                _ => "unexpected_error",
+            };
+            return null;
+        }
+
+        try
+        {
+            return JsonConvert.DeserializeObject<ConfigFile>(fileContents) ?? new ConfigFile();
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            failureReason = exception is JsonException ? "invalid_json" : "unexpected_error";
+            return null;
+        }
+    }
+
+    private bool TryMoveUnreadableConfigAside()
+    {
+        string backupPath = $"{_filePath}.unreadable-{DateTime.UtcNow:yyyyMMdd'T'HHmmssfff'Z'}";
+        try
+        {
+            File.Move(_filePath, backupPath);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            TracePlatformDiagnostics.Instance.Error(
+                "unreadable configuration could not be moved aside; changes will not be saved",
+                exception
+            );
+            return false;
+        }
+    }
+
+    private bool TryWriteUserSettingsLocked()
+    {
+        try
+        {
+            WriteConfigAtomicLocked(_config);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            TracePlatformDiagnostics.Instance.Error(
+                "configuration could not be written at startup",
+                exception
+            );
+            return false;
         }
     }
 
@@ -310,11 +376,6 @@ public class ConfigFileAccessor
             .ConfigureAwait(false);
     }
 
-    private void WriteUserSettingsLocked()
-    {
-        WriteConfigAtomicLocked(_config);
-    }
-
     private (ConfigFile Snapshot, long Version) CreatePersistSnapshotLocked()
     {
         return (CloneConfig(_config), _configVersion);
@@ -325,10 +386,10 @@ public class ConfigFileAccessor
         _configVersion++;
     }
 
-    private void RecordReadFailureLocked(Exception exception, string reason)
+    private void RecordReadFailureLocked(Exception exception, string reason, bool defaultsRestored)
     {
         string exceptionType = exception.GetType().FullName ?? exception.GetType().Name;
-        _lastReadFailure = new ConfigLoadFailure(reason, exceptionType, DefaultsRestored: true);
+        _lastReadFailure = new ConfigLoadFailure(reason, exceptionType, defaultsRestored);
     }
 
     private void WriteConfigAtomicLocked(ConfigFile config)
@@ -341,7 +402,7 @@ public class ConfigFileAccessor
         _fileWriteGate.Wait();
         try
         {
-            if (Interlocked.Read(ref _configVersion) != configVersion)
+            if (_persistenceSuspended || Interlocked.Read(ref _configVersion) != configVersion)
                 return;
 
             WriteConfigAtomic(_filePath, config);
@@ -402,7 +463,7 @@ public class ConfigFileAccessor
         await _fileWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (Interlocked.Read(ref _configVersion) != configVersion)
+            if (_persistenceSuspended || Interlocked.Read(ref _configVersion) != configVersion)
                 return;
 
             await WriteConfigAtomicAsync(config, cancellationToken).ConfigureAwait(false);
@@ -518,7 +579,10 @@ public class ConfigFileAccessor
     /// </summary>
     /// <param name="Reason">Stable failure reason safe for logs and telemetry.</param>
     /// <param name="ExceptionType">Exception type name without file contents or user data.</param>
-    /// <param name="DefaultsRestored">Whether defaults were written after the failure.</param>
+    /// <param name="DefaultsRestored">
+    /// Whether defaults were written after the unreadable file was moved aside. When
+    /// <see langword="false" />, the file was left untouched and changes are not saved.
+    /// </param>
     public sealed record ConfigLoadFailure(
         string Reason,
         string ExceptionType,

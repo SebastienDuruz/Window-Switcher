@@ -142,6 +142,36 @@ public sealed class X11EwmhWindowAccessorTests
     }
 
     [Fact]
+    public async Task TryGetWindowsAsync_ReturnsNull_WhenClientListCannotBeRead()
+    {
+        using var sut = new X11EwmhWindowAccessor(new FakeX11EwmhClient { Windows = null });
+
+        Assert.Null(await sut.TryGetWindowsAsync());
+        Assert.Empty(await sut.GetWindowsAsync());
+    }
+
+    [Fact]
+    public async Task TryGetWindowsAsync_ReturnsNull_WhenDiscoveryThrows()
+    {
+        using var sut = new X11EwmhWindowAccessor(
+            new FakeX11EwmhClient { Failure = new InvalidOperationException("X11 failure") }
+        );
+
+        Assert.Null(await sut.TryGetWindowsAsync());
+    }
+
+    [Fact]
+    public async Task TryGetWindowsAsync_ReturnsEmptySnapshot_WhenNoClientWindowIsOpen()
+    {
+        using var sut = new X11EwmhWindowAccessor(new FakeX11EwmhClient { Windows = [] });
+
+        IReadOnlyCollection<WindowConfig>? windows = await sut.TryGetWindowsAsync();
+
+        Assert.NotNull(windows);
+        Assert.Empty(windows);
+    }
+
+    [Fact]
     public async Task GetWindowsAsync_ObservesCancellation()
     {
         using var sut = new X11EwmhWindowAccessor(new FakeX11EwmhClient());
@@ -193,11 +223,13 @@ public sealed class X11EwmhWindowAccessorTests
 
     private sealed class FakeX11EwmhClient : IX11EwmhClient
     {
-        public IReadOnlyList<X11EwmhWindow> Windows { get; set; } = [];
+        public IReadOnlyList<X11EwmhWindow>? Windows { get; set; } = [];
+        public Exception? Failure { get; set; }
         public uint? ActivatedWindowId { get; private set; }
         public (uint WindowId, string Title)? RenamedWindow { get; private set; }
 
-        public IReadOnlyList<X11EwmhWindow> GetWindows() => Windows;
+        public IReadOnlyList<X11EwmhWindow>? TryGetWindows() =>
+            Failure is null ? Windows : throw Failure;
 
         public bool TryActivateWindow(uint windowId)
         {

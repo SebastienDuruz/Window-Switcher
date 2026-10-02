@@ -19,10 +19,10 @@ internal sealed class WindowAccessorWindowSnapshotProvider : IWindowSnapshotProv
         _winAccessorBase = winAccessorBase;
     }
 
-    public Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+    public Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
         CancellationToken cancellationToken = default
     )
     {
-        return _winAccessorBase.GetWindowsAsync(cancellationToken);
+        return _winAccessorBase.TryGetWindowsAsync(cancellationToken);
     }
 }

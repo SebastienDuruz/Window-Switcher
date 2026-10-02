@@ -2,7 +2,11 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
 internal interface IX11EwmhClient : IDisposable
 {
-    IReadOnlyList<X11EwmhWindow> GetWindows();
+    /// <summary>
+    /// Reads the EWMH client list.
+    /// </summary>
+    /// <returns>The client windows, or <see langword="null" /> when the list cannot be read.</returns>
+    IReadOnlyList<X11EwmhWindow>? TryGetWindows();
 
     bool TryActivateWindow(uint windowId);
 

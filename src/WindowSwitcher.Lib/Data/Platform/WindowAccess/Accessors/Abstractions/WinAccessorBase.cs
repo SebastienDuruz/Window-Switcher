@@ -11,8 +11,25 @@ public abstract class WinAccessorBase : IDisposable
     /// Gets the current top-level window snapshot.
     /// </summary>
     /// <param name="cancellationToken">Token used to cancel the query.</param>
-    /// <returns>The current window snapshot.</returns>
-    public abstract Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+    /// <returns>
+    /// The current window snapshot, or an empty collection when the window list cannot be read.
+    /// </returns>
+    public async Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        return await TryGetWindowsAsync(cancellationToken).ConfigureAwait(false) ?? [];
+    }
+
+    /// <summary>
+    /// Attempts to read the current top-level window snapshot.
+    /// </summary>
+    /// <param name="cancellationToken">Token used to cancel the query.</param>
+    /// <returns>
+    /// The current window snapshot, or <see langword="null" /> when the window list cannot be
+    /// read. An empty collection means that no eligible window is open.
+    /// </returns>
+    public abstract Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
         CancellationToken cancellationToken = default
     );
 

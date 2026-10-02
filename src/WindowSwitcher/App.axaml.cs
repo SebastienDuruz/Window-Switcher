@@ -49,9 +49,7 @@ public partial class App : Application
         if (failure is null)
             return;
 
-        var exception = new InvalidOperationException(
-            "User settings could not be loaded and defaults were restored."
-        );
+        var exception = new InvalidOperationException("User settings could not be loaded.");
         AppTelemetry.CaptureHandledException(
             exception,
             "config_load_failure",

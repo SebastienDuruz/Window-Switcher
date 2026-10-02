@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
+using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.Interop;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -14,13 +15,13 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
     private const int SwRestore = 9;
     private const int SwShow = 5;
 
-    private static IReadOnlyCollection<WindowConfig> GetWindows()
+    private static IReadOnlyCollection<WindowConfig>? TryGetWindows()
     {
         var windows = new List<WindowConfig>();
         int currentProcessId = Process.GetCurrentProcess().Id;
         var processNameByPid = new Dictionary<uint, string>();
 
-        _ = User32Functions.EnumWindows(
+        bool enumerated = User32Functions.EnumWindows(
             (windowHandle, lParam) =>
             {
                 try
@@ -58,18 +59,25 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
             IntPtr.Zero
         );
 
+        // The callback never stops the enumeration, so a false result means that it failed.
+        if (!enumerated)
+        {
+            TracePlatformDiagnostics.Instance.Error("Windows window enumeration failed");
+            return null;
+        }
+
         return windows;
     }
 
-    public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+    public override Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
         CancellationToken cancellationToken = default
     )
     {
-        return Task.Run<IReadOnlyCollection<WindowConfig>>(
+        return Task.Run(
             () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return GetWindows();
+                return TryGetWindows();
             },
             cancellationToken
         );

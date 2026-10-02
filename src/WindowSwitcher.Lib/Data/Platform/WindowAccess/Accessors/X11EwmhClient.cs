@@ -17,12 +17,12 @@ internal sealed class X11EwmhClient : IX11EwmhClient
     private bool _ewmhUnavailableReported;
     private bool _disposed;
 
-    public IReadOnlyList<X11EwmhWindow> GetWindows()
+    public IReadOnlyList<X11EwmhWindow>? TryGetWindows()
     {
         lock (_syncRoot)
         {
             if (!EnsureConnected())
-                return [];
+                return null;
 
             try
             {
@@ -46,7 +46,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                         );
                         _ewmhUnavailableReported = true;
                     }
-                    return [];
+                    return null;
                 }
 
                 _ewmhUnavailableReported = false;
@@ -54,7 +54,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 try
                 {
                     if (format != 32 || itemCount > MaximumWindowCount)
-                        return [];
+                        return null;
 
                     var windows = new List<X11EwmhWindow>(checked((int)itemCount));
                     for (nuint index = 0; index < itemCount; index++)
@@ -91,7 +91,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                     exception
                 );
                 Disconnect();
-                return [];
+                return null;
             }
         }
     }

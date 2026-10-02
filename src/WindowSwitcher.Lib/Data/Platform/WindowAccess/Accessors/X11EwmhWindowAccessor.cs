@@ -25,7 +25,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         _processNameResolver = processNameResolver ?? ReadProcessNameAsync;
     }
 
-    public override async Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+    public override async Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
         CancellationToken cancellationToken = default
     )
     {
@@ -33,12 +33,14 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         await _operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            IReadOnlyList<X11EwmhWindow> nativeWindows = await Task.Run(
-                    _client.GetWindows,
+            IReadOnlyList<X11EwmhWindow>? nativeWindows = await Task.Run(
+                    _client.TryGetWindows,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            if (nativeWindows is null)
+                return null;
 
             int currentProcessId = Environment.ProcessId;
             int[] activeProcessIds = nativeWindows
@@ -84,7 +86,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         catch (Exception exception)
         {
             TracePlatformDiagnostics.Instance.Error("X11 EWMH discovery failed", exception);
-            return [];
+            return null;
         }
         finally
         {

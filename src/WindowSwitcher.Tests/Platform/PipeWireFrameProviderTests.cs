@@ -472,9 +472,9 @@ public sealed class PipeWireFrameProviderTests
             return _raiseSequence > 0 && _raiseSequence <= getOtherSequence();
         }
 
-        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        public override Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
-        ) => Task.FromResult(_windows);
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>?>(_windows);
 
         public override Task<bool> TryActivateWindowAsync(
             string windowId,
