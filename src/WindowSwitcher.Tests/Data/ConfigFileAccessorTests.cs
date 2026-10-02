@@ -139,6 +139,115 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
+    public void ReadUserSettings_MovesInvalidConfigAsideBeforeRestoringDefaults()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            const string invalidJson = """{ "WhitelistPrefixes": ["game" """;
+            string configPath = Path.Combine(dataFolder, "config.json");
+            File.WriteAllText(configPath, invalidJson);
+
+            var sut = CreateAccessor(dataFolder);
+
+            string backupPath = Assert.Single(
+                Directory.GetFiles(dataFolder, "config.json.unreadable-*")
+            );
+            Assert.Equal(invalidJson, File.ReadAllText(backupPath));
+            Assert.Empty(sut.Config.WhitelistPrefixes);
+            Assert.NotNull(
+                Newtonsoft.Json.JsonConvert.DeserializeObject<ConfigFile>(
+                    File.ReadAllText(configPath)
+                )
+            );
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void ReadUserSettings_KeepsUserSettings_WhenWindowTitleIsNull()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(dataFolder, "config.json"),
+                """
+                {
+                  "WhitelistPrefixes": ["game"],
+                  "FloatingWindowsConfig": [{ "ProcessName": "Game", "WindowTitle": null }]
+                }
+                """
+            );
+
+            var sut = CreateAccessor(dataFolder);
+
+            Assert.Null(sut.ConsumeLastReadFailure());
+            Assert.Equal(["game"], sut.Config.WhitelistPrefixes);
+            Assert.Empty(Directory.GetFiles(dataFolder, "config.json.unreadable-*"));
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void ReadUserSettings_LeavesConfigUntouched_WhenItCannotBeMovedAside()
+    {
+        if (!OperatingSystem.IsLinux() || Environment.IsPrivilegedProcess)
+            return;
+
+        string dataFolder = CreateTempDataFolder();
+        string configPath = Path.Combine(dataFolder, "config.json");
+        const string invalidJson = "{ invalid json";
+        File.WriteAllText(configPath, invalidJson);
+        UnixFileMode originalMode = File.GetUnixFileMode(dataFolder);
+        try
+        {
+            // A read-only folder prevents both the backup move and any later write.
+            File.SetUnixFileMode(dataFolder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+
+            var sut = CreateAccessor(dataFolder);
+            sut.UpdateConfig(config => config.WhitelistPrefixes.Add("game"));
+
+            ConfigFileAccessor.ConfigLoadFailure? failure = sut.ConsumeLastReadFailure();
+            Assert.NotNull(failure);
+            Assert.False(failure.DefaultsRestored);
+            Assert.Equal(["game"], sut.Config.WhitelistPrefixes);
+            Assert.Equal(invalidJson, File.ReadAllText(configPath));
+        }
+        finally
+        {
+            File.SetUnixFileMode(dataFolder, originalMode);
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void Constructor_DoesNotThrow_WhenDefaultsCannotBeWritten()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            // A directory named like the configuration file makes the atomic replace fail.
+            Directory.CreateDirectory(Path.Combine(dataFolder, "config.json"));
+
+            var sut = CreateAccessor(dataFolder);
+
+            Assert.NotNull(sut.Config.WhitelistPrefixes);
+            Assert.Null(sut.ConsumeLastReadFailure());
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
     public void Config_ReturnsDetachedSnapshot()
     {
         string dataFolder = CreateTempDataFolder();

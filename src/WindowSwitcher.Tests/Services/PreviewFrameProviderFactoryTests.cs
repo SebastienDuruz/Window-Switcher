@@ -181,9 +181,9 @@ public sealed class PreviewFrameProviderFactoryTests
 
     private sealed class FakeWinAccessor : WinAccessorBase
     {
-        public override Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        public override Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
-        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>>([]);
+        ) => Task.FromResult<IReadOnlyCollection<WindowConfig>?>([]);
 
         public override Task<bool> TryActivateWindowAsync(
             string windowId,

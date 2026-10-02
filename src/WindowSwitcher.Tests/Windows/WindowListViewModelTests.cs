@@ -31,14 +31,70 @@ public sealed class WindowListViewModelTests
         Assert.Equal("1", window.WindowId);
     }
 
-    private sealed class FakeWindowSnapshotProvider(IReadOnlyCollection<WindowConfig> windows)
+    [Fact]
+    public async Task FetchWindowsWithFiltersAsync_KeepsWindows_WhenSnapshotIsUnavailable()
+    {
+        var snapshotProvider = new FakeWindowSnapshotProvider([
+            new WindowConfig { WindowId = "1", WindowTitle = "Game client" },
+        ]);
+        using var sut = CreateViewModel(snapshotProvider);
+        await sut.FetchWindowsWithFiltersAsync();
+        WindowConfig window = Assert.Single(sut.WindowsConfigs);
+        Assert.True(sut.TrySelectWindowById("1"));
+
+        snapshotProvider.Windows = null;
+        await sut.FetchWindowsWithFiltersAsync();
+
+        Assert.Same(window, Assert.Single(sut.WindowsConfigs));
+        Assert.Same(window, sut.SelectedWindow);
+    }
+
+    [Fact]
+    public async Task FetchWindowsWithFiltersAsync_RemovesWindows_WhenSnapshotIsEmpty()
+    {
+        var snapshotProvider = new FakeWindowSnapshotProvider([
+            new WindowConfig { WindowId = "1", WindowTitle = "Game client" },
+        ]);
+        using var sut = CreateViewModel(snapshotProvider);
+        await sut.FetchWindowsWithFiltersAsync();
+        Assert.Single(sut.WindowsConfigs);
+
+        snapshotProvider.Windows = [];
+        await sut.FetchWindowsWithFiltersAsync();
+
+        Assert.Empty(sut.WindowsConfigs);
+    }
+
+    private static WindowListViewModel CreateViewModel(IWindowSnapshotProvider snapshotProvider)
+    {
+        return new WindowListViewModel(
+            snapshotProvider,
+            new FakeWindowFilterSettingsProvider(
+                new WindowFilterSettings(
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    ["Game"]
+                )
+            ),
+            new ImmediateViewModelDispatcher()
+        );
+    }
+
+    private sealed class FakeWindowSnapshotProvider(IReadOnlyCollection<WindowConfig>? windows)
         : IWindowSnapshotProvider
     {
-        public Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        private IReadOnlyCollection<WindowConfig>? _windows = windows;
+
+        internal IReadOnlyCollection<WindowConfig>? Windows
+        {
+            get => Volatile.Read(ref _windows);
+            set => Volatile.Write(ref _windows, value);
+        }
+
+        public Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
         )
         {
-            return Task.FromResult(windows);
+            return Task.FromResult(Windows);
         }
     }
 

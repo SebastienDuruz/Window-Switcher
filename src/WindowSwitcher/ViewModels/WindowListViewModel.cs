@@ -177,9 +177,13 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            IReadOnlyCollection<WindowConfig> fetchedWindows = await _windowSnapshotProvider
-                .GetWindowsAsync(cancellationToken)
+            IReadOnlyCollection<WindowConfig>? fetchedWindows = await _windowSnapshotProvider
+                .TryGetWindowsAsync(cancellationToken)
                 .ConfigureAwait(false);
+            // An unreadable window list is not an empty desktop: keep the current windows and
+            // their previews until the next successful snapshot.
+            if (fetchedWindows is null)
+                return;
             await _dispatcher.InvokeAsync(() => ApplyWindowsWithFilters(fetchedWindows));
         }
         finally

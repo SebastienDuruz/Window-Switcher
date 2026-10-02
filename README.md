@@ -276,7 +276,7 @@ The file contains:
 - an anonymous telemetry installation ID; and
 - an optional Sentry DSN override for custom builds.
 
-Prefer the in-app controls for routine changes. If you edit `config.json` manually, close Window Switcher first and keep a backup. Invalid or unreadable configuration is replaced with defaults so that the application can start.
+Prefer the in-app controls for routine changes. If you edit `config.json` manually, close Window Switcher first and keep a backup. When the configuration is invalid or unreadable, it is renamed to `config.json.unreadable-<timestamp>` in the same folder and defaults are used so that the application can start. If the file cannot be renamed, it is left untouched and changes are not saved until the next launch.
 
 ## Privacy and error reporting
 

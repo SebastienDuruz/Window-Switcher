@@ -14,9 +14,11 @@ public class WindowConfig : INotifyPropertyChanged
         get;
         set
         {
-            if (field == value)
+            // A null title from a hand-edited config.json must not prevent loading it.
+            string title = value ?? string.Empty;
+            if (field == title)
                 return;
-            field = value;
+            field = title;
             ShortWindowTitle = field.Length > 40 ? $"{field[..40]}..." : field;
             OnPropertyChanged();
         }

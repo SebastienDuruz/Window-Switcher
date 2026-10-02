@@ -153,11 +153,11 @@ public sealed class MainWindowViewModelTests
     private sealed class FakeWindowSnapshotProvider(IReadOnlyCollection<WindowConfig> windows)
         : IWindowSnapshotProvider
     {
-        public Task<IReadOnlyCollection<WindowConfig>> GetWindowsAsync(
+        public Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
         )
         {
-            return Task.FromResult(windows);
+            return Task.FromResult<IReadOnlyCollection<WindowConfig>?>(windows);
         }
     }
 
