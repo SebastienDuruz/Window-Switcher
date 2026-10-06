@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Sentry;
+using Serilog;
 using WindowSwitcher.Lib.Data;
-using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Models;
 
 namespace WindowSwitcher.Diagnostics;
@@ -37,6 +35,8 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 {
     internal const string AppStartedMetricName = AppTelemetryEvents.AppStarted;
     internal const string TelemetrySchemaVersion = "2";
+
+    private static readonly ILogger Logger = Log.ForContext<SentryAppTelemetry>();
 
     private readonly ISentrySdkAdapter _sentrySdk;
     private readonly ITelemetrySettingsProvider _telemetrySettingsProvider;
@@ -82,7 +82,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
             ConfigureBaseScope(telemetryInstallationId);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Sentry initialization failed; error reporting is disabled");
+        }
     }
 
     public async Task RecordAppStartedAsync(string previewMode)
@@ -117,7 +120,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             );
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Sentry startup metric could not be sent");
+        }
     }
 
     public void CaptureUnhandledException(Exception exception, string source)
@@ -135,7 +141,11 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 scope => scope.SetTag("capture_source", NormalizeTagValue(source))
             );
         }
-        catch (Exception) { }
+        catch (Exception captureException)
+        {
+            // Debug only: this runs inside the global crash handlers and must stay side-effect free.
+            Logger.Debug(captureException, "Sentry could not capture an unhandled exception");
+        }
     }
 
     public void CaptureHandledException(
@@ -175,7 +185,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
                 }
             );
         }
-        catch (Exception) { }
+        catch (Exception captureException)
+        {
+            Logger.Warning(captureException, "Sentry could not capture a handled exception");
+        }
     }
 
     public async Task ShutdownAsync()
@@ -195,7 +208,10 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
         {
             await _sentrySdk.FlushAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Sentry flush failed during shutdown");
+        }
         finally
         {
             handle.Dispose();
@@ -204,7 +220,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
     internal static string GetSentryRelease()
     {
-        return BuildSentryRelease(GetInformationalVersion());
+        return BuildSentryRelease(AppRuntimeInfo.GetInformationalVersion());
     }
 
     internal static string BuildSentryRelease(string? informationalVersion)
@@ -217,7 +233,7 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
 
     internal static string GetSentryEnvironment()
     {
-        return IsDebugBuild() ? "debug" : "production";
+        return AppRuntimeInfo.GetBuildChannel();
     }
 
     internal static string ResolveSentryDsn(string? configuredSentryDsn)
@@ -367,95 +383,29 @@ internal sealed class SentryAppTelemetry : IAppTelemetry
             && fullName.EndsWith("DisconnectedException", StringComparison.Ordinal);
     }
 
-    private static string GetInformationalVersion()
-    {
-        return typeof(App)
-                .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-                ?.InformationalVersion
-            ?? typeof(App).Assembly.GetName().Version?.ToString()
-            ?? "unknown";
-    }
-
-    private static string GetSentryOperatingSystemTag()
-    {
-        if (OperatingSystem.IsLinux())
-            return "linux";
-        if (OperatingSystem.IsWindows())
-            return "windows";
-        if (OperatingSystem.IsMacOS())
-            return "macos";
-
-        return "unknown";
-    }
-
     private static IReadOnlyDictionary<string, string> CreateBaseTags()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["telemetry_schema_version"] = TelemetrySchemaVersion,
-            ["os"] = GetSentryOperatingSystemTag(),
-            ["os_arch"] = GetProcessArchitectureTag(),
-            ["session_type"] = GetSentrySessionTypeTag(),
-            ["app_version"] = GetInformationalVersion(),
+            ["os"] = AppRuntimeInfo.GetOperatingSystemTag(),
+            ["os_arch"] = AppRuntimeInfo.GetProcessArchitectureTag(),
+            ["session_type"] = AppRuntimeInfo.GetSessionTypeTag(),
+            ["app_version"] = AppRuntimeInfo.GetInformationalVersion(),
             ["build_channel"] = GetSentryEnvironment(),
-            ["distribution_channel"] = GetAssemblyMetadataValue(
-                "TelemetryDistributionChannel",
-                "source"
-            ),
-            ["package_kind"] = GetAssemblyMetadataValue("TelemetryPackageKind", "unpackaged"),
+            ["distribution_channel"] = AppRuntimeInfo.GetDistributionChannel(),
+            ["package_kind"] = AppRuntimeInfo.GetPackageKind(),
         };
-    }
-
-    private static string GetProcessArchitectureTag()
-    {
-        return RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            Architecture.X64 => "x64",
-            Architecture.X86 => "x86",
-            _ => "unknown",
-        };
-    }
-
-    private static string GetSentrySessionTypeTag()
-    {
-        if (!OperatingSystem.IsLinux())
-            return "not_applicable";
-
-        string? sessionType = LinuxSessionDetector.GetSessionType();
-        return string.IsNullOrWhiteSpace(sessionType) ? "unknown" : NormalizeTagValue(sessionType);
     }
 
     private static string NormalizeTagValue(string value)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        return value.Trim().ToLowerInvariant().Replace(' ', '_');
+        return AppRuntimeInfo.NormalizeTagValue(value);
     }
 
     private static string NormalizeTagKey(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
         return value.Trim().ToLowerInvariant().Replace(' ', '_');
-    }
-
-    private static string GetAssemblyMetadataValue(string key, string fallback)
-    {
-        string? value = typeof(App)
-            .Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute =>
-                string.Equals(attribute.Key, key, StringComparison.Ordinal)
-            )
-            ?.Value;
-        return string.IsNullOrWhiteSpace(value) ? fallback : NormalizeTagValue(value);
-    }
-
-    private static bool IsDebugBuild()
-    {
-#if DEBUG
-        return true;
-#else
-        return false;
-#endif
     }
 }

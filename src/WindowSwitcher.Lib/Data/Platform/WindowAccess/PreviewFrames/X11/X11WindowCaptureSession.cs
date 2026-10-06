@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -11,6 +12,7 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
     private const int DamageEventOffset = 0;
     private const int ShmPermissions = 0x180;
     private const string DisableShmEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_SHM";
+    private static readonly ILogger Logger = Log.ForContext<X11WindowCaptureSession>();
     private static readonly nint XImageDataOffset = Marshal.OffsetOf<XImage>(nameof(XImage.Data));
 
     private readonly object _sync = new();
@@ -43,6 +45,8 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         _damage = damage;
     }
 
+    private string WindowIdText => FormattableString.Invariant($"0x{(long)_window:x}");
+
     public static bool IsSupported()
     {
         if (!OperatingSystem.IsLinux())
@@ -58,8 +62,9 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
 
             return QueryComposite(display) && QueryDamage(display, out _);
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Warning(exception, "X11 capture support probe failed");
             return false;
         }
         finally
@@ -112,8 +117,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                 _isRedirected = redirectedByThisClient,
             };
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Error(
+                exception,
+                "X11 capture session creation failed for window {WindowId}",
+                windowId
+            );
             if (display != IntPtr.Zero)
                 _ = X11Native.XCloseDisplay(display);
             return null;
@@ -180,7 +190,14 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                     X11Native.XDamageDestroy(_display, _damage);
                 _damage = IntPtr.Zero;
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(
+                    exception,
+                    "XDamageDestroy failed for window {WindowId}",
+                    WindowIdText
+                );
+            }
 
             try
             {
@@ -193,13 +210,23 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                     );
                 }
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(
+                    exception,
+                    "XCompositeUnredirectWindow failed for window {WindowId}",
+                    WindowIdText
+                );
+            }
 
             try
             {
                 _ = X11Native.XCloseDisplay(_display);
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception, "XCloseDisplay failed for window {WindowId}", WindowIdText);
+            }
 
             _bufferPool.Dispose();
         }
@@ -241,8 +268,9 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
 
             return X11Native.XGetSelectionOwner(display, atom) != IntPtr.Zero;
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Debug(exception, "X11 compositing manager detection failed");
             return false;
         }
     }
@@ -416,8 +444,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             _ = X11Native.XSync(_display, discard: 0);
             _ = X11Native.shmctl(_shmInfo.ShmId, X11Native.IpcRmId, IntPtr.Zero);
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Warning(
+                exception,
+                "X11 SHM unavailable for window {WindowId}, falling back to XGetImage",
+                WindowIdText
+            );
             ReleaseShmImage();
         }
     }
@@ -451,8 +484,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                 X11FrameConverter.CreateFrame(_shmImage, request, _bufferPool)
             );
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Warning(
+                exception,
+                "X11 SHM frame capture failed for window {WindowId}",
+                WindowIdText
+            );
             return new X11CaptureAttempt(BackendSucceeded: false, Frame: null);
         }
     }
@@ -483,8 +521,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
 
             return X11FrameConverter.CreateFrame(image, request, _bufferPool);
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Warning(
+                exception,
+                "X11 XGetImage frame capture failed for window {WindowId}",
+                WindowIdText
+            );
             return null;
         }
         finally
@@ -502,7 +545,10 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         {
             _ = X11Native.XDestroyImage(image);
         }
-        catch { }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "XDestroyImage failed for captured frame image");
+        }
         finally
         {
             image = IntPtr.Zero;
@@ -532,8 +578,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                     _ = X11Native.XFlush(_display);
                 }
             }
-            catch
+            catch (Exception exception)
             {
+                Logger.Warning(
+                    exception,
+                    "X11 damage event processing failed for window {WindowId}",
+                    WindowIdText
+                );
                 return false;
             }
 
@@ -550,7 +601,10 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             if (_pixmap != IntPtr.Zero)
                 _ = X11Native.XFreePixmap(_display, _pixmap);
         }
-        catch { }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "XFreePixmap failed for window {WindowId}", WindowIdText);
+        }
 
         _pixmap = IntPtr.Zero;
         _width = 0;
@@ -567,13 +621,23 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                 if (_shmInfo.ShmAddr != IntPtr.Zero)
                     _ = X11Native.XShmDetach(_display, ref _shmInfo);
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception, "XShmDetach failed for window {WindowId}", WindowIdText);
+            }
 
             try
             {
                 _ = X11Native.XDestroyImage(_shmImage);
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(
+                    exception,
+                    "XDestroyImage failed for SHM image of window {WindowId}",
+                    WindowIdText
+                );
+            }
         }
 
         if (_shmAddress != IntPtr.Zero && _shmAddress != new IntPtr(-1))
@@ -582,7 +646,10 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             {
                 _ = X11Native.shmdt(_shmAddress);
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception, "shmdt failed for window {WindowId}", WindowIdText);
+            }
         }
 
         if (_shmInfo.ShmId >= 0)
@@ -591,7 +658,14 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             {
                 _ = X11Native.shmctl(_shmInfo.ShmId, X11Native.IpcRmId, IntPtr.Zero);
             }
-            catch { }
+            catch (Exception exception)
+            {
+                Logger.Debug(
+                    exception,
+                    "shmctl IPC_RMID failed for SHM segment {ShmId}",
+                    _shmInfo.ShmId
+                );
+            }
         }
 
         _shmImage = IntPtr.Zero;

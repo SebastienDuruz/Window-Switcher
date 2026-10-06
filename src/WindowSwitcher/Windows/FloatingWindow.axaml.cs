@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Serilog;
 using WindowSwitcher.Controls;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
@@ -19,6 +20,7 @@ namespace WindowSwitcher.Windows;
 public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
     private const double ResizeGripThickness = 8d;
+    private static readonly ILogger Logger = Log.ForContext<FloatingWindow>();
     private static readonly Cursor DefaultCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor TopSideCursor = new(StandardCursorType.TopSide);
     private static readonly Cursor BottomSideCursor = new(StandardCursorType.BottomSide);
@@ -288,9 +290,13 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
                 return;
             _floatingWindowHost.NotifyPreviewWindowActivated(WindowConfig.WindowId);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // Best-effort activation path.
+            Logger.Error(
+                exception,
+                "Activating window {WindowId} from its preview failed",
+                WindowConfig.WindowId
+            );
         }
     }
 

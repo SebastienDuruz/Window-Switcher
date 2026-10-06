@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Serilog;
 using WindowSwitcher.Lib.Models;
 using WindowSwitcher.ViewModels.Abstractions;
 
@@ -17,6 +18,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     private readonly IWindowSnapshotProvider _windowSnapshotProvider;
     private readonly IWindowFilterSettingsProvider _windowFilterSettingsProvider;
     private readonly IViewModelDispatcher _dispatcher;
+    private readonly ILogger _logger;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
     [ObservableProperty]
@@ -30,7 +32,8 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     public WindowListViewModel(
         IWindowSnapshotProvider windowSnapshotProvider,
         IWindowFilterSettingsProvider windowFilterSettingsProvider,
-        IViewModelDispatcher dispatcher
+        IViewModelDispatcher dispatcher,
+        ILogger? logger = null
     )
     {
         ArgumentNullException.ThrowIfNull(windowSnapshotProvider);
@@ -40,6 +43,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         _windowSnapshotProvider = windowSnapshotProvider;
         _windowFilterSettingsProvider = windowFilterSettingsProvider;
         _dispatcher = dispatcher;
+        _logger = logger ?? Log.ForContext<WindowListViewModel>();
         _ = Task.Run(() => RunPeriodicTask(_cts.Token));
     }
 
@@ -57,7 +61,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Shutdown path.
+            // Shutdown path: the view model was disposed, nothing to report.
         }
     }
 
@@ -167,9 +171,13 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Shutdown path.
+            // Shutdown path: the view model was disposed, nothing to report.
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            // Keep the periodic refresh alive: the next tick retries with a fresh snapshot.
+            _logger.Error(exception, "Window list refresh failed");
+        }
     }
 
     private async Task FetchAndApplyWindowsAsync(CancellationToken cancellationToken)

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading.Channels;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Discovery;
@@ -22,7 +22,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
     private readonly SemaphoreSlim _deviceGate = new(1, 1);
     private readonly ILinuxInputDeviceDiscovery _discovery;
     private readonly ILinuxKeyboardForwarderFactory _forwarderFactory;
-    private readonly IPlatformDiagnostics _diagnostics;
+    private readonly ILogger _logger;
     private readonly TimeSpan _reconciliationInterval;
     private readonly EventDecoder _decoder = new();
     private readonly Dictionary<string, DeviceRoutingState> _routingByDevice = (
@@ -46,26 +46,26 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         : this(
             new InputDeviceDiscovery(),
             new LinuxKeyboardForwarderFactory(),
-            TracePlatformDiagnostics.Instance,
+            Log.ForContext<LinuxGlobalKeyboardListener>(),
             DefaultReconciliationInterval
         ) { }
 
     internal LinuxGlobalKeyboardListener(
         ILinuxInputDeviceDiscovery discovery,
         ILinuxKeyboardForwarderFactory forwarderFactory,
-        IPlatformDiagnostics diagnostics,
+        ILogger logger,
         TimeSpan reconciliationInterval
     )
     {
         ArgumentNullException.ThrowIfNull(discovery);
         ArgumentNullException.ThrowIfNull(forwarderFactory);
-        ArgumentNullException.ThrowIfNull(diagnostics);
+        ArgumentNullException.ThrowIfNull(logger);
         if (reconciliationInterval <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(reconciliationInterval));
 
         _discovery = discovery;
         _forwarderFactory = forwarderFactory;
-        _diagnostics = diagnostics;
+        _logger = logger;
         _reconciliationInterval = reconciliationInterval;
     }
 
@@ -160,7 +160,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
                 {
-                    _diagnostics.Error("Linux keyboard processor stopped unexpectedly", exception);
+                    _logger.Error(exception, "Linux keyboard processor stopped unexpectedly");
                 }
             }
 
@@ -197,7 +197,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("Linux keyboard listener shutdown failed", exception);
+            _logger.Error(exception, "Linux keyboard listener shutdown failed");
         }
 
         KeyEvent = null;
@@ -275,21 +275,22 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // The listener is stopping: leaving the loop is the expected outcome.
                 return;
             }
             catch (LinuxInputAccessException exception)
             {
-                _diagnostics.Warning(exception.Message);
+                _logger.Warning(exception, "Linux evdev keyboard access was refused");
                 await StopGenerationForUnavailableInputAsync().ConfigureAwait(false);
             }
             catch (LinuxUinputAccessException exception)
             {
-                _diagnostics.Warning(exception.Message);
+                _logger.Warning(exception, "Linux uinput virtual keyboard access was refused");
                 await StopGenerationForUnavailableInputAsync().ConfigureAwait(false);
             }
             catch (Exception exception)
             {
-                _diagnostics.Error("Linux keyboard reconciliation failed", exception);
+                _logger.Error(exception, "Linux keyboard reconciliation failed");
             }
         }
     }
@@ -348,7 +349,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         _deviceSignature = BuildDeviceSignature(keyboardDevices);
         if (keyboardDevices.Count == 0)
         {
-            _diagnostics.Information("No physical Linux keyboard is currently available");
+            _logger.Information("No physical Linux keyboard is currently available");
             return;
         }
 
@@ -426,7 +427,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 }
                 catch (Exception exception)
                 {
-                    _diagnostics.Error("Linux evdev readers stopped unexpectedly", exception);
+                    _logger.Error(exception, "Linux evdev readers stopped unexpectedly");
                 }
             }
             await DrainCapturedEventsAsync(cancellationToken).ConfigureAwait(false);
@@ -474,7 +475,11 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 int openErrno = LinuxNative.GetLastErrno();
                 if (LinuxNative.IsPermissionError(openErrno))
                 {
-                    _diagnostics.Warning("Reading a Linux evdev keyboard was refused");
+                    _logger.Warning(
+                        "Reading Linux evdev device {DevicePath} was refused (errno={Errno})",
+                        devicePath,
+                        openErrno
+                    );
                     generationCancellation.Cancel();
                     return;
                 }
@@ -491,7 +496,11 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                     int grabErrno = LinuxNative.GetLastErrno();
                     if (LinuxNative.IsPermissionError(grabErrno))
                     {
-                        _diagnostics.Warning("Grabbing a Linux evdev keyboard was refused");
+                        _logger.Warning(
+                            "Grabbing Linux evdev device {DevicePath} was refused (errno={Errno})",
+                            devicePath,
+                            grabErrno
+                        );
                         generationCancellation.Cancel();
                         return;
                     }
@@ -557,14 +566,18 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                     throw new IOException($"read({devicePath}) failed (errno={errno}).");
                 }
             }
-            catch (DeviceDisconnectedException) { }
+            catch (DeviceDisconnectedException)
+            {
+                // Unplugged or suspended devices are expected: the loop reopens them after a delay.
+            }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // The reader generation is stopping: leaving the loop is the expected outcome.
                 break;
             }
             catch (Exception exception)
             {
-                _diagnostics.Error("Linux evdev reader failed", exception);
+                _logger.Error(exception, "Linux evdev reader for {DevicePath} failed", devicePath);
             }
             finally
             {
@@ -593,11 +606,12 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            _diagnostics.Error("Linux keyboard event queue remained saturated");
+            _logger.Error("Linux keyboard event queue remained saturated");
             return false;
         }
         catch (ChannelClosedException)
         {
+            // The listener is stopping and no longer accepts events; the reader stops writing.
             return false;
         }
     }
@@ -622,12 +636,12 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                 }
                 catch (LinuxUinputAccessException exception)
                 {
-                    _diagnostics.Warning(exception.Message);
+                    _logger.Warning(exception, "Linux uinput virtual keyboard access was refused");
                     ReleaseGrabsAfterForwardingFailure();
                 }
                 catch (Exception exception)
                 {
-                    _diagnostics.Error("Linux keyboard event processing failed", exception);
+                    _logger.Error(exception, "Linux keyboard event processing failed");
                     ReleaseGrabsAfterForwardingFailure();
                 }
             }
@@ -682,7 +696,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("Linux keyboard filter failed", exception);
+            _logger.Error(exception, "Linux keyboard filter failed");
             return KeyboardFilterDecision.Forward();
         }
     }
@@ -723,7 +737,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             }
             catch (Exception exception)
             {
-                _diagnostics.Error("Linux keyboard event subscriber failed", exception);
+                _logger.Error(exception, "Linux keyboard event subscriber failed");
             }
         }
     }
@@ -743,7 +757,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("Linux keyboard filter reset failed", exception);
+            _logger.Error(exception, "Linux keyboard filter reset failed");
         }
     }
 
@@ -764,7 +778,10 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         {
             _readerCts?.Cancel();
         }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException)
+        {
+            // The reader generation was already torn down, so its grabs are already released.
+        }
     }
 
     private static async Task DelayReconnectAsync(CancellationToken cancellationToken)
@@ -776,7 +793,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Expected during shutdown.
+            // Expected during shutdown: the caller observes the cancellation on its loop check.
         }
     }
 
@@ -800,7 +817,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("Linux keyboard startup cleanup failed", exception);
+            _logger.Error(exception, "Linux keyboard startup cleanup failed");
         }
         finally
         {

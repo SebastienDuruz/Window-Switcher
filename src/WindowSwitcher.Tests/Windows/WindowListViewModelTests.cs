@@ -1,4 +1,6 @@
+using Serilog.Events;
 using WindowSwitcher.Lib.Models;
+using WindowSwitcher.Tests.TestLogging;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.ViewModels.Abstractions;
 using Xunit;
@@ -65,7 +67,49 @@ public sealed class WindowListViewModelTests
         Assert.Empty(sut.WindowsConfigs);
     }
 
-    private static WindowListViewModel CreateViewModel(IWindowSnapshotProvider snapshotProvider)
+    [Fact]
+    public async Task PeriodicRefresh_LogsErrorAndKeepsRefreshing_WhenSnapshotProviderThrows()
+    {
+        var failure = new InvalidOperationException("snapshot failure");
+        var snapshotProvider = new FakeWindowSnapshotProvider([
+            new WindowConfig { WindowId = "1", WindowTitle = "Game client" },
+        ])
+        {
+            Failure = failure,
+        };
+        Serilog.ILogger logger = TestLogger.Create(out CollectingSink sink);
+        using var sut = CreateViewModel(snapshotProvider, logger);
+
+        LogEvent errorEvent = await WaitForAsync(() =>
+            sink.AtLevel(LogEventLevel.Error).FirstOrDefault()
+        );
+        Assert.Same(failure, errorEvent.Exception);
+        Assert.Contains("Window list refresh failed", errorEvent.RenderMessage());
+
+        snapshotProvider.Failure = null;
+        WindowConfig window = await WaitForAsync(() => sut.WindowsConfigs.FirstOrDefault());
+
+        Assert.Equal("1", window.WindowId);
+    }
+
+    private static async Task<T> WaitForAsync<T>(Func<T?> probe)
+        where T : class
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (true)
+        {
+            T? value = probe();
+            if (value is not null)
+                return value;
+
+            await Task.Delay(25, timeout.Token);
+        }
+    }
+
+    private static WindowListViewModel CreateViewModel(
+        IWindowSnapshotProvider snapshotProvider,
+        Serilog.ILogger? logger = null
+    )
     {
         return new WindowListViewModel(
             snapshotProvider,
@@ -75,7 +119,8 @@ public sealed class WindowListViewModelTests
                     ["Game"]
                 )
             ),
-            new ImmediateViewModelDispatcher()
+            new ImmediateViewModelDispatcher(),
+            logger
         );
     }
 
@@ -83,6 +128,7 @@ public sealed class WindowListViewModelTests
         : IWindowSnapshotProvider
     {
         private IReadOnlyCollection<WindowConfig>? _windows = windows;
+        private Exception? _failure;
 
         internal IReadOnlyCollection<WindowConfig>? Windows
         {
@@ -90,10 +136,20 @@ public sealed class WindowListViewModelTests
             set => Volatile.Write(ref _windows, value);
         }
 
+        internal Exception? Failure
+        {
+            get => Volatile.Read(ref _failure);
+            set => Volatile.Write(ref _failure, value);
+        }
+
         public Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
             CancellationToken cancellationToken = default
         )
         {
+            Exception? failure = Failure;
+            if (failure is not null)
+                return Task.FromException<IReadOnlyCollection<WindowConfig>?>(failure);
+
             return Task.FromResult(Windows);
         }
     }

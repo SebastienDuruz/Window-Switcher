@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -8,6 +9,8 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 internal static class X11FrameConverter
 {
     internal const int MaximumOutputFrameBytes = 16 * 1024 * 1024;
+
+    private static readonly ILogger Logger = Log.ForContext(typeof(X11FrameConverter));
 
     public static unsafe NativeBgraPreviewFrame? CreateFrame(
         IntPtr imagePtr,
@@ -73,8 +76,15 @@ internal static class X11FrameConverter
                 lease.Dispose
             );
         }
-        catch
+        catch (Exception exception)
         {
+            Logger.Error(
+                exception,
+                "X11 image to BGRA conversion failed ({Width}x{Height}, {BitsPerPixel} bpp)",
+                image.Width,
+                image.Height,
+                image.BitsPerPixel
+            );
             lease.Dispose();
             return null;
         }
@@ -107,6 +117,7 @@ internal static class X11FrameConverter
         }
         catch (OverflowException)
         {
+            // Geometry too large to address safely: reject the frame (expected, not logged).
             return false;
         }
 
@@ -165,6 +176,7 @@ internal static class X11FrameConverter
         }
         catch (OverflowException)
         {
+            // Output size not representable: the caller simply skips this frame.
             return false;
         }
     }

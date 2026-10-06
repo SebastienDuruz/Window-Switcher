@@ -14,6 +14,13 @@ internal interface ISentrySdkAdapter
 
     void CaptureException(Exception exception, Action<Scope> configureScope);
 
+    void AddBreadcrumb(
+        string message,
+        string? category,
+        BreadcrumbLevel level,
+        IDictionary<string, string>? data = null
+    );
+
     void EmitCounter(
         string name,
         double value,
@@ -42,6 +49,17 @@ internal sealed class SentrySdkAdapter : ISentrySdkAdapter
         ArgumentNullException.ThrowIfNull(exception);
         ArgumentNullException.ThrowIfNull(configureScope);
         SentrySdk.CaptureException(exception, configureScope);
+    }
+
+    public void AddBreadcrumb(
+        string message,
+        string? category,
+        BreadcrumbLevel level,
+        IDictionary<string, string>? data = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        SentrySdk.AddBreadcrumb(message, category, type: null, data, level);
     }
 
     public void EmitCounter(

@@ -97,6 +97,7 @@ internal static class BgraFrameCopier
         }
         catch (OverflowException)
         {
+            // Overflowing dimensions describe an invalid frame; rejecting it is expected.
             return false;
         }
         if (requiredSourceBytes > sourceLength)

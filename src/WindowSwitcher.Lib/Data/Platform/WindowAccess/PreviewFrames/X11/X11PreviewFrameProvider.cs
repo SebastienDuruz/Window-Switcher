@@ -60,6 +60,7 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
                 }
                 catch (OperationCanceledException)
                 {
+                    // Cancellation requested by the consumer: end the stream normally.
                     yield break;
                 }
 
@@ -74,6 +75,7 @@ internal sealed class X11PreviewFrameProvider : IPreviewFrameProvider
             }
             catch (OperationCanceledException)
             {
+                // Cancellation requested by the consumer: end the stream normally.
                 yield break;
             }
 

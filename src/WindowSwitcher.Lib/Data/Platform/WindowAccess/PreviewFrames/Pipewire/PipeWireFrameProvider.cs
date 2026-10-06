@@ -1,8 +1,9 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Serilog;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
@@ -26,7 +27,7 @@ internal sealed class PipeWireFrameProvider
     private readonly WinAccessorBase _accessor;
     private readonly IPipeWirePortalClient _portalClient;
     private readonly IPipeWireNativeStreamFactory _streamFactory;
-    private readonly IPlatformDiagnostics _diagnostics;
+    private readonly ILogger _logger;
     private readonly WaylandScreenCastMemoryCache _restoreTokenCache;
     private readonly SemaphoreSlim _portalCreationGate = new(1, 1);
     private readonly object _capturesSync = new();
@@ -54,9 +55,9 @@ internal sealed class PipeWireFrameProvider
     public PipeWireFrameProvider(WinAccessorBase accessorBase)
         : this(
             accessorBase,
-            new PipeWirePortalClient(TracePlatformDiagnostics.Instance),
+            new PipeWirePortalClient(Log.ForContext<PipeWirePortalClient>()),
             new PipeWireNativeStreamFactory(),
-            TracePlatformDiagnostics.Instance,
+            Log.ForContext<PipeWireFrameProvider>(),
             WaylandScreenCastMemoryCache.Shared
         ) { }
 
@@ -64,19 +65,19 @@ internal sealed class PipeWireFrameProvider
         WinAccessorBase accessorBase,
         IPipeWirePortalClient portalClient,
         IPipeWireNativeStreamFactory streamFactory,
-        IPlatformDiagnostics diagnostics,
+        ILogger logger,
         WaylandScreenCastMemoryCache restoreTokenCache
     )
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
         ArgumentNullException.ThrowIfNull(portalClient);
         ArgumentNullException.ThrowIfNull(streamFactory);
-        ArgumentNullException.ThrowIfNull(diagnostics);
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(restoreTokenCache);
         _accessor = accessorBase;
         _portalClient = portalClient;
         _streamFactory = streamFactory;
-        _diagnostics = diagnostics;
+        _logger = logger;
         _restoreTokenCache = restoreTokenCache;
     }
 
@@ -110,6 +111,7 @@ internal sealed class PipeWireFrameProvider
             }
             catch (OperationCanceledException)
             {
+                // The consumer stopped streaming while waiting to restart the capture.
                 yield break;
             }
         }
@@ -165,7 +167,10 @@ internal sealed class PipeWireFrameProvider
         {
             creationCancellation?.Cancel();
         }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException)
+        {
+            // The creation already completed and disposed its token source: nothing to cancel.
+        }
         if (capture is not null)
             DisposeStream(capture.Stream);
     }
@@ -250,6 +255,7 @@ internal sealed class PipeWireFrameProvider
         }
         catch (OperationCanceledException)
         {
+            // The caller or a window reset cancelled the capture creation.
             return null;
         }
     }
@@ -286,11 +292,16 @@ internal sealed class PipeWireFrameProvider
         }
         catch (OperationCanceledException)
         {
+            // The window was forgotten or the provider disposed during creation.
             return null;
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("capture creation failed", exception);
+            _logger.Error(
+                exception,
+                "PipeWire capture creation failed for window {WindowId}",
+                windowId
+            );
             return null;
         }
         finally
@@ -395,7 +406,11 @@ internal sealed class PipeWireFrameProvider
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("preview selection indicator callback failed", exception);
+            _logger.Error(
+                exception,
+                "Preview selection indicator callback failed for window {WindowId}",
+                windowId
+            );
         }
     }
 
@@ -422,7 +437,11 @@ internal sealed class PipeWireFrameProvider
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("target activation before portal selection failed", exception);
+            _logger.Error(
+                exception,
+                "Activation of window {WindowId} before portal selection failed",
+                windowId
+            );
         }
     }
 
@@ -490,7 +509,7 @@ internal sealed class PipeWireFrameProvider
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("capture cleanup failed", exception);
+            _logger.Error(exception, "PipeWire capture stream cleanup failed");
         }
     }
 
@@ -502,7 +521,7 @@ internal sealed class PipeWireFrameProvider
         }
         catch (TimeoutException)
         {
-            _diagnostics.Warning(
+            _logger.Warning(
                 "PipeWire stream teardown is still waiting for preview frames to be released"
             );
             await teardown.ConfigureAwait(false);
@@ -529,7 +548,7 @@ internal sealed class PipeWireFrameProvider
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("portal session cleanup failed", exception);
+            _logger.Error(exception, "Portal session {SessionPath} cleanup failed", sessionPath);
         }
     }
 
@@ -597,7 +616,11 @@ internal sealed class PipeWireFrameProvider
         }
         catch (Exception exception)
         {
-            _diagnostics.Error("window identity lookup failed", exception);
+            _logger.Error(
+                exception,
+                "Window identity lookup failed for window {WindowId}",
+                windowId
+            );
         }
 
         Add($"window:{windowId}");
@@ -649,7 +672,10 @@ internal sealed class PipeWireFrameProvider
             {
                 cancellation.Cancel();
             }
-            catch (ObjectDisposedException) { }
+            catch (ObjectDisposedException)
+            {
+                // The creation already completed and disposed its token source: nothing to cancel.
+            }
         }
         foreach (CaptureContext capture in captures)
             DisposeStream(capture.Stream);
@@ -716,7 +742,7 @@ internal sealed class PipeWireFrameProvider
         }
         catch (TimeoutException)
         {
-            _diagnostics.Warning("PipeWire stream teardown did not complete before shutdown");
+            _logger.Warning("PipeWire stream teardown did not complete before shutdown");
         }
     }
 
@@ -768,9 +794,11 @@ internal interface IPipeWirePortalClient : IDisposable
     Task CloseAsync(string sessionPath, CancellationToken cancellationToken);
 }
 
-internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : IPipeWirePortalClient
+internal sealed class PipeWirePortalClient(ILogger logger) : IPipeWirePortalClient
 {
     private const string Destination = "org.freedesktop.portal.Desktop";
+    private const uint PortalResponseSuccess = 0;
+    private const uint PortalResponseCancelledByUser = 1;
     private static readonly ObjectPath DesktopPath = new("/org/freedesktop/portal/desktop");
     private readonly object _syncRoot = new();
     private Connection? _connection;
@@ -786,7 +814,7 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
             .ConfigureAwait(false);
         if (connection is null)
             return null;
-        diagnostics.Information("portal session bus connected");
+        logger.Information("Portal session bus connected");
 
         IPipeWirePortalScreenCast screenCast = connection.CreateProxy<IPipeWirePortalScreenCast>(
             Destination,
@@ -801,6 +829,7 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
             PortalResponse? create = await InvokeRequestAsync(
                     connection,
                     createToken,
+                    "CreateSession",
                     () =>
                         screenCast.CreateSessionAsync(
                             new Dictionary<string, object>
@@ -813,15 +842,18 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            if (create is null || create.Value.Code != 0)
+            if (!IsSuccessfulResponse(create, "CreateSession"))
                 return null;
-            diagnostics.Information("portal session created");
+            logger.Information("Portal session created");
 
             sessionPath =
                 ExtractObjectPath(create.Value.Results, "session_handle")
                 ?? BuildSessionPath(sessionToken);
             if (string.IsNullOrWhiteSpace(sessionPath))
+            {
+                logger.Warning("Portal session handle could not be resolved");
                 return null;
+            }
 
             string selectToken = $"ws_select_{nonce}";
             var selectOptions = new Dictionary<string, object>
@@ -839,19 +871,21 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
             PortalResponse? select = await InvokeRequestAsync(
                     connection,
                     selectToken,
+                    "SelectSources",
                     () => screenCast.SelectSourcesAsync(sessionObjectPath, selectOptions),
                     TimeSpan.FromMinutes(5),
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            if (select is null || select.Value.Code != 0)
+            if (!IsSuccessfulResponse(select, "SelectSources"))
                 return null;
-            diagnostics.Information("portal source selected");
+            logger.Information("Portal source selected");
 
             string startToken = $"ws_start_{nonce}";
             PortalResponse? start = await InvokeRequestAsync(
                     connection,
                     startToken,
+                    "Start",
                     () =>
                         screenCast.StartAsync(
                             sessionObjectPath,
@@ -862,13 +896,14 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
                     cancellationToken
                 )
                 .ConfigureAwait(false);
-            if (
-                start is null
-                || start.Value.Code != 0
-                || !TryExtractPipeWireNodeId(start.Value.Results, out uint pipeWireNodeId)
-            )
+            if (!IsSuccessfulResponse(start, "Start"))
                 return null;
-            diagnostics.Information("portal stream started");
+            if (!TryExtractPipeWireNodeId(start.Value.Results, out uint pipeWireNodeId))
+            {
+                logger.Warning("Portal Start response did not contain a usable PipeWire node id");
+                return null;
+            }
+            logger.Information("Portal stream started on node {PipeWireNodeId}", pipeWireNodeId);
 
             CloseSafeHandle remoteHandle = await screenCast
                 .OpenPipeWireRemoteAsync(sessionObjectPath, new Dictionary<string, object>())
@@ -876,10 +911,11 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
                 .ConfigureAwait(false);
             if (remoteHandle.IsInvalid || remoteHandle.IsClosed)
             {
+                logger.Warning("Portal returned an invalid PipeWire remote handle");
                 remoteHandle.Dispose();
                 return null;
             }
-            diagnostics.Information("portal PipeWire remote opened");
+            logger.Information("Portal PipeWire remote opened");
 
             string? newRestoreToken = ExtractString(start.Value.Results, "restore_token");
             var capture = new PortalCapture(
@@ -893,15 +929,17 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
         }
         catch (OperationCanceledException)
         {
+            // The capture request was cancelled while waiting for the portal.
             return null;
         }
         catch (TimeoutException)
         {
+            logger.Warning("ScreenCast portal did not answer in time");
             return null;
         }
         catch (Exception exception)
         {
-            diagnostics.Error("portal request failed", exception);
+            logger.Error(exception, "ScreenCast portal request failed");
             return null;
         }
         finally
@@ -932,11 +970,17 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { }
-        catch (TimeoutException) { }
+        catch (OperationCanceledException)
+        {
+            // The caller gave up on closing the session; the portal drops it with the connection.
+        }
+        catch (TimeoutException)
+        {
+            logger.Warning("Portal session {SessionPath} did not close in time", sessionPath);
+        }
         catch (Exception exception)
         {
-            diagnostics.Error("portal close failed", exception);
+            logger.Error(exception, "Portal session {SessionPath} close failed", sessionPath);
         }
     }
 
@@ -970,14 +1014,40 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
         }
         catch (Exception exception)
         {
-            diagnostics.Error("session bus connection failed", exception);
+            logger.Error(exception, "Session bus connection failed");
             return null;
         }
+    }
+
+    private bool IsSuccessfulResponse(
+        [NotNullWhen(true)] PortalResponse? response,
+        string requestName
+    )
+    {
+        // A missing response means the request timed out, which has already been reported.
+        if (response is not { } value)
+            return false;
+        if (value.Code == PortalResponseSuccess)
+            return true;
+
+        if (value.Code == PortalResponseCancelledByUser)
+            logger.Information(
+                "Portal {PortalRequest} request was cancelled by the user",
+                requestName
+            );
+        else
+            logger.Warning(
+                "Portal {PortalRequest} request failed with response code {PortalResponseCode}",
+                requestName,
+                value.Code
+            );
+        return false;
     }
 
     private async Task<PortalResponse?> InvokeRequestAsync(
         Connection connection,
         string handleToken,
+        string requestName,
         Func<Task<ObjectPath>> invoke,
         TimeSpan timeout,
         CancellationToken cancellationToken
@@ -1008,7 +1078,13 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
         if (
             !string.Equals(actualPath.ToString(), expectedPath.ToString(), StringComparison.Ordinal)
         )
-            return await WaitForResponseAsync(connection, actualPath, timeout, cancellationToken)
+            return await WaitForResponseAsync(
+                    connection,
+                    actualPath,
+                    requestName,
+                    timeout,
+                    cancellationToken
+                )
                 .ConfigureAwait(false);
 
         try
@@ -1019,13 +1095,15 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
         }
         catch (TimeoutException)
         {
+            LogResponseTimeout(requestName, timeout);
             return null;
         }
     }
 
-    private static async Task<PortalResponse?> WaitForResponseAsync(
+    private async Task<PortalResponse?> WaitForResponseAsync(
         Connection connection,
         ObjectPath requestPath,
+        string requestName,
         TimeSpan timeout,
         CancellationToken cancellationToken
     )
@@ -1055,8 +1133,18 @@ internal sealed class PipeWirePortalClient(IPlatformDiagnostics diagnostics) : I
         }
         catch (TimeoutException)
         {
+            LogResponseTimeout(requestName, timeout);
             return null;
         }
+    }
+
+    private void LogResponseTimeout(string requestName, TimeSpan timeout)
+    {
+        logger.Warning(
+            "Portal {PortalRequest} request got no user response within {TimeoutSeconds} s",
+            requestName,
+            timeout.TotalSeconds
+        );
     }
 
     private ObjectPath BuildRequestPath(string handleToken)

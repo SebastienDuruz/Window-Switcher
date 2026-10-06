@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using Serilog;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
@@ -26,11 +26,10 @@ internal interface IPipeWireNativeStreamFactory
     );
 }
 
-internal sealed class PipeWireNativeStreamFactory(IPlatformDiagnostics? diagnostics = null)
+internal sealed class PipeWireNativeStreamFactory(ILogger? logger = null)
     : IPipeWireNativeStreamFactory
 {
-    private readonly IPlatformDiagnostics _diagnostics =
-        diagnostics ?? TracePlatformDiagnostics.Instance;
+    private readonly ILogger _logger = logger ?? Log.ForContext<PipeWireNativeStream>();
 
     public Task<IPipeWireNativeStream?> CreateAsync(
         CloseSafeHandle remoteHandle,
@@ -46,7 +45,7 @@ internal sealed class PipeWireNativeStreamFactory(IPlatformDiagnostics? diagnost
             pipeWireNodeId,
             width,
             height,
-            _diagnostics,
+            _logger,
             cancellationToken
         );
     }
@@ -61,7 +60,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private readonly object _syncRoot = new();
     private readonly LatestFrameChannel _frames = new();
     private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
-    private readonly IPlatformDiagnostics _diagnostics;
+    private readonly ILogger _logger;
     private readonly WindowSwitcherPipeWireNative.FrameCallback _frameCallback;
     private readonly WindowSwitcherPipeWireNative.StateCallback _stateCallback;
     private GCHandle _selfHandle;
@@ -73,11 +72,11 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private bool _framePublishedReported;
     private BgraScalePlan? _scalePlan;
 
-    private PipeWireNativeStream(int width, int height, IPlatformDiagnostics diagnostics)
+    private PipeWireNativeStream(int width, int height, ILogger logger)
     {
         _targetWidth = width;
         _targetHeight = height;
-        _diagnostics = diagnostics;
+        _logger = logger;
         _frameCallback = OnFrame;
         _stateCallback = OnStateChanged;
     }
@@ -87,15 +86,14 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         uint pipeWireNodeId,
         int width,
         int height,
-        IPlatformDiagnostics diagnostics,
+        ILogger logger,
         CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(remoteHandle);
-        ArgumentNullException.ThrowIfNull(diagnostics);
+        ArgumentNullException.ThrowIfNull(logger);
         return Task.Run<IPipeWireNativeStream?>(
-            () =>
-                Create(remoteHandle, pipeWireNodeId, width, height, diagnostics, cancellationToken),
+            () => Create(remoteHandle, pipeWireNodeId, width, height, logger, cancellationToken),
             cancellationToken
         );
     }
@@ -105,11 +103,11 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         uint pipeWireNodeId,
         int width,
         int height,
-        IPlatformDiagnostics diagnostics,
+        ILogger logger,
         CancellationToken cancellationToken
     )
     {
-        var created = new PipeWireNativeStream(width, height, diagnostics);
+        var created = new PipeWireNativeStream(width, height, logger);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -129,7 +127,10 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             ulong[] dmaBufModifiers = dmaBufCapabilities
                 .Select(capability => capability.Modifier)
                 .ToArray();
-            diagnostics.Information("initialisation du backend PipeWire natif");
+            logger.Information(
+                "Initializing native PipeWire backend for node {PipeWireNodeId}",
+                pipeWireNodeId
+            );
             created._nativeStream = WindowSwitcherPipeWireNative.CreateStream(
                 fileDescriptor,
                 pipeWireNodeId,
@@ -150,11 +151,16 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         }
         catch (OperationCanceledException)
         {
+            // The capture request was cancelled before the native stream existed.
             return null;
         }
         catch (Exception exception)
         {
-            diagnostics.Error("native PipeWire stream initialization failed", exception);
+            logger.Error(
+                exception,
+                "Native PipeWire stream initialization failed for node {PipeWireNodeId}",
+                pipeWireNodeId
+            );
             return null;
         }
         finally
@@ -187,8 +193,13 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 checked((uint)width),
                 checked((uint)height)
             ) < 0
+            && TryMarkFaulted()
         )
-            MarkFaulted("PipeWire format renegotiation failed");
+            _logger.Error(
+                "PipeWire format renegotiation failed for {Width}x{Height}",
+                width,
+                height
+            );
     }
 
     public void SetActive(bool active)
@@ -204,8 +215,9 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         if (
             stream != IntPtr.Zero
             && WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0) < 0
+            && TryMarkFaulted()
         )
-            MarkFaulted("PipeWire could not change stream activity");
+            _logger.Error("PipeWire could not change stream activity to {Active}", active);
         if (!active)
             _frames.Drain();
     }
@@ -220,8 +232,12 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             stream = _nativeStream;
         }
 
-        if (stream != IntPtr.Zero && WindowSwitcherPipeWireNative.SetDmaBufEnabled(stream, 0) < 0)
-            MarkFaulted("PipeWire could not renegotiate CPU preview buffers");
+        if (
+            stream != IntPtr.Zero
+            && WindowSwitcherPipeWireNative.SetDmaBufEnabled(stream, 0) < 0
+            && TryMarkFaulted()
+        )
+            _logger.Error("PipeWire could not renegotiate CPU preview buffers");
     }
 
     public async IAsyncEnumerable<PreviewFrame> ReadFramesAsync(
@@ -285,7 +301,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                     )
                 );
                 dmaBufPublished = true;
-                ReportFirstPublishedFrame("première frame DMA-BUF publiée par le backend PipeWire");
+                ReportFirstPublishedFrame("DMA-BUF");
                 return;
             }
 
@@ -357,15 +373,18 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                     lease.Dispose
                 )
             );
-            ReportFirstPublishedFrame("première frame CPU publiée par le backend PipeWire");
+            ReportFirstPublishedFrame("CPU");
         }
         catch (Exception exception)
         {
             try
             {
-                _diagnostics.Error("native frame callback failed", exception);
+                _logger.Error(exception, "Native PipeWire frame callback failed");
             }
-            catch { }
+            catch
+            {
+                // Nothing may cross the P/Invoke boundary, not even a failing log sink.
+            }
         }
         finally
         {
@@ -374,7 +393,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         }
     }
 
-    private void ReportFirstPublishedFrame(string message)
+    private void ReportFirstPublishedFrame(string frameKind)
     {
         lock (_syncRoot)
         {
@@ -382,7 +401,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                 return;
             _framePublishedReported = true;
         }
-        _diagnostics.Information(message);
+        _logger.Information("First {FrameKind} frame published by the PipeWire backend", frameKind);
     }
 
     private void OnStateChanged(IntPtr userData, int state, string? message)
@@ -391,35 +410,56 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         {
             if (state < 0)
             {
-                MarkFaulted(
-                    string.IsNullOrWhiteSpace(message)
-                        ? "PipeWire stream entered the error state"
-                        : $"PipeWire stream entered the error state: {message}"
-                );
+                if (!TryMarkFaulted())
+                    return;
+                if (string.IsNullOrWhiteSpace(message))
+                    _logger.Error(
+                        "PipeWire stream entered the error state {NativeStateCode}",
+                        state
+                    );
+                else
+                    _logger.Error(
+                        "PipeWire stream entered the error state: {NativeError}",
+                        message
+                    );
                 return;
             }
             if (!string.IsNullOrWhiteSpace(message))
-                _diagnostics.Information(message);
+                _logger.Information("PipeWire stream state changed: {NativeState}", message);
             else
-                _diagnostics.Information($"PipeWire stream state changed to {state}");
+                _logger.Information("PipeWire stream state changed to {NativeStateCode}", state);
         }
-        catch
+        catch (Exception exception)
         {
             lock (_syncRoot)
                 _faulted = true;
+            try
+            {
+                _logger.Error(exception, "PipeWire stream state callback failed");
+            }
+            catch
+            {
+                // Nothing may cross the P/Invoke boundary, not even a failing log sink.
+            }
         }
     }
 
-    private void MarkFaulted(string message)
+    /// <summary>
+    /// Marks the stream as faulted and completes the frame channel.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> when this call performed the transition and should report it.
+    /// </returns>
+    private bool TryMarkFaulted()
     {
         lock (_syncRoot)
         {
             if (_faulted || _disposed)
-                return;
+                return false;
             _faulted = true;
         }
-        _diagnostics.Error(message);
         _frames.Complete();
+        return true;
     }
 
     private static int GetFileDescriptor(CloseSafeHandle remoteHandle)
@@ -447,6 +487,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         }
         catch (OverflowException)
         {
+            // Overflowing dimensions are invalid; rejecting them is the expected outcome.
             return false;
         }
     }
@@ -473,7 +514,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             }
             catch (Exception exception)
             {
-                _diagnostics.Error("native PipeWire stream cleanup failed", exception);
+                _logger.Error(exception, "Native PipeWire stream cleanup failed");
             }
         }
         if (_selfHandle.IsAllocated)

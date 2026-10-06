@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Serilog;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
@@ -19,6 +20,7 @@ internal static class X11Native
     public const nint SubstructureRedirectMask = 1 << 20;
     public const ulong AllPlanes = ulong.MaxValue;
 
+    private static readonly ILogger Logger = Log.ForContext(typeof(X11Native));
     private static readonly XErrorHandler ErrorHandler = IgnoreXError;
     private static int _initialized;
 
@@ -32,9 +34,13 @@ internal static class X11Native
             _ = XInitThreads();
             _ = XSetErrorHandler(ErrorHandler);
         }
-        catch
+        catch (Exception exception)
         {
             // Availability checks and capture creation will fall back safely.
+            Logger.Warning(
+                exception,
+                "X11 thread/error handler initialization failed; falling back"
+            );
         }
     }
 

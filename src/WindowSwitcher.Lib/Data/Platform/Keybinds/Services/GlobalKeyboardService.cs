@@ -1,3 +1,4 @@
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 
@@ -9,6 +10,7 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Services;
 public sealed class GlobalKeyboardService : IGlobalKeyboardService
 {
     private readonly IGlobalKeyboardListener _listener;
+    private readonly ILogger _logger;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private bool _isDisposed;
 
@@ -16,10 +18,15 @@ public sealed class GlobalKeyboardService : IGlobalKeyboardService
     /// Creates a new keyboard service.
     /// </summary>
     public GlobalKeyboardService(IGlobalKeyboardListener listener)
+        : this(listener, Log.ForContext<GlobalKeyboardService>()) { }
+
+    internal GlobalKeyboardService(IGlobalKeyboardListener listener, ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _listener = listener;
+        _logger = logger;
         _listener.KeyEvent += OnListenerKeyEvent;
     }
 
@@ -83,7 +90,11 @@ public sealed class GlobalKeyboardService : IGlobalKeyboardService
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            // Best-effort shutdown: the listener is still disposed below even if stopping failed.
+            _logger.Debug(exception, "Global keyboard service shutdown failed during disposal");
+        }
 
         await _listener.DisposeAsync().ConfigureAwait(false);
         KeyEvent = null;
@@ -100,7 +111,10 @@ public sealed class GlobalKeyboardService : IGlobalKeyboardService
             {
                 ((EventHandler<GlobalKeyEventArgs>)subscriber).Invoke(this, eventArgs);
             }
-            catch (Exception) { }
+            catch (Exception exception)
+            {
+                _logger.Error(exception, "Global keyboard event subscriber failed");
+            }
         }
     }
 

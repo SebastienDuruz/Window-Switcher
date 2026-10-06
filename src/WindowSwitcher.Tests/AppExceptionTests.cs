@@ -400,6 +400,13 @@ public sealed class SentryAppTelemetryTests
             );
         }
 
+        public void AddBreadcrumb(
+            string message,
+            string? category,
+            BreadcrumbLevel level,
+            IDictionary<string, string>? data = null
+        ) { }
+
         public void EmitCounter(
             string name,
             double value,

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Serilog;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
@@ -23,6 +24,8 @@ namespace WindowSwitcher.Windows;
 
 public partial class MainWindow : Window, IFloatingWindowHost
 {
+    private static readonly ILogger Logger = Log.ForContext<MainWindow>();
+
     private WinAccessorBase WinAccessorBase { get; }
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private readonly IPreviewSelectionReset? _previewSelectionReset;
@@ -93,7 +96,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
             },
             openSettings: () => SettingsWindow.Show(),
             openAbout: OpenAppInfoWindow,
-            openDataFolder: OpenDataFolder,
+            openConfigFolder: () => OpenFolder(StaticData.DataFolder),
+            openLogsFolder: () => OpenFolder(StaticData.LogFolder),
             clearConfig: () => _configurationService.ResetFloatingWindowSettings(),
             resetConfig: () => _configurationService.ResetUserSettings(),
             canResetAllPreviews: () => _previewSelectionReset is not null,
@@ -230,11 +234,16 @@ public partial class MainWindow : Window, IFloatingWindowHost
         AppInfoWindow.Show();
     }
 
-    private void OpenDataFolder()
+    private static void OpenFolder(string folder)
     {
-        Process.Start(
-            new ProcessStartInfo { FileName = StaticData.DataFolder, UseShellExecute = true }
-        );
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "Folder {Folder} could not be opened", folder);
+        }
     }
 
     public void AddToBlacklist(string windowTitle)

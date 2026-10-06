@@ -1,5 +1,5 @@
 using Newtonsoft.Json;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 using WindowSwitcher.Lib.Models;
@@ -8,6 +8,7 @@ namespace WindowSwitcher.Lib.Data;
 
 public class ConfigFileAccessor
 {
+    private static readonly ILogger Logger = Log.ForContext<ConfigFileAccessor>();
     private static readonly Lazy<ConfigFileAccessor> Instance = new(() => new ConfigFileAccessor());
     private readonly object _syncRoot = new();
     private readonly SemaphoreSlim _fileWriteGate = new(1, 1);
@@ -123,6 +124,12 @@ public class ConfigFileAccessor
                 UnauthorizedAccessException => "access_denied",
                 _ => "unexpected_error",
             };
+            Logger.Warning(
+                exception,
+                "Configuration file {FilePath} could not be read ({Reason})",
+                _filePath,
+                failureReason
+            );
             return null;
         }
 
@@ -134,6 +141,12 @@ public class ConfigFileAccessor
         {
             failure = exception;
             failureReason = exception is JsonException ? "invalid_json" : "unexpected_error";
+            Logger.Warning(
+                exception,
+                "Configuration file {FilePath} could not be parsed ({Reason})",
+                _filePath,
+                failureReason
+            );
             return null;
         }
     }
@@ -148,9 +161,10 @@ public class ConfigFileAccessor
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            TracePlatformDiagnostics.Instance.Error(
-                "unreadable configuration could not be moved aside; changes will not be saved",
-                exception
+            Logger.Error(
+                exception,
+                "Unreadable configuration {FilePath} not moved aside; changes will not be saved",
+                _filePath
             );
             return false;
         }
@@ -165,9 +179,10 @@ public class ConfigFileAccessor
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            TracePlatformDiagnostics.Instance.Error(
-                "configuration could not be written at startup",
-                exception
+            Logger.Error(
+                exception,
+                "Configuration {FilePath} could not be written at startup",
+                _filePath
             );
             return false;
         }
@@ -496,7 +511,15 @@ public class ConfigFileAccessor
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
         }
-        catch { }
+        catch (Exception exception)
+        {
+            // Best-effort cleanup: a leftover temporary file does not affect the saved config.
+            Logger.Debug(
+                exception,
+                "Temporary configuration file {TempPath} could not be deleted",
+                tempPath
+            );
+        }
     }
 
     private static ConfigFile NormalizeConfig(ConfigFile config)

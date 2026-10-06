@@ -1,10 +1,11 @@
 using System.Runtime.Versioning;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog.Events;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Linux;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+using WindowSwitcher.Tests.TestLogging;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Platform.Input;
@@ -270,11 +271,48 @@ public sealed class LinuxGlobalKeyboardListenerTests
         await listener.StopAsync();
     }
 
+    [Fact]
+    public async Task Emit_LogsFailingSubscriberAndStillNotifiesOthers()
+    {
+        InputDeviceInfo keyboard = CreateKeyboard("/definitely/missing-event1", [30]);
+        var forwarders = new RecordingForwarderFactory();
+        Serilog.ILogger logger = TestLogger.Create(out CollectingSink sink);
+        await using var listener = CreateListener(
+            new SequenceDiscovery([keyboard]),
+            forwarders,
+            TimeSpan.FromHours(1),
+            logger
+        );
+        var failure = new InvalidOperationException("subscriber failure");
+        int healthySubscriberCalls = 0;
+        listener.KeyEvent += (_, _) => throw failure;
+        listener.KeyEvent += (_, _) => healthySubscriberCalls++;
+        await listener.StartAsync();
+
+        listener.ProcessNativeEventForTesting("device-a", KeyDown());
+
+        Assert.Equal(1, healthySubscriberCalls);
+        LogEvent logEvent = Assert.Single(
+            sink.AtLevel(LogEventLevel.Error),
+            candidate =>
+                candidate.RenderMessage().Contains("subscriber failed", StringComparison.Ordinal)
+        );
+        Assert.Same(failure, logEvent.Exception);
+        await listener.StopAsync();
+    }
+
     private static LinuxGlobalKeyboardListener CreateListener(
         ILinuxInputDeviceDiscovery discovery,
         ILinuxKeyboardForwarderFactory forwarderFactory,
-        TimeSpan reconciliationInterval
-    ) => new(discovery, forwarderFactory, new RecordingDiagnostics(), reconciliationInterval);
+        TimeSpan reconciliationInterval,
+        Serilog.ILogger? logger = null
+    ) =>
+        new(
+            discovery,
+            forwarderFactory,
+            logger ?? TestLogger.Create(out _),
+            reconciliationInterval
+        );
 
     private static InputDeviceInfo CreateKeyboard(string path, ushort[] keyCodes) =>
         new()
@@ -405,14 +443,5 @@ public sealed class LinuxGlobalKeyboardListenerTests
             KeyboardFilterDecision.Forward();
 
         public void Reset() => ResetCalled.TrySetResult();
-    }
-
-    private sealed class RecordingDiagnostics : IPlatformDiagnostics
-    {
-        public void Information(string message) { }
-
-        public void Warning(string message) { }
-
-        public void Error(string message, Exception? exception = null) { }
     }
 }

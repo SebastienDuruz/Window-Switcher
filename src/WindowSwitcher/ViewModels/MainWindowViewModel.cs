@@ -21,7 +21,8 @@ public partial class MainWindowViewModel : ObservableObject
     public IRelayCommand OpenKeybindsCommand { get; }
     public IRelayCommand OpenSettingsCommand { get; }
     public IRelayCommand OpenAboutCommand { get; }
-    public IRelayCommand OpenDataFolderCommand { get; }
+    public IRelayCommand OpenConfigFolderCommand { get; }
+    public IRelayCommand OpenLogsFolderCommand { get; }
     public IRelayCommand ClearConfigCommand { get; }
     public IRelayCommand ResetConfigCommand { get; }
     public IRelayCommand ResetAllPreviewsCommand { get; }
@@ -35,7 +36,8 @@ public partial class MainWindowViewModel : ObservableObject
         Action openKeybinds,
         Action openSettings,
         Action openAbout,
-        Action openDataFolder,
+        Action openConfigFolder,
+        Action openLogsFolder,
         Action clearConfig,
         Action resetConfig,
         Func<bool> canResetAllPreviews,
@@ -50,7 +52,8 @@ public partial class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(openKeybinds);
         ArgumentNullException.ThrowIfNull(openSettings);
         ArgumentNullException.ThrowIfNull(openAbout);
-        ArgumentNullException.ThrowIfNull(openDataFolder);
+        ArgumentNullException.ThrowIfNull(openConfigFolder);
+        ArgumentNullException.ThrowIfNull(openLogsFolder);
         ArgumentNullException.ThrowIfNull(clearConfig);
         ArgumentNullException.ThrowIfNull(resetConfig);
         ArgumentNullException.ThrowIfNull(canResetAllPreviews);
@@ -65,7 +68,8 @@ public partial class MainWindowViewModel : ObservableObject
         OpenKeybindsCommand = new RelayCommand(openKeybinds);
         OpenSettingsCommand = new RelayCommand(openSettings);
         OpenAboutCommand = new RelayCommand(openAbout);
-        OpenDataFolderCommand = new RelayCommand(openDataFolder);
+        OpenConfigFolderCommand = new RelayCommand(openConfigFolder);
+        OpenLogsFolderCommand = new RelayCommand(openLogsFolder);
         ClearConfigCommand = new RelayCommand(clearConfig);
         ResetConfigCommand = new RelayCommand(resetConfig);
         ResetAllPreviewsCommand = new RelayCommand(resetAllPreviews, canResetAllPreviews);

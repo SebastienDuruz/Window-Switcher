@@ -69,7 +69,7 @@ internal static class ProcessExecution
         }
         catch (InvalidOperationException)
         {
-            // Best-effort cleanup path.
+            // Best-effort cleanup: the process has already exited or was never associated.
         }
     }
 
@@ -82,7 +82,8 @@ internal static class ProcessExecution
         }
         catch
         {
-            // Best-effort cleanup path.
+            // Best-effort cleanup: the process has already exited or can no longer be killed;
+            // the caller still receives the timeout or cancellation outcome.
         }
     }
 }
