@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using static Avalonia.OpenGL.GlConsts;
@@ -17,6 +18,7 @@ internal sealed class DmaBufPreviewControl : OpenGlControlBase
     private const int GlTextureWrapT = 0x2803;
     private const int GlClampToEdge = 0x812F;
     private const int GlTriangleStrip = 0x0005;
+    private static readonly ILogger Logger = Log.ForContext<DmaBufPreviewControl>();
 
     private readonly object _frameSync = new();
     private readonly TaskCompletionSource<bool> _availability = new(
@@ -45,6 +47,7 @@ internal sealed class DmaBufPreviewControl : OpenGlControlBase
         }
         catch (TimeoutException)
         {
+            // The OpenGL context did not initialize in time: callers fall back to CPU frames.
             return false;
         }
     }
@@ -186,7 +189,7 @@ internal sealed class DmaBufPreviewControl : OpenGlControlBase
 
     private void ReportFailure(Exception exception)
     {
-        System.Diagnostics.Trace.TraceError($"DMA-BUF preview rendering failed: {exception}");
+        Logger.Error(exception, "DMA-BUF preview rendering failed");
         if (_failureReported)
             return;
         _failureReported = true;

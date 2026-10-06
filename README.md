@@ -125,7 +125,7 @@ Renaming is especially useful when several clients initially share the same titl
 - Enable **Enable previews** to show live content inside floating windows.
 - Choose **Highlight color** to change the active-preview outline.
 
-Position and size are saved per window key and restored on a later launch. Use `File > Clean config file` to clear saved preview layouts without resetting every preference.
+Position and size are saved per window key and restored on a later launch. Use `File > Clean config` to clear saved preview layouts without resetting every preference.
 
 The highlight follows the client activated through a preview or global keybind, making the currently active target easy to identify.
 
@@ -172,9 +172,10 @@ Settings are persisted as they change.
 | `Config` | `Keybinds` | Configure global shortcuts. |
 | `Config` | `Settings` | Configure preview behavior and appearance. |
 | `Config` | `Reset all previews` | Reset supported capture selections, primarily on Wayland. |
-| `File` | `Open data folder` | Open the directory containing `config.json`. |
-| `File` | `Clean config file` | Remove saved preview positions and sizes. |
-| `File` | `Generate new config file` | Restore all settings to their defaults. |
+| `File` | `Open logs` | Open the directory containing the application log files. |
+| `File` | `Open config` | Open the directory containing `config.json`. |
+| `File` | `Clean config` | Remove saved preview positions and sizes. |
+| `File` | `Generate new config` | Restore all settings to their defaults. |
 | `Help` | `About` | Show diagnostics, version information, and updates. |
 
 ### Diagnostics and updates
@@ -265,7 +266,7 @@ Preferences are stored in `config.json` inside the application data directory:
 | Windows | `%APPDATA%\WindowSwitcher\config.json` |
 | Linux | `~/.config/WindowSwitcher/config.json` in a typical desktop session |
 
-Use `File > Open data folder` to open the exact directory for the current system.
+Use `File > Open config` to open the exact directory for the current system.
 
 The file contains:
 
@@ -292,8 +293,11 @@ Sentry events may contain the following limited runtime metadata:
 - telemetry schema version;
 - operating system, process architecture, and session type;
 - build channel, distribution channel, and package kind;
-- application version and preview mode; and
-- a sanitized capture source for unhandled exceptions.
+- application version and preview mode;
+- a sanitized capture source for unhandled exceptions; and
+- breadcrumbs listing the application log messages that preceded a crash. A breadcrumb contains only the message template (for example `PipeWire portal request timed out`), the emitting component, the level, and the exception type, never the logged values.
+
+Handled errors are never sent to Sentry as events; they are only written to the local log described below.
 
 Window Switcher does **not intentionally send**:
 
@@ -306,6 +310,17 @@ Window Switcher does **not intentionally send**:
 - hostnames, usernames, email addresses, or machine-derived identifiers.
 
 The `SentryDsn` value in `config.json` can redirect events for a custom build, but it is not an opt-out. Builds compiled without Sentry ignore this setting entirely.
+
+### Local logs
+
+Window Switcher writes a rolling log file on the local machine. It is never uploaded; attach it to an issue yourself when reporting a problem. Use **File > Open logs** to open the log folder (**File > Open config** opens the folder that contains `config.json`).
+
+| Platform | Folder |
+| --- | --- |
+| Linux | `$XDG_STATE_HOME/WindowSwitcher/logs/` (defaults to `~/.local/state/WindowSwitcher/logs/`) |
+| Windows | `%LOCALAPPDATA%\WindowSwitcher\logs\` |
+
+A new file `window-switcher-<yyyyMMdd>.log` is started every day or when it reaches 10 MB, and only the 7 most recent files are kept. Identical messages are written at most once every 30 seconds. Logs contain the application version, platform details, component errors with their stack traces, window or process identifiers, and device paths; they do not contain window titles or keystrokes.
 
 ### Build without Sentry
 
@@ -357,11 +372,11 @@ On Windows, the equivalent Nuke option is:
 
 ### A preview opens in the wrong place or size
 
-Use `File > Clean config file` to remove saved preview positions and sizes, then arrange the previews again.
+Use `File > Clean config` to remove saved preview positions and sizes, then arrange the previews again.
 
 ### Reset all preferences
 
-Use `File > Generate new config file`. This restores default settings, filters, saved layouts, and keybind definitions.
+Use `File > Generate new config`. This restores default settings, filters, saved layouts, and keybind definitions.
 
 When reporting a reproducible problem, include the application version and the non-sensitive diagnostic information shown under `Help > About`. Do not post `config.json` publicly without reviewing it first.
 

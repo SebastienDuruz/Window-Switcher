@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 
@@ -30,7 +31,20 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
     private HookProc? _hookProc;
     private TaskCompletionSource<object?>? _startTcs;
     private TaskCompletionSource<object?>? _stopTcs;
+    private readonly ILogger _logger;
     private bool _isDisposed;
+
+    /// <summary>
+    /// Creates the Windows low-level keyboard hook listener.
+    /// </summary>
+    public WindowsGlobalKeyboardListener()
+        : this(Log.ForContext<WindowsGlobalKeyboardListener>()) { }
+
+    internal WindowsGlobalKeyboardListener(ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+        _logger = logger;
+    }
 
     /// <inheritdoc />
     public IKeyboardInputFilter? InputFilter { get; set; }
@@ -115,7 +129,11 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            // Best-effort shutdown: disposal must complete even if the hook thread did not stop.
+            _logger.Debug(exception, "Windows keyboard listener shutdown failed during disposal");
+        }
 
         KeyEvent = null;
         InputFilter = null;
@@ -140,7 +158,12 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         }
 
         if (!quitPosted)
-            _ = Marshal.GetLastWin32Error();
+        {
+            _logger.Warning(
+                "Posting WM_QUIT to the Windows keyboard hook thread failed (Win32={Win32Error})",
+                Marshal.GetLastWin32Error()
+            );
+        }
 
         if (stopTcs is not null)
             await stopTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -182,7 +205,10 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
                 if (messageResult < 0)
                 {
-                    _ = Marshal.GetLastWin32Error();
+                    _logger.Error(
+                        "Windows keyboard hook message loop failed (Win32={Win32Error})",
+                        Marshal.GetLastWin32Error()
+                    );
                     break;
                 }
 
@@ -190,7 +216,10 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
                 _ = DispatchMessage(ref message);
             }
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            _logger.Error(exception, "Windows keyboard hook message loop stopped unexpectedly");
+        }
         finally
         {
             CleanupHook();
@@ -238,8 +267,9 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             Emit(eventArgs);
             return ApplyDecision(decision, code, wParam, lParam);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _logger.Error(exception, "Windows keyboard hook callback failed");
             return CallNextHookEx(_hookHandle, code, wParam, lParam);
         }
     }
@@ -254,8 +284,9 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         {
             return filter.ProcessEvent(eventArgs);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _logger.Error(exception, "Windows keyboard filter failed");
             return KeyboardFilterDecision.Forward();
         }
     }
@@ -292,7 +323,12 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         if (_hookHandle != IntPtr.Zero)
         {
             if (!UnhookWindowsHookEx(_hookHandle))
-                _ = Marshal.GetLastWin32Error();
+            {
+                _logger.Warning(
+                    "Removing the Windows keyboard hook failed (Win32={Win32Error})",
+                    Marshal.GetLastWin32Error()
+                );
+            }
 
             _hookHandle = IntPtr.Zero;
         }
@@ -315,7 +351,10 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             {
                 ((EventHandler<GlobalKeyEventArgs>)subscriber).Invoke(this, eventArgs);
             }
-            catch (Exception) { }
+            catch (Exception exception)
+            {
+                _logger.Error(exception, "Windows keyboard event subscriber failed");
+            }
         }
     }
 

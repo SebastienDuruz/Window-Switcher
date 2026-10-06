@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using Serilog;
 using WindowSwitcher.Controls;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
@@ -21,6 +22,7 @@ internal sealed class FloatingWindowService
     private const int PreviewRequestTimeoutMs = 1_500;
     private const int ResizePreviewRefreshDebounceMs = 250;
     private static readonly TimeSpan GpuInitializationTimeout = TimeSpan.FromSeconds(1);
+    private static readonly ILogger Logger = Log.ForContext<FloatingWindowService>();
     private readonly Window _ownerWindow;
     private readonly WindowConfig _windowConfig;
     private readonly IPreviewFrameProvider _previewFrameProvider;
@@ -192,6 +194,7 @@ internal sealed class FloatingWindowService
         }
         catch (OperationCanceledException)
         {
+            // The floating window closed before the preview loop started.
             return;
         }
 
@@ -229,9 +232,17 @@ internal sealed class FloatingWindowService
 
                 await Task.Delay(500, operationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (operationToken.IsCancellationRequested) { }
-            catch (Exception)
+            catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
             {
+                // Window closing, settings change or resize restarted the preview operation.
+            }
+            catch (Exception exception)
+            {
+                Logger.Error(
+                    exception,
+                    "Preview frame stream failed for window {WindowId}",
+                    _windowConfig.WindowId
+                );
                 await DelayAfterFailureAsync(cancellationToken).ConfigureAwait(false);
             }
         }
@@ -266,7 +277,10 @@ internal sealed class FloatingWindowService
         {
             await Task.Delay(500, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // The floating window closed during the retry delay; the loop exits on its own.
+        }
     }
 
     private void QueueLatestFrame(PreviewFrame frame, CancellationToken cancellationToken)
@@ -314,7 +328,10 @@ internal sealed class FloatingWindowService
                 await ApplyFrameAsync(frame, cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Preview operation cancelled: pending frames are released in the finally block.
+        }
         finally
         {
             Interlocked.Exchange(ref _pendingFrameDrainScheduled, 0);
@@ -424,7 +441,10 @@ internal sealed class FloatingWindowService
                 _isPreviewSurfaceCleared = true;
             });
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The floating window closed; Stop clears the preview surface itself.
+        }
         finally
         {
             if (lockTaken)
@@ -498,7 +518,10 @@ internal sealed class FloatingWindowService
         {
             cancellation?.Cancel();
         }
-        catch (ObjectDisposedException) { }
+        catch (ObjectDisposedException)
+        {
+            // The source was already disposed, so there is nothing left to cancel.
+        }
         finally
         {
             cancellation?.Dispose();
@@ -528,7 +551,10 @@ internal sealed class FloatingWindowService
             if (TryConsumePendingResizePreviewRefresh(cancellation))
                 CancelPreviewOperations(recreateTokenSource: true);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer resize or cancelled on close: this refresh is dropped.
+        }
         finally
         {
             cancellation.Dispose();

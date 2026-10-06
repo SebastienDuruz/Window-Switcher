@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Interop;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
@@ -14,6 +14,7 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
     private const uint GwOwner = 4;
     private const int SwRestore = 9;
     private const int SwShow = 5;
+    private static readonly ILogger Logger = Log.ForContext<WindowsWinAccessor>();
 
     private static IReadOnlyCollection<WindowConfig>? TryGetWindows()
     {
@@ -49,9 +50,14 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
                         }
                     );
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Ignore windows we cannot inspect.
+                    // Skip windows we cannot inspect and keep enumerating the others.
+                    Logger.Warning(
+                        exception,
+                        "Cannot inspect window {WindowHandle} during enumeration",
+                        windowHandle
+                    );
                 }
 
                 return true;
@@ -62,7 +68,7 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
         // The callback never stops the enumeration, so a false result means that it failed.
         if (!enumerated)
         {
-            TracePlatformDiagnostics.Instance.Error("Windows window enumeration failed");
+            Logger.Error("Windows window enumeration failed");
             return null;
         }
 
@@ -129,9 +135,10 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
             using Process process = Process.GetProcessById((int)processId);
             processName = process.ProcessName;
         }
-        catch
+        catch (Exception exception)
         {
-            // Keep empty process name if unavailable.
+            // The process may have exited or be inaccessible: keep an empty process name.
+            Logger.Debug(exception, "Cannot resolve process name for PID {ProcessId}", processId);
         }
 
         processNameByPid[processId] = processName;

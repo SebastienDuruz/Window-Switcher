@@ -27,9 +27,10 @@
                           IsVisible="{Binding CanResetAllPreviews}" />
             </MenuItem>
             <MenuItem Header="_File" Padding="4">
-                <MenuItem Header="_Open data folder" Command="{Binding OpenDataFolderCommand}" />
-                <MenuItem Header="_Clean config file" Command="{Binding ClearConfigCommand}" />
-                <MenuItem Header="_Generate new config file" Command="{Binding ResetConfigCommand}" />
+                <MenuItem Header="Open _logs" Command="{Binding OpenLogsFolderCommand}" />
+                <MenuItem Header="_Open config" Command="{Binding OpenConfigFolderCommand}" />
+                <MenuItem Header="_Clean config" Command="{Binding ClearConfigCommand}" />
+                <MenuItem Header="_Generate new config" Command="{Binding ResetConfigCommand}" />
             </MenuItem>
             <MenuItem Header="_Help" Padding="4">
                 <MenuItem Header="_About" Command="{Binding OpenAboutCommand}" />

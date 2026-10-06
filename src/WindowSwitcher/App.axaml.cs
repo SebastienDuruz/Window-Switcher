@@ -7,6 +7,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Serilog;
 using WindowSwitcher.Diagnostics;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
@@ -19,6 +20,8 @@ namespace WindowSwitcher;
 
 public partial class App : Application
 {
+    private static readonly ILogger Logger = Log.ForContext<App>();
+
     private Windows.MainWindow? MainWindow { get; set; }
     private IGlobalKeyboardService? GlobalKeyboardService { get; set; }
     private IGlobalWindowKeybindRuntimeService? GlobalWindowKeybindRuntimeService { get; set; }
@@ -49,6 +52,12 @@ public partial class App : Application
         if (failure is null)
             return;
 
+        Logger.Warning(
+            "User settings could not be loaded ({Reason}, {ExceptionType}, defaults restored: {DefaultsRestored})",
+            failure.Reason,
+            failure.ExceptionType,
+            failure.DefaultsRestored
+        );
         var exception = new InvalidOperationException("User settings could not be loaded.");
         AppTelemetry.CaptureHandledException(
             exception,
@@ -160,6 +169,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            Logger.Error(ex, "Global keyboard service failed to start");
             globalKeyboardStartupStatusService.ReportStartupFailure(ex);
         }
     }
@@ -177,7 +187,10 @@ public partial class App : Application
         {
             // Shutdown path.
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, "Global window keybind runtime failed to start");
+        }
     }
 
     private async void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
@@ -191,7 +204,10 @@ public partial class App : Application
             {
                 await GlobalWindowKeybindRuntimeService.StopAsync().ConfigureAwait(false);
             }
-            catch (Exception) { }
+            catch (Exception exception)
+            {
+                Logger.Debug(exception, "Global window keybind runtime failed to stop cleanly");
+            }
 
             GlobalWindowKeybindRuntimeService = null;
         }
@@ -208,7 +224,10 @@ public partial class App : Application
         {
             await GlobalKeyboardService.StopAsync().ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Debug(exception, "Global keyboard service failed to stop cleanly");
+        }
 
         GlobalKeyboardCts?.Dispose();
         GlobalKeyboardCts = null;
@@ -222,15 +241,22 @@ public partial class App : Application
         DispatcherUnhandledExceptionEventArgs e
     )
     {
+        Logger.Error(e.Exception, "Unhandled exception on the UI dispatcher");
         AppTelemetry.CaptureUnhandledException(e.Exception, "dispatcher_unhandled");
     }
 
     private void OnCurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        AppTelemetry.CaptureUnhandledException(
-            AppTelemetrySanitizer.CreateUnhandledException(e.ExceptionObject),
-            "appdomain_unhandled"
+        Exception exception = AppTelemetrySanitizer.CreateUnhandledException(e.ExceptionObject);
+        Logger.Fatal(
+            exception,
+            "Unhandled exception in the application domain (terminating: {IsTerminating})",
+            e.IsTerminating
         );
+        AppTelemetry.CaptureUnhandledException(exception, "appdomain_unhandled");
+
+        if (e.IsTerminating)
+            Log.CloseAndFlush();
     }
 
     private void OnTaskSchedulerUnobservedTaskException(
@@ -238,6 +264,7 @@ public partial class App : Application
         UnobservedTaskExceptionEventArgs e
     )
     {
+        Logger.Error(e.Exception, "Unobserved task exception");
         AppTelemetry.CaptureUnhandledException(e.Exception, "task_unobserved");
     }
 
@@ -253,5 +280,6 @@ public partial class App : Application
     {
         await ShutdownTelemetryAsync().ConfigureAwait(false);
         await AppServiceProvider.DisposeAsync().ConfigureAwait(false);
+        await AppLogging.CloseAndFlushAsync().ConfigureAwait(false);
     }
 }

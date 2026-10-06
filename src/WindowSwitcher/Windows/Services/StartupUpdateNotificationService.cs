@@ -2,12 +2,14 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Serilog;
 using WindowSwitcher.Lib.Data;
 
 namespace WindowSwitcher.Windows.Services;
 
 internal sealed class StartupUpdateNotificationService
 {
+    private static readonly ILogger Logger = Log.ForContext<StartupUpdateNotificationService>();
     private readonly Window _ownerWindow;
     private readonly AppInfoWindow _appInfoWindow;
 
@@ -37,9 +39,12 @@ internal sealed class StartupUpdateNotificationService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Shutdown path.
+            // Shutdown path: the application is closing, the check is no longer needed.
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, "Startup update check failed");
+        }
     }
 
     private void ShowAppInfoWindow()

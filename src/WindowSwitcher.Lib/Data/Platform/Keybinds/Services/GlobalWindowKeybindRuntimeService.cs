@@ -1,3 +1,4 @@
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Runtime;
@@ -16,6 +17,7 @@ public sealed class GlobalWindowKeybindRuntimeService
     private readonly IGlobalKeyboardListener _globalKeyboardListener;
     private readonly IWindowKeybindManager _keybindManager;
     private readonly IWindowKeybindActivator _activator;
+    private readonly ILogger _logger;
     private readonly HashSet<KeybindModifier> _pressedModifiers = [];
     private readonly HashSet<KeybindPrimaryKey> _consumedPrimaryKeys = [];
     private KeybindFilterCatalogSnapshot _catalogSnapshot = KeybindFilterCatalogSnapshot.Empty;
@@ -29,14 +31,29 @@ public sealed class GlobalWindowKeybindRuntimeService
         IWindowKeybindManager keybindManager,
         IWindowKeybindActivator activator
     )
+        : this(
+            globalKeyboardListener,
+            keybindManager,
+            activator,
+            Log.ForContext<GlobalWindowKeybindRuntimeService>()
+        ) { }
+
+    internal GlobalWindowKeybindRuntimeService(
+        IGlobalKeyboardListener globalKeyboardListener,
+        IWindowKeybindManager keybindManager,
+        IWindowKeybindActivator activator,
+        ILogger logger
+    )
     {
         ArgumentNullException.ThrowIfNull(globalKeyboardListener);
         ArgumentNullException.ThrowIfNull(keybindManager);
         ArgumentNullException.ThrowIfNull(activator);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _globalKeyboardListener = globalKeyboardListener;
         _keybindManager = keybindManager;
         _activator = activator;
+        _logger = logger;
         _keybindManager.BindingsChanged += OnBindingsChanged;
         RefreshCatalogSnapshot();
     }
@@ -141,7 +158,11 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             await StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            // Best-effort shutdown: disposal must complete even if detaching the filter failed.
+            _logger.Debug(exception, "Window keybind runtime shutdown failed during disposal");
+        }
 
         GC.SuppressFinalize(this);
     }
@@ -188,7 +209,11 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             _ = await _activator.TryActivateTargetAsync(targetId).ConfigureAwait(false);
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            // The target id is not logged: client targets can be derived from window titles.
+            _logger.Error(exception, "Activating a keybind target failed");
+        }
     }
 
     private KeyCombination BuildCombination(KeybindPrimaryKey primaryKey)
@@ -241,7 +266,10 @@ public sealed class GlobalWindowKeybindRuntimeService
         {
             RefreshCatalogSnapshot();
         }
-        catch (Exception) { }
+        catch (Exception exception)
+        {
+            _logger.Error(exception, "Refreshing the keybind catalog after a change failed");
+        }
     }
 
     private void ThrowIfDisposed()

@@ -19,6 +19,9 @@
         <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+        <PackageReference Include="Serilog" Version="4.4.0" />
+        <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
         <PackageReference
             Include="NSIS"
             Version="2.51.0"
@@ -33,6 +36,7 @@
     <ItemGroup Condition="'$(EnableSentryTelemetry)' != 'true'">
         <Compile Remove="Diagnostics\SentryAppTelemetry.cs" />
         <Compile Remove="Diagnostics\SentrySdkAdapter.cs" />
+        <Compile Remove="Diagnostics\SentryBreadcrumbSink.cs" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.X11;
 
 namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
@@ -9,6 +9,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
 {
     private const int MaximumWindowCount = 65_536;
     private const int MaximumTitleBytes = 1_048_576;
+    private static readonly ILogger Logger = Log.ForContext<X11EwmhClient>();
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, IntPtr> _atoms = new(StringComparer.Ordinal);
     private IntPtr _display;
@@ -41,9 +42,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                 {
                     if (!_ewmhUnavailableReported)
                     {
-                        TracePlatformDiagnostics.Instance.Warning(
-                            "X11 EWMH unavailable: _NET_CLIENT_LIST is missing."
-                        );
+                        Logger.Warning("X11 EWMH unavailable: _NET_CLIENT_LIST is missing");
                         _ewmhUnavailableReported = true;
                     }
                     return null;
@@ -86,10 +85,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                             or OverflowException
                 )
             {
-                TracePlatformDiagnostics.Instance.Error(
-                    "X11 EWMH window discovery failed",
-                    exception
-                );
+                Logger.Error(exception, "X11 EWMH window discovery failed");
                 Disconnect();
                 return null;
             }
@@ -207,9 +203,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
             {
                 if (!_connectionUnavailableReported)
                 {
-                    TracePlatformDiagnostics.Instance.Warning(
-                        "X11 EWMH unavailable: the X display cannot be opened."
-                    );
+                    Logger.Warning("X11 EWMH unavailable: the X display cannot be opened");
                     _connectionUnavailableReported = true;
                 }
                 return false;
@@ -229,7 +223,7 @@ internal sealed class X11EwmhClient : IX11EwmhClient
                         or BadImageFormatException
             )
         {
-            TracePlatformDiagnostics.Instance.Error("X11 EWMH connection failed", exception);
+            Logger.Error(exception, "X11 EWMH connection failed");
         }
 
         Disconnect();

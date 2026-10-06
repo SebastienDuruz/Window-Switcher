@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json.Linq;
+using Serilog;
 using WindowSwitcher.Lib.Data.Updates.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -15,6 +16,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
     private const string ReleasesLatestEndpoint =
         "https://api.github.com/repos/SebastienDuruz/Window-Switcher/releases/latest";
     private const int MaxReleaseNotesLength = 1200;
+    private static readonly ILogger Logger = Log.ForContext<GitHubAppUpdateService>();
 
     private readonly HttpClient _httpClient;
     private readonly IUpdateLinkLauncher _updateLinkLauncher;
@@ -71,6 +73,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         }
         catch (Exception ex)
         {
+            Logger.Warning(ex, "Release feed could not be reached");
             return new UpdateCheckResult
             {
                 CurrentVersion = currentVersion,
@@ -82,6 +85,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
         {
             if (!response.IsSuccessStatusCode)
             {
+                Logger.Warning("Release feed returned HTTP {StatusCode}", (int)response.StatusCode);
                 return new UpdateCheckResult
                 {
                     CurrentVersion = currentVersion,
@@ -100,6 +104,7 @@ public sealed class GitHubAppUpdateService : IAppUpdateService
             }
             catch (Exception ex)
             {
+                Logger.Warning(ex, "Release feed payload is invalid");
                 return new UpdateCheckResult
                 {
                     CurrentVersion = currentVersion,
@@ -308,6 +313,8 @@ internal interface IUpdateLinkLauncher
 
 internal sealed class ProcessUpdateLinkLauncher : IUpdateLinkLauncher
 {
+    private static readonly ILogger Logger = Log.ForContext<ProcessUpdateLinkLauncher>();
+
     public bool TryLaunch(string launchTarget, out string? errorMessage)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(launchTarget);
@@ -328,6 +335,7 @@ internal sealed class ProcessUpdateLinkLauncher : IUpdateLinkLauncher
         }
         catch (Exception ex)
         {
+            Logger.Warning(ex, "Update target could not be launched");
             errorMessage = ex.Message;
             return false;
         }

@@ -79,6 +79,7 @@ public sealed class NativeBgraPreviewFrame : PreviewFrame
         }
         catch (OverflowException)
         {
+            // Overflowing dimensions describe an invalid frame; rejecting it is expected.
             return false;
         }
 

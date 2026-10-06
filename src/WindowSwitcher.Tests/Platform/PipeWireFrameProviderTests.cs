@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using Serilog.Events;
 using Tmds.DBus;
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire.Abstractions;
 using WindowSwitcher.Lib.Models;
+using WindowSwitcher.Tests.TestLogging;
 using Xunit;
 
 namespace WindowSwitcher.Tests.Platform;
@@ -206,7 +207,7 @@ public sealed class PipeWireFrameProviderTests
             new FakeWinAccessor(),
             new CapturePortalClient(),
             new SingleStreamFactory(stream),
-            new RecordingDiagnostics(),
+            TestLogger.Create(out _),
             cache
         );
         await using IAsyncEnumerator<PreviewFrame> frames = provider
@@ -228,6 +229,32 @@ public sealed class PipeWireFrameProviderTests
         }
 
         await stream.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task PortalFailure_LogsCaptureCreationErrorWithException()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        using var cache = new WaylandScreenCastMemoryCache();
+        await using var provider = new PipeWireFrameProvider(
+            new FakeWinAccessor(),
+            new ThrowingPortalClient(),
+            new UnusedNativeStreamFactory(),
+            TestLogger.Create(out CollectingSink sink),
+            cache
+        );
+
+        await StartStreamAsync(provider, "42");
+
+        LogEvent logEvent = Assert.Single(sink.AtLevel(LogEventLevel.Error));
+        Assert.Contains(
+            "PipeWire capture creation failed for window",
+            logEvent.RenderMessage(),
+            StringComparison.Ordinal
+        );
+        Assert.IsType<InvalidOperationException>(logEvent.Exception);
     }
 
     [Fact]
@@ -272,7 +299,7 @@ public sealed class PipeWireFrameProviderTests
             accessor,
             portal,
             new UnusedNativeStreamFactory(),
-            new RecordingDiagnostics(),
+            TestLogger.Create(out _),
             cache
         );
     }
@@ -321,6 +348,24 @@ public sealed class PipeWireFrameProviderTests
             RestoreToken = restoreToken;
             OpenSequence = Stopwatch.GetTimestamp();
             return Task.FromResult<PortalCapture?>(null);
+        }
+
+        public Task CloseAsync(string sessionPath, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public void Dispose() { }
+    }
+
+    private sealed class ThrowingPortalClient : IPipeWirePortalClient
+    {
+        public Task<PortalCapture?> OpenAsync(
+            string? restoreToken,
+            CancellationToken cancellationToken
+        )
+        {
+            return Task.FromException<PortalCapture?>(
+                new InvalidOperationException("Portal unavailable.")
+            );
         }
 
         public Task CloseAsync(string sessionPath, CancellationToken cancellationToken) =>
@@ -431,15 +476,6 @@ public sealed class PipeWireFrameProviderTests
                 "No portal capture should reach the stream factory."
             );
         }
-    }
-
-    private sealed class RecordingDiagnostics : IPlatformDiagnostics
-    {
-        public void Information(string message) { }
-
-        public void Warning(string message) { }
-
-        public void Error(string message, Exception? exception = null) { }
     }
 
     private sealed class FakeWinAccessor : WinAccessorBase

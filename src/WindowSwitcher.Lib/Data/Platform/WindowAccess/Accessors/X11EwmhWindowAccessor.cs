@@ -1,4 +1,4 @@
-using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using Serilog;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Models;
 
@@ -6,6 +6,7 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 
 internal sealed class X11EwmhWindowAccessor : WinAccessorBase
 {
+    private static readonly ILogger Logger = Log.ForContext<X11EwmhWindowAccessor>();
     private readonly IX11EwmhClient _client;
     private readonly Func<int, CancellationToken, Task<string>> _processNameResolver;
     private readonly SemaphoreSlim _operationGate = new(1, 1);
@@ -85,7 +86,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         }
         catch (Exception exception)
         {
-            TracePlatformDiagnostics.Instance.Error("X11 EWMH discovery failed", exception);
+            Logger.Error(exception, "X11 EWMH discovery failed");
             return null;
         }
         finally
@@ -172,7 +173,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         }
         catch (Exception exception)
         {
-            TracePlatformDiagnostics.Instance.Error("X11 EWMH operation failed", exception);
+            Logger.Error(exception, "X11 EWMH operation failed");
             return false;
         }
         finally
@@ -204,6 +205,12 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // The process may have exited or be owned by another user: the name stays empty.
+            Logger.Debug(
+                exception,
+                "Cannot read process name from /proc for PID {ProcessId}",
+                processId
+            );
             return string.Empty;
         }
     }

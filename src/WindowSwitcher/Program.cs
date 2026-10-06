@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using Avalonia;
+using Serilog;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data.Platform.Graphics;
 
@@ -14,13 +15,27 @@ static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        AppServiceProvider.Initialize();
         using var mutex = new Mutex(false, "{8A6F0BA4-B5B1-45fd-A8CF-71F04B6BDE8F}");
 
         // Only one instance of the app running !
-        if (mutex.WaitOne(TimeSpan.Zero, true))
+        if (!mutex.WaitOne(TimeSpan.Zero, true))
+            return;
+
+        // Logging first: services resolved below bind their loggers at construction time.
+        AppLogging.Initialize();
+        try
         {
+            AppServiceProvider.Initialize();
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception exception)
+        {
+            Log.Fatal(exception, "Window Switcher terminated unexpectedly");
+            throw;
+        }
+        finally
+        {
+            Log.CloseAndFlush();
             mutex.ReleaseMutex();
         }
     }

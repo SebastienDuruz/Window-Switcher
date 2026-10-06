@@ -18,7 +18,8 @@ public sealed class MainWindowViewModelTests
         int openKeybinds = 0;
         int openSettings = 0;
         int openAbout = 0;
-        int openDataFolder = 0;
+        int openConfigFolder = 0;
+        int openLogsFolder = 0;
         int clearConfig = 0;
         int resetConfig = 0;
         int resetAllPreviews = 0;
@@ -30,7 +31,8 @@ public sealed class MainWindowViewModelTests
             () => openKeybinds++,
             () => openSettings++,
             () => openAbout++,
-            () => openDataFolder++,
+            () => openConfigFolder++,
+            () => openLogsFolder++,
             () => clearConfig++,
             () => resetConfig++,
             () => resetAllPreviews++,
@@ -43,7 +45,8 @@ public sealed class MainWindowViewModelTests
         sut.OpenKeybindsCommand.Execute(null);
         sut.OpenSettingsCommand.Execute(null);
         sut.OpenAboutCommand.Execute(null);
-        sut.OpenDataFolderCommand.Execute(null);
+        sut.OpenConfigFolderCommand.Execute(null);
+        sut.OpenLogsFolderCommand.Execute(null);
         sut.ClearConfigCommand.Execute(null);
         sut.ResetConfigCommand.Execute(null);
         sut.ResetAllPreviewsCommand.Execute(null);
@@ -52,7 +55,8 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(1, openKeybinds);
         Assert.Equal(1, openSettings);
         Assert.Equal(1, openAbout);
-        Assert.Equal(1, openDataFolder);
+        Assert.Equal(1, openConfigFolder);
+        Assert.Equal(1, openLogsFolder);
         Assert.Equal(1, clearConfig);
         Assert.Equal(1, resetConfig);
         Assert.Equal(1, resetAllPreviews);
@@ -115,7 +119,8 @@ public sealed class MainWindowViewModelTests
         Action? openKeybinds = null,
         Action? openSettings = null,
         Action? openAbout = null,
-        Action? openDataFolder = null,
+        Action? openConfigFolder = null,
+        Action? openLogsFolder = null,
         Action? clearConfig = null,
         Action? resetConfig = null,
         Action? resetAllPreviews = null,
@@ -139,7 +144,8 @@ public sealed class MainWindowViewModelTests
             openKeybinds ?? (() => { }),
             openSettings ?? (() => { }),
             openAbout ?? (() => { }),
-            openDataFolder ?? (() => { }),
+            openConfigFolder ?? (() => { }),
+            openLogsFolder ?? (() => { }),
             clearConfig ?? (() => { }),
             resetConfig ?? (() => { }),
             canResetAllPreviews ?? (() => true),

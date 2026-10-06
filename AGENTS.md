@@ -103,7 +103,16 @@ All changes MUST compile and all tests MUST pass before submission.
 
 - All unexpected errors MUST be logged.
 - Silent failures are forbidden.
-- Logs MUST NOT contain sensitive data.
+- Logs MUST NOT contain sensitive data (no window titles, keystrokes, credentials or DSNs).
+- Logging uses Serilog through `Serilog.ILogger`. Classes receive the logger through their constructor when they are constructed by tests; `Log.ForContext<T>()` is only used as the default at composition points or in static native helpers.
+- The process-wide logger is configured first in `Program.Main` (`Hosting/AppLogging.cs`): rolling file under the platform log folder (`StaticData.LogFolder`), asynchronous writes, and a global filter that drops identical messages repeated within 30 seconds. Call sites in hot paths do not need their own throttling.
+- Message templates MUST be constant strings with named properties; pass the exception object as the first argument instead of formatting `exception.Message`.
+- Level classification:
+  - `Debug`: best-effort cleanup failures (dispose, stop during shutdown).
+  - `Information` / `Warning`: expected environment conditions (missing optional dependency, portal declined or timed out, device unavailable).
+  - `Error`: unexpected failures that leave a feature degraded.
+  - `Fatal`: unhandled exceptions.
+- An empty `catch` is only allowed for cancellation, disposal races and validation guards, and MUST carry a comment explaining why nothing is logged.
 
 ### Sentry (Error Tracking & Usage Metrics)
 - Sentry is used to capture unhandled exceptions and basic usage metrics.
@@ -111,7 +120,8 @@ All changes MUST compile and all tests MUST pass before submission.
 - All unhandled exceptions MUST be reported to Sentry.
 - Expected/user errors MUST NOT be sent as exceptions; use logging instead.
 - PII and sensitive data MUST NOT be sent to Sentry (scrub or omit).
-- Breadcrumbs SHOULD be used to provide minimal context for failures.
+- Breadcrumbs SHOULD be used to provide minimal context for failures. Log events at `Information` and above are forwarded as breadcrumbs by `SentryBreadcrumbSink`, which sends only the message template, source context, level and exception type, never property values.
+- Handled errors MUST NOT create Sentry events; only unhandled exceptions (and the existing config-load report) do.
 - Sampling SHOULD be applied when necessary to stay within free-tier limits.
 - Network failures to Sentry MUST NOT impact application behavior.
 
