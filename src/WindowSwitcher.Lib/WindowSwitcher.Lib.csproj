@@ -13,7 +13,16 @@
         <PackageReference Include="Tmds.DBus" Version="0.94.2" />
     </ItemGroup>
 
-    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <!--
+        The PipeWire native library needs a Linux toolchain and only ships with Linux targets.
+        Without RuntimeIdentifier (the usual case for this RID-agnostic project reference),
+        the host decides; WindowSwitcher.csproj drops the library from non-Linux publish output.
+    -->
+    <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux')) and ('$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('linux-')))">
+        <PipeWireNativeEnabled>true</PipeWireNativeEnabled>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(PipeWireNativeEnabled)' == 'true'">
         <PipeWireNativeSource>$(MSBuildProjectDirectory)/Data/Platform/WindowAccess/PreviewFrames/Pipewire/Native/window_switcher_pipewire.c</PipeWireNativeSource>
         <PipeWireNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''"
             >linux-x64</PipeWireNativeRuntimeIdentifier
@@ -26,7 +35,7 @@
         <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);GetPipeWireNativeBuildOutput</TargetsForTfmSpecificBuildOutput>
     </PropertyGroup>
 
-    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <ItemGroup Condition="'$(PipeWireNativeEnabled)' == 'true'">
         <None
             Include="$(PipeWireNativeOutput)"
             Link="libwindowswitcher-pipewire.so"
@@ -39,7 +48,7 @@
     <Target
         Name="ValidateLinuxRuntimeIdentifier"
         BeforeTargets="PrepareForBuild"
-        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+        Condition="'$(PipeWireNativeEnabled)' == 'true'"
     >
         <Error
             Condition="'$(PipeWireNativeRuntimeIdentifier)' != 'linux-x64'"
@@ -53,7 +62,7 @@
         DependsOnTargets="ValidateLinuxRuntimeIdentifier"
         Inputs="$(PipeWireNativeSource)"
         Outputs="$(PipeWireNativeOutput)"
-        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+        Condition="'$(PipeWireNativeEnabled)' == 'true'"
     >
         <MakeDir Directories="$(PipeWireNativeIntermediateDirectory)" />
         <Exec Command="cc -std=c17 -O2 -fPIC -fvisibility=hidden -Wall -Wextra -Werror -shared `pkg-config --cflags libpipewire-0.3` &quot;$(PipeWireNativeSource)&quot; -o &quot;$(PipeWireNativeOutput)&quot; `pkg-config --libs libpipewire-0.3` -pthread" />
@@ -64,7 +73,7 @@
         Name="GetPipeWireNativeBuildOutput"
         DependsOnTargets="BuildPipeWireNative"
         Returns="@(BuildOutput)"
-        Condition="$([MSBuild]::IsOSPlatform('Linux'))"
+        Condition="'$(PipeWireNativeEnabled)' == 'true'"
     >
         <ItemGroup>
             <BuildOutput Include="$(PipeWireNativeOutput)">

@@ -4,8 +4,7 @@
 enum TargetHost
 {
     Any,
-    Windows,
-    Linux
+    Linux,
 }
 
 /// <summary>
@@ -18,13 +17,14 @@ sealed record BuildTarget(
     string Description,
     TargetHost Host,
     IReadOnlyList<string> DependsOn,
-    Func<Task>? Execute)
+    Func<Task>? Execute
+)
 {
     /// <summary>Whether the step can run on the current operating system.</summary>
-    public bool SupportsCurrentHost => Host switch
-    {
-        TargetHost.Windows => OperatingSystem.IsWindows(),
-        TargetHost.Linux => OperatingSystem.IsLinux(),
-        _ => true
-    };
+    public bool SupportsCurrentHost =>
+        Host switch
+        {
+            TargetHost.Linux => OperatingSystem.IsLinux(),
+            _ => true,
+        };
 }

@@ -42,6 +42,23 @@
     <ItemGroup>
         <ProjectReference Include="..\WindowSwitcher.Lib\WindowSwitcher.Lib.csproj" />
     </ItemGroup>
+
+    <!--
+        On a Linux host, WindowSwitcher.Lib builds the PipeWire native library even when this
+        project is published for Windows. Keep it out of non-Linux packages.
+    -->
+    <Target
+        Name="ExcludePipeWireNativeFromNonLinuxPublish"
+        AfterTargets="ComputeResolvedFilesToPublishList"
+        Condition="'$(RuntimeIdentifier)' != '' and !$(RuntimeIdentifier.StartsWith('linux-'))"
+    >
+        <ItemGroup>
+            <ResolvedFileToPublish
+                Remove="@(ResolvedFileToPublish)"
+                Condition="'%(Filename)%(Extension)' == 'libwindowswitcher-pipewire.so'"
+            />
+        </ItemGroup>
+    </Target>
     <ItemGroup>
         <AvaloniaResource Include="Assets\WS_logo.ico" />
         <AvaloniaResource Include="Assets\WS_logo.png" />

@@ -5,7 +5,7 @@ using System.Xml.Linq;
 
 /// <summary>
 /// Packaging build entrypoint for Window Switcher.
-/// Produces a Windows NSIS installer on Windows and an AppImage on Linux.
+/// Produces the Windows NSIS installer on Windows or Linux, and the AppImage on Linux.
 /// </summary>
 sealed class Build
 {
@@ -57,13 +57,13 @@ sealed class Build
             new("ValidateParameters", "Validates the supported runtime identifiers.", TargetHost.Any, [], Synchronous(ValidateParameters)),
             new("Restore", "Restores the application dependencies.", TargetHost.Any, ["ValidateParameters"], Synchronous(Restore)),
             new("Compile", "Builds the application project.", TargetHost.Any, ["Restore"], Synchronous(Compile)),
-            new("PublishWindows", "Publishes the application for the Windows runtime.", TargetHost.Windows, ["Compile"], Synchronous(PublishWindows)),
-            new("Installer", "Builds the NSIS installer from the Windows publish output.", TargetHost.Windows, ["PublishWindows"], Synchronous(BuildInstaller)),
+            new("PublishWindows", "Publishes the application for the Windows runtime.", TargetHost.Any, ["Compile"], Synchronous(PublishWindows)),
+            new("Installer", "Builds the NSIS installer from the Windows publish output.", TargetHost.Any, ["PublishWindows"], Synchronous(BuildInstaller)),
             new("PublishLinux", "Publishes the application for the Linux runtime.", TargetHost.Linux, ["Compile"], Synchronous(PublishLinux)),
             new("AppImage", "Packages the AppImage and its zsync file from the Linux publish output.", TargetHost.Linux, ["PublishLinux"], PackageAppImageAsync),
-            new("WindowsArtifacts", "Produces the Windows artifacts.", TargetHost.Windows, ["Installer"], null),
+            new("WindowsArtifacts", "Produces the Windows artifacts.", TargetHost.Any, ["Installer"], null),
             new("LinuxArtifacts", "Produces the Linux artifacts.", TargetHost.Linux, ["AppImage"], null),
-            new("Artifacts", "Produces the artifacts for the current host (default).", TargetHost.Any, ["WindowsArtifacts", "LinuxArtifacts"], null),
+            new("Artifacts", "Produces every artifact the current host can build (default).", TargetHost.Any, ["WindowsArtifacts", "LinuxArtifacts"], null),
         ];
     }
 
@@ -164,6 +164,13 @@ sealed class Build
     {
         PublishForRuntime(options.WindowsRuntime, EffectiveWindowsPublishDir);
         AssertPublishOutputNotEmpty(EffectiveWindowsPublishDir);
+
+        var publishedExecutable = Path.Combine(EffectiveWindowsPublishDir, "WindowSwitcher.exe");
+        var linuxOnlyLibrary = Path.Combine(EffectiveWindowsPublishDir, "libwindowswitcher-pipewire.so");
+        Ensure(File.Exists(publishedExecutable), $"Published binary not found at: {publishedExecutable}");
+        Ensure(
+            !File.Exists(linuxOnlyLibrary),
+            $"Linux-only PipeWire library must not be part of the Windows publish output: {linuxOnlyLibrary}");
     }
 
     /// <summary>
@@ -281,7 +288,7 @@ sealed class Build
     }
 
     /// <summary>
-    /// Resolves makensis from an explicit path or from PATH.
+    /// Resolves makensis from an explicit path, from PATH, or on Windows from the restored NSIS NuGet package.
     /// </summary>
     string ResolveMakensis()
     {
@@ -294,6 +301,10 @@ sealed class Build
         var discovered = FindExecutableOnPath("makensis");
         if (!string.IsNullOrWhiteSpace(discovered))
             return discovered;
+
+        Ensure(
+            OperatingSystem.IsWindows(),
+            "Missing dependency: 'makensis'. Install NSIS with the system package manager (package 'nsis') or pass --makensis-path.");
 
         var nuGetTool = FindNuGetPackageTool("NSIS", "makensis.exe", AppProjectPath);
         Ensure(
