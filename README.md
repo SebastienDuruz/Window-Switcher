@@ -335,11 +335,11 @@ dotnet build Window-Switcher.slnx -p:EnableSentryTelemetry=false
 # Make
 make build SENTRY_TELEMETRY=false
 
-# Nuke packaging
+# Packaging build
 ./build/build.sh --target AppImage --enable-sentry-telemetry false
 ```
 
-On Windows, the equivalent Nuke option is:
+On Windows, the equivalent packaging option is:
 
 ```powershell
 ./build/build.cmd --target Installer --enable-sentry-telemetry false
@@ -419,7 +419,7 @@ Window-Switcher/
 ├── src/WindowSwitcher/          Avalonia desktop UI
 ├── src/WindowSwitcher.Lib/      Platform and application services
 ├── src/WindowSwitcher.Tests/    Unit and integration tests
-├── build/                       Nuke build and packaging project
+├── build/                       C# packaging build project
 ├── docs/                        Screenshots and documentation assets
 ├── Directory.Build.props        Shared version and build properties
 ├── Makefile                     Common development commands
@@ -460,7 +460,7 @@ All contributions must follow the engineering rules in [`AGENTS.md`](AGENTS.md),
 
 ## Packaging
 
-Nuke is the release-artifact entry point. Packaging is host-specific: build Windows installers on Windows and AppImages on Linux.
+The release artifacts are produced by a small C# console project in `build/` (`_build.csproj`), started through `build/build.sh` on Linux and `build/build.cmd` on Windows. It has no build framework dependency: each target runs its dependencies first, then itself. Packaging is host-specific: build Windows installers on Windows and AppImages on Linux; targets for the other host are skipped.
 
 ### Targets
 
@@ -470,7 +470,7 @@ Nuke is the release-artifact entry point. Packaging is host-specific: build Wind
 | `Compile` | Windows or Linux | Compiled application |
 | `Installer` | Windows | `build/artifacts/installer/WindowSwitcher-setup-<version>-<x86_64\|arm64>.exe` |
 | `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-x86_64.AppImage` and matching `.AppImage.zsync` |
-| `Artifacts` | Windows or Linux | Artifact appropriate for the current host |
+| `Artifacts` | Windows or Linux | Artifact appropriate for the current host (default target) |
 
 ### Commands
 
@@ -488,6 +488,9 @@ Nuke is the release-artifact entry point. Packaging is host-specific: build Wind
 
 # Artifact for the current host
 ./build/build.sh --target Artifacts
+
+# List targets and options
+./build/build.sh --help
 ```
 
 Useful options:

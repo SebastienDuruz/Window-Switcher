@@ -5,8 +5,8 @@ SENTRY_TELEMETRY ?= true
 TELEMETRY_DISTRIBUTION_CHANNEL ?= source
 TELEMETRY_PACKAGE_KIND ?= unpackaged
 MSBUILD_SENTRY_PROPERTY := -p:EnableSentryTelemetry=$(SENTRY_TELEMETRY) -p:TelemetryDistributionChannel=$(TELEMETRY_DISTRIBUTION_CHANNEL) -p:TelemetryPackageKind=$(TELEMETRY_PACKAGE_KIND)
-NUKE_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
-NUKE_TELEMETRY_ARGUMENTS := $(NUKE_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
+BUILD_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
+BUILD_TELEMETRY_ARGUMENTS := $(BUILD_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
 BUILD_SCRIPT := ./build/build.sh
 
 .PHONY: help restore build run test test-no-build clean format format-check artifacts appimage
@@ -22,7 +22,7 @@ help:
 	@echo "  make clean         Clean the solution"
 	@echo "  make format        Format source with CSharpier"
 	@echo "  make format-check  Check source formatting with CSharpier"
-	@echo "  make appimage      Build the Linux AppImage with Nuke"
+	@echo "  make appimage      Build the Linux AppImage with the packaging build"
 	@echo ""
 	@echo "Set SENTRY_TELEMETRY=false to compile without Sentry."
 	@echo "Set TELEMETRY_DISTRIBUTION_CHANNEL and TELEMETRY_PACKAGE_KIND to label packaged builds."
@@ -55,4 +55,4 @@ format-check:
 	dotnet csharpier check .
 
 appimage:
-	$(BUILD_SCRIPT) --target AppImage $(NUKE_TELEMETRY_ARGUMENTS)
+	$(BUILD_SCRIPT) --target AppImage $(BUILD_TELEMETRY_ARGUMENTS)
