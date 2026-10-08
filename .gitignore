@@ -33,6 +33,5 @@ WindowSwitcherWinSetup/.vs/WindowSwitcherWinSetup/v17/.suo
 .vs/ProjectEvaluation/window-switcher.metadata.v9.bin
 /artifacts
 /build/artifacts
-.nuke/temp/
 *.user
 .vscode/settings.json
