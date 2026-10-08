@@ -117,7 +117,9 @@ sealed class BuildOptions
         if (values.Count > 0)
         {
             var unknownOptions = string.Join(", ", values.Keys.Select(name => $"--{name}"));
-            throw new BuildFailedException($"Unknown option(s): {unknownOptions}. Run with --help to list options.");
+            throw new BuildFailedException(
+                $"Unknown option(s): {unknownOptions}. Run with --help to list options."
+            );
         }
 
         return options;
@@ -135,8 +137,11 @@ sealed class BuildOptions
             var name = argument switch
             {
                 "-h" => "help",
-                _ when argument.StartsWith("--", StringComparison.Ordinal) && argument.Length > 2 => argument[2..],
-                _ => throw new BuildFailedException($"Unexpected argument: {argument}. Options must start with '--'.")
+                _ when argument.StartsWith("--", StringComparison.Ordinal) && argument.Length > 2 =>
+                    argument[2..],
+                _ => throw new BuildFailedException(
+                    $"Unexpected argument: {argument}. Options must start with '--'."
+                ),
             };
 
             var hasValue = index + 1 < arguments.Count && !arguments[index + 1].StartsWith('-');

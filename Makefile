@@ -9,7 +9,7 @@ BUILD_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
 BUILD_TELEMETRY_ARGUMENTS := $(BUILD_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
 BUILD_SCRIPT := ./build/build.sh
 
-.PHONY: help restore build run test test-no-build clean format format-check artifacts appimage
+.PHONY: help restore build run test test-no-build clean format format-check artifacts appimage installer
 
 help:
 	@echo "Window Switcher development commands"
@@ -23,6 +23,8 @@ help:
 	@echo "  make format        Format source with CSharpier"
 	@echo "  make format-check  Check source formatting with CSharpier"
 	@echo "  make appimage      Build the Linux AppImage with the packaging build"
+	@echo "  make installer     Build the Windows installer (requires makensis)"
+	@echo "  make artifacts     Build every artifact the current host supports"
 	@echo ""
 	@echo "Set SENTRY_TELEMETRY=false to compile without Sentry."
 	@echo "Set TELEMETRY_DISTRIBUTION_CHANNEL and TELEMETRY_PACKAGE_KIND to label packaged builds."
@@ -56,3 +58,9 @@ format-check:
 
 appimage:
 	$(BUILD_SCRIPT) --target AppImage $(BUILD_TELEMETRY_ARGUMENTS)
+
+installer:
+	$(BUILD_SCRIPT) --target Installer $(BUILD_TELEMETRY_ARGUMENTS)
+
+artifacts:
+	$(BUILD_SCRIPT) --target Artifacts $(BUILD_TELEMETRY_ARGUMENTS)

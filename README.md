@@ -442,7 +442,9 @@ Run commands from the repository root:
 | `make clean` | `dotnet clean Window-Switcher.slnx` | Clean build outputs. |
 | `make format` | `dotnet csharpier format .` | Format the repository. |
 | `make format-check` | `dotnet csharpier check .` | Check formatting without changing files. |
-| `make appimage` | — | Build the AppImage on Linux. |
+| `make appimage` | `./build/build.sh --target AppImage` | Build the AppImage on Linux. |
+| `make installer` | `./build/build.sh --target Installer` | Build the Windows installer (requires `makensis`). |
+| `make artifacts` | `./build/build.sh --target Artifacts` | Build every artifact the current host supports. |
 
 The application version is defined once as `WindowSwitcherVersion` in `Directory.Build.props`.
 
@@ -460,7 +462,7 @@ All contributions must follow the engineering rules in [`AGENTS.md`](AGENTS.md),
 
 ## Packaging
 
-The release artifacts are produced by a small C# console project in `build/` (`_build.csproj`), started through `build/build.sh` on Linux and `build/build.cmd` on Windows. It has no build framework dependency: each target runs its dependencies first, then itself. Packaging is host-specific: build Windows installers on Windows and AppImages on Linux; targets for the other host are skipped.
+The release artifacts are produced by a small C# console project in `build/` (`_build.csproj`), started through `build/build.sh` on Linux and `build/build.cmd` on Windows. It has no build framework dependency: each target runs its dependencies first, then itself. A Linux host builds both the AppImage and the Windows installer; a Windows host builds the installer only, because the AppImage needs a Linux toolchain (PipeWire native library, `appimagetool`). Targets the current host cannot build are skipped.
 
 ### Targets
 
@@ -468,9 +470,9 @@ The release artifacts are produced by a small C# console project in `build/` (`_
 | --- | --- | --- |
 | `Restore` | Windows or Linux | Restored project dependencies |
 | `Compile` | Windows or Linux | Compiled application |
-| `Installer` | Windows | `build/artifacts/installer/WindowSwitcher-setup-<version>-<x86_64\|arm64>.exe` |
+| `Installer` | Windows or Linux | `build/artifacts/installer/WindowSwitcher-setup-<version>-<x86_64\|arm64>.exe` |
 | `AppImage` | Linux | `build/artifacts/appimage/WindowSwitcher-<version>-x86_64.AppImage` and matching `.AppImage.zsync` |
-| `Artifacts` | Windows or Linux | Artifact appropriate for the current host (default target) |
+| `Artifacts` | Windows or Linux | Installer and, on Linux, AppImage (default target) |
 
 ### Commands
 
@@ -486,7 +488,10 @@ The release artifacts are produced by a small C# console project in `build/` (`_
 # Linux AppImage
 ./build/build.sh --target AppImage
 
-# Artifact for the current host
+# Windows installer, built from Linux
+./build/build.sh --target Installer
+
+# AppImage and Windows installer
 ./build/build.sh --target Artifacts
 
 # List targets and options
@@ -501,7 +506,7 @@ Useful options:
 - `--makensis-path <path>` selects a specific NSIS compiler.
 - `--self-contained false` publishes a framework-dependent build that requires the .NET 10 runtime on the target machine. Packaged builds are self-contained by default, and the AppImage target rejects framework-dependent output.
 
-On Windows, the installer target uses the restored NSIS NuGet package when available and otherwise requires `makensis` from an installed NSIS distribution. NSIS is not restored on non-Windows hosts. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime and GitHub Releases update information for AppImageUpdate-compatible delta updates.
+The installer target uses `makensis` from `PATH`. On Windows it falls back to the restored NSIS NuGet package; on Linux, install the distribution `nsis` package (the NuGet package is not restored on non-Windows hosts). When the Windows installer is built on Linux, the Linux-only PipeWire native library is excluded from the Windows publish output. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime and GitHub Releases update information for AppImageUpdate-compatible delta updates.
 
 Publish both the versioned `.AppImage` and its matching `.AppImage.zsync` as GitHub Release assets. The embedded `gh-releases-zsync` feed resolves the latest stable release using the `WindowSwitcher-*-x86_64.AppImage.zsync` asset pattern.
 
