@@ -19,4 +19,10 @@ public interface IFloatingPreviewPolicy
     /// Indicates whether screenshot refresh should be forced when preview loses focus.
     /// </summary>
     bool RefreshScreenshotWhenDeselected { get; }
+
+    /// <summary>
+    /// Indicates whether the floating window keeps the platform window border.
+    /// When <see langword="false"/>, the window is undecorated so its bounds match the preview.
+    /// </summary>
+    bool UseWindowBorder { get; }
 }

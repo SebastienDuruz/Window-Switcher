@@ -120,6 +120,11 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
 
         WindowLabel.Content = WindowConfig.ShortWindowTitle;
 
+        // Avalonia draws its own shadow and frame around BorderOnly windows on X11/XWayland,
+        // which shows up as a black margin around the preview; resizing is handled by the canvas.
+        if (!_floatingPreviewPolicy.UseWindowBorder)
+            WindowDecorations = WindowDecorations.None;
+
         WindowScreenshot.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
         DmaBufPreview.IsVisible = _floatingPreviewPolicy.ShowScreenshotControl;
         FloatingWindowContextMenu.Items.Add(
