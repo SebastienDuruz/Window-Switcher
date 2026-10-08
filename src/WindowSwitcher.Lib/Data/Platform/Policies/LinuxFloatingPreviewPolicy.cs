@@ -12,4 +12,6 @@ public sealed class LinuxFloatingPreviewPolicy : IFloatingPreviewPolicy
     public bool ShowScreenshotControl => true;
 
     public bool RefreshScreenshotWhenDeselected => true;
+
+    public bool UseWindowBorder => false;
 }

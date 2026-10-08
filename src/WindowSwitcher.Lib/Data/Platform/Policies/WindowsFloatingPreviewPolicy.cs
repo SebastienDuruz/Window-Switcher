@@ -12,4 +12,6 @@ public sealed class WindowsFloatingPreviewPolicy : IFloatingPreviewPolicy
     public bool ShowScreenshotControl => false;
 
     public bool RefreshScreenshotWhenDeselected => false;
+
+    public bool UseWindowBorder => true;
 }

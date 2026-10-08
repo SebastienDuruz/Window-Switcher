@@ -13,11 +13,13 @@ public sealed class PlatformPoliciesTests
         Assert.False(linuxPolicy.UseNativeThumbnailPreview);
         Assert.True(linuxPolicy.ShowScreenshotControl);
         Assert.True(linuxPolicy.RefreshScreenshotWhenDeselected);
+        Assert.False(linuxPolicy.UseWindowBorder);
 
         var windowsPolicy = new WindowsFloatingPreviewPolicy();
         Assert.True(windowsPolicy.UseNativeThumbnailPreview);
         Assert.False(windowsPolicy.ShowScreenshotControl);
         Assert.False(windowsPolicy.RefreshScreenshotWhenDeselected);
+        Assert.True(windowsPolicy.UseWindowBorder);
     }
 
     [Fact]
