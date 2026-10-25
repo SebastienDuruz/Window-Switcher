@@ -16,6 +16,18 @@ public enum LinuxSessionKind
 }
 
 /// <summary>
+/// Identifies the Linux desktop environments that have a dedicated integration.
+/// </summary>
+public enum LinuxDesktopKind
+{
+    /// <summary>KDE Plasma, whose KWin compositor accepts scripts over D-Bus.</summary>
+    Kde,
+
+    /// <summary>Any other desktop environment, or none.</summary>
+    Other,
+}
+
+/// <summary>
 /// Detects the active Linux display session without invoking external commands.
 /// </summary>
 public static class LinuxSessionDetector
@@ -39,6 +51,34 @@ public static class LinuxSessionDetector
             LinuxSessionKind.Wayland => "wayland",
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Gets the active Linux desktop environment kind.
+    /// </summary>
+    public static LinuxDesktopKind GetDesktopKind()
+    {
+        return DetectDesktop(Environment.GetEnvironmentVariable, OperatingSystem.IsLinux());
+    }
+
+    internal static LinuxDesktopKind DetectDesktop(
+        Func<string, string?> environmentResolver,
+        bool isLinux
+    )
+    {
+        ArgumentNullException.ThrowIfNull(environmentResolver);
+        if (!isLinux)
+            return LinuxDesktopKind.Other;
+
+        // XDG_CURRENT_DESKTOP is a colon-separated list such as "KDE" or "ubuntu:GNOME".
+        string currentDesktop = Normalize(environmentResolver("XDG_CURRENT_DESKTOP"));
+        foreach (string desktop in currentDesktop.Split(':', StringSplitOptions.TrimEntries))
+        {
+            if (string.Equals(desktop, "kde", StringComparison.Ordinal))
+                return LinuxDesktopKind.Kde;
+        }
+
+        return LinuxDesktopKind.Other;
     }
 
     internal static LinuxSessionKind Detect(Func<string, string?> environmentResolver, bool isLinux)

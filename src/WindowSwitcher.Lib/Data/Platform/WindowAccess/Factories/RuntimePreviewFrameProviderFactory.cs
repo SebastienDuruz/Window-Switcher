@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
@@ -117,10 +118,17 @@ public sealed class RuntimePreviewFrameProviderFactory(
         bool available = hasLibPipeWire && hasNativeAdapter;
         string? failure = failures.Count == 0 ? null : string.Join(' ', failures);
 
+        string windowBackend = (hasXWayland, accessor is CompositeWinAccessor) switch
+        {
+            (true, true) => "EWMH (XWayland) + KWin script",
+            (false, true) => "KWin script",
+            (true, false) => "EWMH (XWayland)",
+            (false, false) => "Unavailable",
+        };
         _capabilityStatus.Update(
             new PlatformCapabilitySnapshot(
                 session,
-                hasXWayland ? "EWMH (XWayland)" : "Unavailable",
+                windowBackend,
                 available ? "PipeWire" : "None",
                 available,
                 failure

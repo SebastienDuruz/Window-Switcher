@@ -14,7 +14,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
     private volatile bool _disposed;
 
     public X11EwmhWindowAccessor()
-        : this(new X11EwmhClient(), ReadProcessNameAsync) { }
+        : this(new X11EwmhClient(), LinuxProcessNameReader.ReadAsync) { }
 
     internal X11EwmhWindowAccessor(
         IX11EwmhClient client,
@@ -23,7 +23,7 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
     {
         ArgumentNullException.ThrowIfNull(client);
         _client = client;
-        _processNameResolver = processNameResolver ?? ReadProcessNameAsync;
+        _processNameResolver = processNameResolver ?? LinuxProcessNameReader.ReadAsync;
     }
 
     public override async Task<IReadOnlyCollection<WindowConfig>?> TryGetWindowsAsync(
@@ -179,39 +179,6 @@ internal sealed class X11EwmhWindowAccessor : WinAccessorBase
         finally
         {
             _operationGate.Release();
-        }
-    }
-
-    private static async Task<string> ReadProcessNameAsync(
-        int processId,
-        CancellationToken cancellationToken
-    )
-    {
-        if (processId <= 0)
-            return string.Empty;
-
-        try
-        {
-            string processName = await File.ReadAllTextAsync(
-                    $"/proc/{processId}/comm",
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            return processName.Trim();
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // The process may have exited or be owned by another user: the name stays empty.
-            Logger.Debug(
-                exception,
-                "Cannot read process name from /proc for PID {ProcessId}",
-                processId
-            );
-            return string.Empty;
         }
     }
 }

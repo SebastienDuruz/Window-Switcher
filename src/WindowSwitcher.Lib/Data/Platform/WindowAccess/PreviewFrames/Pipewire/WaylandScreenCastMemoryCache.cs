@@ -3,13 +3,65 @@ namespace WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 internal sealed class WaylandScreenCastMemoryCache : IDisposable
 {
     private const string RestoreTokenPrefix = "wayland_restore_token:";
+
+    // Window identifiers change on every run, so only title-based keys are worth persisting.
+    private const string VolatileRestoreKeyPrefix = "window:";
+    private readonly IScreenCastRestoreTokenStore? _store;
+    private readonly SemaphoreSlim _persistGate = new(1, 1);
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, string> _tokensByAlias = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _aliasesByToken = new(
         StringComparer.Ordinal
     );
 
-    internal static WaylandScreenCastMemoryCache Shared { get; } = new();
+    internal WaylandScreenCastMemoryCache() { }
+
+    internal WaylandScreenCastMemoryCache(IScreenCastRestoreTokenStore store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        _store = store;
+        foreach ((string restoreKey, string restoreToken) in store.Load())
+        {
+            if (!string.IsNullOrWhiteSpace(restoreKey) && !string.IsNullOrWhiteSpace(restoreToken))
+                SetRestoreToken([restoreKey], restoreToken);
+        }
+    }
+
+    /// <summary>
+    /// Writes the persistable restore tokens to the store, when the cache has one.
+    /// </summary>
+    internal async Task PersistAsync(CancellationToken cancellationToken)
+    {
+        if (_store is null)
+            return;
+
+        // The gate keeps an older snapshot from being written after a newer one.
+        await _persistGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            Dictionary<string, string> tokens;
+            lock (_syncRoot)
+            {
+                tokens = _tokensByAlias
+                    .Select(entry =>
+                        (RestoreKey: entry.Key[RestoreTokenPrefix.Length..], Token: entry.Value)
+                    )
+                    .Where(entry =>
+                        !entry.RestoreKey.StartsWith(
+                            VolatileRestoreKeyPrefix,
+                            StringComparison.Ordinal
+                        )
+                    )
+                    .ToDictionary(entry => entry.RestoreKey, entry => entry.Token, StringComparer.Ordinal);
+            }
+
+            await _store.SaveAsync(tokens, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _persistGate.Release();
+        }
+    }
 
     internal string? TakeRestoreToken(IReadOnlyList<string> restoreKeys)
     {

@@ -58,7 +58,9 @@ internal sealed class PipeWireFrameProvider
             new PipeWirePortalClient(Log.ForContext<PipeWirePortalClient>()),
             new PipeWireNativeStreamFactory(),
             Log.ForContext<PipeWireFrameProvider>(),
-            WaylandScreenCastMemoryCache.Shared
+            new WaylandScreenCastMemoryCache(
+                new ConfigScreenCastRestoreTokenStore(ConfigFileAccessor.GetInstance())
+            )
         ) { }
 
     internal PipeWireFrameProvider(
@@ -181,7 +183,8 @@ internal sealed class PipeWireFrameProvider
         if (string.IsNullOrWhiteSpace(windowId))
             return;
 
-        _restoreTokenCache.ClearRestoreToken([$"window:{windowId.Trim().ToLowerInvariant()}"]);
+        if (_restoreTokenCache.ClearRestoreToken([$"window:{windowId.Trim().ToLowerInvariant()}"]))
+            _ = PersistRestoreTokensAsync();
         ForgetWindow(windowId);
     }
 
@@ -201,6 +204,7 @@ internal sealed class PipeWireFrameProvider
         }
 
         _restoreTokenCache.Clear();
+        _ = PersistRestoreTokensAsync();
         foreach (string windowId in windowIds)
             ForgetWindow(windowId);
     }
@@ -354,8 +358,11 @@ internal sealed class PipeWireFrameProvider
             if (portalCapture is null)
                 return null;
 
-            if (!string.IsNullOrWhiteSpace(portalCapture.RestoreToken))
-                _restoreTokenCache.SetRestoreToken(restoreKeys, portalCapture.RestoreToken);
+            if (
+                !string.IsNullOrWhiteSpace(portalCapture.RestoreToken)
+                && _restoreTokenCache.SetRestoreToken(restoreKeys, portalCapture.RestoreToken)
+            )
+                await PersistRestoreTokensAsync().ConfigureAwait(false);
 
             IPipeWireNativeStream? stream = await _streamFactory
                 .CreateAsync(
@@ -549,6 +556,18 @@ internal sealed class PipeWireFrameProvider
         catch (Exception exception)
         {
             _logger.Error(exception, "Portal session {SessionPath} cleanup failed", sessionPath);
+        }
+    }
+
+    private async Task PersistRestoreTokensAsync()
+    {
+        try
+        {
+            await _restoreTokenCache.PersistAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger.Error(exception, "ScreenCast restore tokens could not be saved");
         }
     }
 

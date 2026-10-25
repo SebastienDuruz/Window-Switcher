@@ -44,4 +44,35 @@ public sealed class LinuxSessionDetectorTests
 
         Assert.Equal(LinuxSessionKind.Unsupported, actual);
     }
+
+    [Theory]
+    [InlineData("KDE", LinuxDesktopKind.Kde)]
+    [InlineData(" kde ", LinuxDesktopKind.Kde)]
+    [InlineData("custom:KDE", LinuxDesktopKind.Kde)]
+    [InlineData("ubuntu:GNOME", LinuxDesktopKind.Other)]
+    [InlineData("KDEX", LinuxDesktopKind.Other)]
+    [InlineData(null, LinuxDesktopKind.Other)]
+    public void DetectDesktop_RecognizesKdeInCurrentDesktopList(
+        string? currentDesktop,
+        LinuxDesktopKind expected
+    )
+    {
+        LinuxDesktopKind actual = LinuxSessionDetector.DetectDesktop(
+            variable => variable == "XDG_CURRENT_DESKTOP" ? currentDesktop : null,
+            isLinux: true
+        );
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void DetectDesktop_ReturnsOtherOutsideLinux()
+    {
+        LinuxDesktopKind actual = LinuxSessionDetector.DetectDesktop(
+            _ => throw new InvalidOperationException(),
+            isLinux: false
+        );
+
+        Assert.Equal(LinuxDesktopKind.Other, actual);
+    }
 }

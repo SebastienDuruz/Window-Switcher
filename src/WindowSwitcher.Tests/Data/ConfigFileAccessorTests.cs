@@ -1,6 +1,7 @@
 using System.Reflection;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Models;
 using Xunit;
 
@@ -104,6 +105,44 @@ public sealed class ConfigFileAccessorTests
             WindowKeybindShortcut shortcut = Assert.Single(keybindTarget.Shortcuts);
             Assert.True(shortcut.Combination.Ctrl);
             Assert.Equal(KeybindPrimaryKey.A, shortcut.Combination.Key);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public async Task ScreenCastRestoreTokens_AreNormalizedAndSurviveReload()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            const string persistedJson = """
+                {
+                  "ScreenCastRestoreTokens": {
+                    "title:calculator": "token-a",
+                    "title:empty": "",
+                    " ": "token-b"
+                  }
+                }
+                """;
+            File.WriteAllText(Path.Combine(dataFolder, "config.json"), persistedJson);
+            var sut = CreateAccessor(dataFolder);
+            var store = new ConfigScreenCastRestoreTokenStore(sut);
+
+            KeyValuePair<string, string> loaded = Assert.Single(store.Load());
+            Assert.Equal("title:calculator", loaded.Key);
+
+            await store.SaveAsync(
+                new Dictionary<string, string> { ["title:editor"] = "token-c" },
+                CancellationToken.None
+            );
+            var reloaded = new ConfigScreenCastRestoreTokenStore(CreateAccessor(dataFolder));
+
+            KeyValuePair<string, string> persisted = Assert.Single(reloaded.Load());
+            Assert.Equal("title:editor", persisted.Key);
+            Assert.Equal("token-c", persisted.Value);
         }
         finally
         {
