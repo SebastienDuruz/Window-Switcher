@@ -28,4 +28,7 @@ public class ConfigFile
 
     // Global keybinds by stable window target
     public List<WindowKeybindTargetConfig> WindowKeybindTargets { get; set; } = [];
+
+    // Wayland ScreenCast portal restore tokens by restore key
+    public Dictionary<string, string> ScreenCastRestoreTokens { get; set; } = [];
 }

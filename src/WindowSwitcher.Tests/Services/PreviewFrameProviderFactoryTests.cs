@@ -1,6 +1,7 @@
 using WindowSwitcher.Lib.Data.Platform.Commands.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Diagnostics;
+using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Factories;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.NoOp;
@@ -79,6 +80,27 @@ public sealed class PreviewFrameProviderFactoryTests
         Assert.DoesNotContain("libwindowswitcher-pipewire.so", dependencies.ReportedMissing);
         Assert.Equal("EWMH (XWayland)", capabilities.Current.WindowBackend);
         Assert.False(capabilities.Current.PreviewAvailable);
+    }
+
+    [Fact]
+    public void Create_ReportsKWinWindowBackendForCompositeAccessor()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var capabilities = new PlatformCapabilityStatus();
+        var factory = CreateFactory(
+            LinuxSessionKind.Wayland,
+            supportsX11: true,
+            supportsPipeWire: false,
+            supportsNativeAdapter: true,
+            capabilities: capabilities
+        );
+        using var accessor = new CompositeWinAccessor(new FakeWinAccessor(), new FakeWinAccessor());
+
+        using var provider = factory.Create(accessor);
+
+        Assert.Equal("EWMH (XWayland) + KWin script", capabilities.Current.WindowBackend);
     }
 
     [Fact]

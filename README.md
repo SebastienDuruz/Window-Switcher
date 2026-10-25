@@ -55,15 +55,17 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 | --- | --- | --- | --- | --- |
 | Windows | Native Windows APIs | DWM thumbnails | Low-level keyboard hook | Supported |
 | Linux on X11 | Native EWMH | XComposite/XDamage | evdev + `uinput`; permissions required | Supported |
-| Linux on Wayland | Native EWMH; **XWayland windows only** | PipeWire through the XDG ScreenCast portal | evdev + `uinput`; permissions required | Partially supported |
+| Linux on Wayland (KDE Plasma) | Native EWMH for XWayland windows; KWin scripts for native Wayland windows | PipeWire through the XDG ScreenCast portal | evdev + `uinput`; permissions required | Supported |
+| Linux on Wayland (other desktops) | Native EWMH; **XWayland windows only** | PipeWire through the XDG ScreenCast portal | evdev + `uinput`; permissions required | Partially supported |
 | macOS | — | — | — | Not implemented |
 
 ### Known limitations
 
-- Native Wayland windows cannot be discovered or switched. Applications running through XWayland, including many Wine/Proton games, can be used.
+- Outside KDE Plasma, native Wayland windows cannot be discovered or switched. Applications running through XWayland, including many Wine/Proton games, can be used.
+- On KDE Plasma, native Wayland windows are listed and activated through KWin scripts but cannot be renamed.
 - Fullscreen applications are not supported.
 - Linux global shortcuts are optional and remain unavailable until the user can read `/dev/input/event*` and write to `/dev/uinput` or `/dev/input/uinput`.
-- Wayland preview capture may show a desktop portal selection prompt.
+- Wayland preview capture shows a desktop portal selection prompt the first time a window is previewed. Pick the window that matches the preview: the portal cannot target a window on its own. The selection is remembered across restarts while the window title stays the same.
 - Linux previews use the same 20 FPS target for every window. The active-window highlight does not change capture cadence.
 
 The application still runs when optional preview or keyboard dependencies are unavailable. Open `Help > About` to see the active preview mode and dependency status.
@@ -129,7 +131,7 @@ Position and size are saved per window key and restored on a later launch. Use `
 
 The highlight follows the client activated through a preview or global keybind, making the currently active target easy to identify.
 
-On Wayland, use `Config > Reset all previews` if you need to discard existing portal capture selections and choose them again. This command is shown only when the active preview provider supports selection reset.
+On Wayland, use `Config > Reset all previews` if you need to discard existing portal capture selections and choose them again. This command is shown only when the active preview provider supports selection reset. Selections saved in the configuration file are removed as well.
 
 ### Configure global keybinds
 
@@ -214,7 +216,7 @@ Window discovery, focus, and renaming use the X11 EWMH protocol directly. Waylan
 
 Package names and portal backends vary by distribution and desktop environment. KDE commonly uses `xdg-desktop-portal-kde`, while GNOME commonly uses `xdg-desktop-portal-gnome` in addition to the base portal package.
 
-On Wayland, EWMH can enumerate only XWayland windows. Installing more portal packages does not enable native Wayland window discovery.
+On Wayland, EWMH can enumerate only XWayland windows. On KDE Plasma, native Wayland windows are listed and activated by loading a small script into KWin over D-Bus (`org.kde.KWin /Scripting`); no extra package or permission is needed. Other desktops do not offer an equivalent interface, and installing more portal packages does not enable native Wayland window discovery there.
 
 ### Linux preview rendering
 
@@ -352,7 +354,8 @@ On Windows, the equivalent packaging option is:
 1. Confirm that at least one non-empty entry exists under `Config > Filters > Prefixes`.
 2. Check that the window title contains that entry and is not an exact blacklist match.
 3. On Linux, confirm that the desktop window manager exposes the EWMH `_NET_CLIENT_LIST` property and that the target is an X11 or XWayland window.
-4. On Wayland, confirm that the target application is using XWayland. Native Wayland windows are not discoverable.
+4. On Wayland outside KDE Plasma, confirm that the target application is using XWayland. Native Wayland windows are only discoverable on KDE Plasma.
+5. On KDE Plasma, open `Help > About` and check that the window backend includes `KWin script`.
 
 ### A preview is blank or unavailable
 

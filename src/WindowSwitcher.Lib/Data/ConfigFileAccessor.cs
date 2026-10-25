@@ -551,6 +551,12 @@ public class ConfigFileAccessor
             .Targets.Select(KeybindCatalogBuilder.CloneTarget)
             .ToList();
 
+        config.ScreenCastRestoreTokens = (config.ScreenCastRestoreTokens ?? [])
+            .Where(entry =>
+                !string.IsNullOrWhiteSpace(entry.Key) && !string.IsNullOrWhiteSpace(entry.Value)
+            )
+            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal);
+
         return config;
     }
 
@@ -580,6 +586,10 @@ public class ConfigFileAccessor
             WindowKeybindTargets = config
                 .WindowKeybindTargets.Select(KeybindCatalogBuilder.CloneTarget)
                 .ToList(),
+            ScreenCastRestoreTokens = new Dictionary<string, string>(
+                config.ScreenCastRestoreTokens,
+                StringComparer.Ordinal
+            ),
         };
     }
 
