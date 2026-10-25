@@ -6,7 +6,7 @@ Purpose: Define strict, enforceable engineering guidelines for contributing to W
 
 ## Stack and Structure
 
-- Solution: `Window-Switcher.sln`
+- Solution: `Window-Switcher.slnx`
 - UI: `src/WindowSwitcher/` (Avalonia)
 - Core/Library: `src/WindowSwitcher.Lib/`
 - Tests: `src/WindowSwitcher.Tests/`
@@ -17,7 +17,7 @@ Purpose: Define strict, enforceable engineering guidelines for contributing to W
 
 ## Build, Run, Test (Local)
 
-- Build: `dotnet build Window-Switcher.sln`
+- Build: `dotnet build Window-Switcher.slnx`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Tests: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
 
