@@ -79,7 +79,9 @@ public sealed class KWinWaylandWindowAccessorTests
         IReadOnlyCollection<WindowConfig>? first = await sut.TryGetWindowsAsync();
         IReadOnlyCollection<WindowConfig>? second = await sut.TryGetWindowsAsync();
 
-        WindowConfig window = Assert.Single(Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(first));
+        WindowConfig window = Assert.Single(
+            Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(first)
+        );
         Assert.Equal($"kwin:{NativeId:D}", window.WindowId);
         Assert.Equal("Calculator", window.WindowTitle);
         Assert.Equal("kcalc", window.ProcessName);
@@ -101,7 +103,12 @@ public sealed class KWinWaylandWindowAccessorTests
         await sut.BridgeObject.PushSnapshotAsync(Snapshot(Window(NativeId, "After", 0)));
         IReadOnlyCollection<WindowConfig>? windows = await sut.TryGetWindowsAsync();
 
-        Assert.Equal("After", Assert.Single(Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(windows)).WindowTitle);
+        Assert.Equal(
+            "After",
+            Assert
+                .Single(Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(windows))
+                .WindowTitle
+        );
     }
 
     [Fact]
@@ -117,7 +124,12 @@ public sealed class KWinWaylandWindowAccessorTests
         await sut.BridgeObject.PushSnapshotAsync("{ not json");
         IReadOnlyCollection<WindowConfig>? windows = await sut.TryGetWindowsAsync();
 
-        Assert.Equal("Kept", Assert.Single(Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(windows)).WindowTitle);
+        Assert.Equal(
+            "Kept",
+            Assert
+                .Single(Assert.IsAssignableFrom<IReadOnlyCollection<WindowConfig>>(windows))
+                .WindowTitle
+        );
         Assert.True(sink.Contains(LogEventLevel.Warning, "unreadable window list"));
         Assert.DoesNotContain(sink.Events, logEvent => logEvent.RenderMessage().Contains("Kept"));
     }
@@ -127,7 +139,11 @@ public sealed class KWinWaylandWindowAccessorTests
     {
         var client = new FakeKWinScriptingClient { BusName = null };
         var timeProvider = new ManualTimeProvider();
-        await using KWinWaylandWindowAccessor sut = CreateSut(client, out _, timeProvider: timeProvider);
+        await using KWinWaylandWindowAccessor sut = CreateSut(
+            client,
+            out _,
+            timeProvider: timeProvider
+        );
 
         Assert.Null(await sut.TryGetWindowsAsync());
         Assert.Null(await sut.TryGetWindowsAsync());
