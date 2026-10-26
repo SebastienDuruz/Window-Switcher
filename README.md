@@ -46,7 +46,10 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - Per-window preview position and size persistence
 - Fixed or individually resizable previews
 - Configurable movement, startup behavior, and active-window highlight color
+- Native Wayland window listing and activation on KDE Plasma
+- Wayland capture selections remembered across restarts
 - Runtime, operating-system, dependency, preview-mode, and update diagnostics
+- Local rolling log files for troubleshooting
 - Native Windows and Linux implementations—no code injection into monitored applications
 
 ## Platform support
@@ -65,7 +68,7 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - On KDE Plasma, native Wayland windows are listed and activated through KWin scripts but cannot be renamed.
 - Fullscreen applications are not supported.
 - Linux global shortcuts are optional and remain unavailable until the user can read `/dev/input/event*` and write to `/dev/uinput` or `/dev/input/uinput`.
-- Wayland preview capture shows a desktop portal selection prompt the first time a window is previewed. Pick the window that matches the preview: the portal cannot target a window on its own. The selection is remembered across restarts while the window title stays the same.
+- Wayland preview capture shows a desktop portal selection prompt the first time a window is previewed. Pick the window that matches the preview: the portal cannot target a window on its own. The selection is remembered across restarts while the window title stays the same and no other window of the same application shares that title.
 - Linux previews use the same 20 FPS target for every window. The active-window highlight does not change capture cadence.
 
 The application still runs when optional preview or keyboard dependencies are unavailable. Open `Help > About` to see the active preview mode and dependency status.
@@ -216,7 +219,7 @@ Window discovery, focus, and renaming use the X11 EWMH protocol directly. Waylan
 
 Package names and portal backends vary by distribution and desktop environment. KDE commonly uses `xdg-desktop-portal-kde`, while GNOME commonly uses `xdg-desktop-portal-gnome` in addition to the base portal package.
 
-On Wayland, EWMH can enumerate only XWayland windows. On KDE Plasma, native Wayland windows are listed and activated by loading a small script into KWin over D-Bus (`org.kde.KWin /Scripting`); no extra package or permission is needed. Other desktops do not offer an equivalent interface, and installing more portal packages does not enable native Wayland window discovery there.
+On Wayland, EWMH can enumerate only XWayland windows. On KDE Plasma, native Wayland windows are listed and activated by loading a small script into KWin over D-Bus (`org.kde.KWin /Scripting`); no extra package or permission is needed. KDE Plasma is detected when `XDG_CURRENT_DESKTOP` contains `KDE`, and the script files are written to `$XDG_RUNTIME_DIR/window-switcher/` while KWin runs them. Other desktops do not offer an equivalent interface, and installing more portal packages does not enable native Wayland window discovery there.
 
 ### Linux preview rendering
 
@@ -276,6 +279,7 @@ The file contains:
 - whitelist and blacklist entries;
 - saved preview positions and sizes;
 - global keybind targets and shortcuts;
+- saved Wayland capture selections (portal restore tokens, keyed by window title and process name);
 - an anonymous telemetry installation ID; and
 - an optional Sentry DSN override for custom builds.
 
@@ -355,7 +359,7 @@ On Windows, the equivalent packaging option is:
 2. Check that the window title contains that entry and is not an exact blacklist match.
 3. On Linux, confirm that the desktop window manager exposes the EWMH `_NET_CLIENT_LIST` property and that the target is an X11 or XWayland window.
 4. On Wayland outside KDE Plasma, confirm that the target application is using XWayland. Native Wayland windows are only discoverable on KDE Plasma.
-5. On KDE Plasma, open `Help > About` and check that the window backend includes `KWin script`.
+5. On KDE Plasma, open `Help > About` and check that the `window-control` line under **Dependency status** includes `KWin script`. If it does not, confirm that `XDG_CURRENT_DESKTOP` contains `KDE` in the environment that launches Window Switcher. If it does, open `File > Open logs` and look for `KWin window watcher started`; KWin script warnings in the log explain why the watcher could not start (for example, `XDG_RUNTIME_DIR` not set).
 
 ### A preview is blank or unavailable
 

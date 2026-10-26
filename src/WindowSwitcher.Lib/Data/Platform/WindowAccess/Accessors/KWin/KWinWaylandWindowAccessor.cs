@@ -245,7 +245,11 @@ internal sealed class KWinWaylandWindowAccessor : WinAccessorBase, IAsyncDisposa
             return null;
 
         bool started = await _client
-            .LoadAndRunAsync(WatcherPluginName, KWinScripts.BuildWatcher(busName), cancellationToken)
+            .LoadAndRunAsync(
+                WatcherPluginName,
+                KWinScripts.BuildWatcher(busName),
+                cancellationToken
+            )
             .ConfigureAwait(false);
         if (!started)
             return null;

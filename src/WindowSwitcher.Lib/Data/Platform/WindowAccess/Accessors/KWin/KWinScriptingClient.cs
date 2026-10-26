@@ -19,7 +19,11 @@ internal interface IKWinScriptingClient : IAsyncDisposable
     /// Loads and starts a script, replacing any script already loaded under the same name.
     /// </summary>
     /// <returns><see langword="true" /> when KWin accepted and started the script.</returns>
-    Task<bool> LoadAndRunAsync(string pluginName, string script, CancellationToken cancellationToken);
+    Task<bool> LoadAndRunAsync(
+        string pluginName,
+        string script,
+        CancellationToken cancellationToken
+    );
 
     /// <summary>
     /// Unloads a script and deletes its source file.

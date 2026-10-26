@@ -52,7 +52,11 @@ internal sealed class WaylandScreenCastMemoryCache : IDisposable
                             StringComparison.Ordinal
                         )
                     )
-                    .ToDictionary(entry => entry.RestoreKey, entry => entry.Token, StringComparer.Ordinal);
+                    .ToDictionary(
+                        entry => entry.RestoreKey,
+                        entry => entry.Token,
+                        StringComparer.Ordinal
+                    );
             }
 
             await _store.SaveAsync(tokens, cancellationToken).ConfigureAwait(false);

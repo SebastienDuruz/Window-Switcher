@@ -11,7 +11,9 @@ internal static class KWinScripts
 {
     internal const string BridgeInterfaceName =
         "io.github.sebastienduruz.WindowSwitcher.KWinBridge";
-    internal static readonly ObjectPath BridgePath = new("/io/github/sebastienduruz/WindowSwitcher/KWinBridge");
+    internal static readonly ObjectPath BridgePath = new(
+        "/io/github/sebastienduruz/WindowSwitcher/KWinBridge"
+    );
 
     // KWin exposes no X11 flag to scripts; the wrapped QObject class name tells the backends apart
     // ("KWin::X11Window" for XWayland, "KWin::XdgToplevelWindow" for native Wayland windows).

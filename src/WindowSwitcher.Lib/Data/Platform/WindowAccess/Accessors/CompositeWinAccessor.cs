@@ -30,15 +30,14 @@ internal sealed class CompositeWinAccessor : WinAccessorBase, IAsyncDisposable
         Task<IReadOnlyCollection<WindowConfig>?> x11Windows = _x11Accessor.TryGetWindowsAsync(
             cancellationToken
         );
-        Task<IReadOnlyCollection<WindowConfig>?> nativeWindows =
-            _nativeAccessor.TryGetWindowsAsync(cancellationToken);
+        Task<IReadOnlyCollection<WindowConfig>?> nativeWindows = _nativeAccessor.TryGetWindowsAsync(
+            cancellationToken
+        );
         await Task.WhenAll(x11Windows, nativeWindows).ConfigureAwait(false);
 
         // One unavailable source must not hide the windows of the other one.
         IReadOnlyCollection<WindowConfig>? x11Result = await x11Windows.ConfigureAwait(false);
-        IReadOnlyCollection<WindowConfig>? nativeResult = await nativeWindows.ConfigureAwait(
-            false
-        );
+        IReadOnlyCollection<WindowConfig>? nativeResult = await nativeWindows.ConfigureAwait(false);
         if (x11Result is null && nativeResult is null)
             return null;
 
