@@ -4,6 +4,9 @@
         <Platform Name="x64" />
         <Platform Name="x86" />
     </Configurations>
+    <Folder Name="/build/">
+        <Project Path="build/_build.csproj" />
+    </Folder>
     <Project Path="src/WindowSwitcher.Lib/WindowSwitcher.Lib.csproj" />
     <Project Path="src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj" />
     <Project Path="src/WindowSwitcher/WindowSwitcher.csproj" />

@@ -19,8 +19,8 @@ sealed class BuildOptions
           --package-kind <name>               Package kind telemetry label (default: unpackaged)
           --windows-runtime <rid>             win-x64 or win-arm64 (default: win-x64)
           --linux-runtime <rid>               linux-x64 (default: linux-x64)
-          --windows-publish-dir <path>        Windows publish output directory
-          --linux-publish-dir <path>          Linux publish output directory
+          --windows-publish-dir <path>        Windows publish output directory (emptied before publishing)
+          --linux-publish-dir <path>          Linux publish output directory (emptied before publishing)
           --installer-out-dir <path>          Installer output directory
           --app-image-out-dir <path>          AppImage output directory
           --makensis-path <path>              Explicit makensis executable
