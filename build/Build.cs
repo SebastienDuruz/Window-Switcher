@@ -351,7 +351,9 @@ sealed class Build
     /// </summary>
     void PublishForRuntime(string runtime, string outputDirectory)
     {
-        Directory.CreateDirectory(outputDirectory);
+        // dotnet publish skips a file whose copy in the output is newer than its source, so a
+        // leftover from an earlier build (e.g. a trimmed assembly) would be packaged as is.
+        RecreateDirectory(outputDirectory);
 
         var selfContainedValue = options.SelfContained ? "true" : "false";
         RunDotNet(
