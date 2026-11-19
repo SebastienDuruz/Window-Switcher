@@ -40,6 +40,19 @@ public class SettingsViewModel : ObservableObject
             );
     }
 
+    public bool HideActivePreview
+    {
+        get => ReadSetting(config => config.HideActivePreview);
+        set =>
+            UpdateSetting(
+                nameof(HideActivePreview),
+                value,
+                config => config.HideActivePreview,
+                (config, currentValue) => config.HideActivePreview = currentValue,
+                applyToWindows: true
+            );
+    }
+
     public bool StartMinimized
     {
         get => ReadSetting(config => config.StartMinimized);

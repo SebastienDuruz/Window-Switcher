@@ -577,6 +577,7 @@ public class ConfigFileAccessor
             WindowHeight = config.WindowHeight,
             PreviewHighlightColor = config.PreviewHighlightColor,
             EnablePreviews = config.EnablePreviews,
+            HideActivePreview = config.HideActivePreview,
             WhitelistPrefixes = config.WhitelistPrefixes.ToList(),
             BlacklistPrefixes = config.BlacklistPrefixes.ToList(),
             FloatingWindowsConfig = config

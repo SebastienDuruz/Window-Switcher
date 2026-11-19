@@ -473,6 +473,26 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
+    public void HideActivePreview_SurvivesSnapshotAndReload()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+            Assert.False(sut.Config.HideActivePreview);
+
+            sut.UpdateConfig(config => config.HideActivePreview = true);
+
+            Assert.True(sut.Config.HideActivePreview);
+            Assert.True(CreateAccessor(dataFolder).Config.HideActivePreview);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
     public void UpdateConfig_PersistsUpdatedValuesImmediately()
     {
         string dataFolder = CreateTempDataFolder();

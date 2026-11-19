@@ -36,6 +36,21 @@ public sealed class SettingsViewModelTests
         Assert.Equal(1, applyActionInvocationCount);
     }
 
+    [Fact]
+    public void HideActivePreview_UpdatesRepositoryAndInvokesApplyAction()
+    {
+        var repository = new FakeSettingsRepository();
+        int applyActionInvocationCount = 0;
+        var sut = new SettingsViewModel(repository, () => applyActionInvocationCount++, _ => { });
+
+        Assert.False(sut.HideActivePreview);
+
+        sut.HideActivePreview = true;
+
+        Assert.True(repository.Config.HideActivePreview);
+        Assert.Equal(1, applyActionInvocationCount);
+    }
+
     private sealed class FakeSettingsRepository : ISettingsRepository
     {
         public ConfigFile Config { get; } = new();

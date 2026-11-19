@@ -114,7 +114,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _previewCoordinator = new FloatingPreviewCoordinator(
             _windowKeybindActivator,
             dispatcher,
-            SetActivePreviewByWindowId
+            SetActivePreviewByWindowId,
+            () => ConfigFileAccessor.GetInstance().ReadConfig(config => config.HideActivePreview)
         );
         _blacklistCoordinator = new WindowBlacklistCoordinator(
             FiltersWindow,
@@ -365,6 +366,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
     public void ApplySettings()
     {
         _floatingWindowRegistry.ApplySettings();
+        _previewCoordinator.ApplySettings();
     }
 
     private void RequestApplicationShutdown()
