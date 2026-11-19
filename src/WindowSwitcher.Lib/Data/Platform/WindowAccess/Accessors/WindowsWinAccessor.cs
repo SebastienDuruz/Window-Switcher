@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 using Serilog;
@@ -16,11 +15,17 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
     private const int SwShow = 5;
     private static readonly ILogger Logger = Log.ForContext<WindowsWinAccessor>();
 
-    private static IReadOnlyCollection<WindowConfig>? TryGetWindows()
+    // Shared across enumerations: the periodic refresh runs every 250 ms and reading the
+    // same processes again on each tick is wasted work.
+    private readonly ProcessNameCache _processNames = new(
+        WindowsProcessNameReader.Read,
+        TimeProvider.System
+    );
+
+    private IReadOnlyCollection<WindowConfig>? TryGetWindows()
     {
         var windows = new List<WindowConfig>();
-        int currentProcessId = Process.GetCurrentProcess().Id;
-        var processNameByPid = new Dictionary<uint, string>();
+        uint currentProcessId = (uint)Environment.ProcessId;
 
         bool enumerated = User32Functions.EnumWindows(
             (windowHandle, lParam) =>
@@ -37,10 +42,10 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
                         return true;
 
                     User32Functions.GetWindowThreadProcessId(windowHandle, out uint processId);
-                    if (processId == 0 || processId == (uint)currentProcessId)
+                    if (processId == 0 || processId == currentProcessId)
                         return true;
 
-                    string processName = ResolveProcessName(processId, processNameByPid);
+                    string processName = _processNames.GetName(processId);
                     windows.Add(
                         new WindowConfig
                         {
@@ -119,30 +124,6 @@ internal sealed class WindowsWinAccessor : WinAccessorBase
             return string.Empty;
 
         return titleBuffer.ToString().Trim();
-    }
-
-    private static string ResolveProcessName(
-        uint processId,
-        IDictionary<uint, string> processNameByPid
-    )
-    {
-        if (processNameByPid.TryGetValue(processId, out string? cachedName))
-            return cachedName;
-
-        string processName = string.Empty;
-        try
-        {
-            using Process process = Process.GetProcessById((int)processId);
-            processName = process.ProcessName;
-        }
-        catch (Exception exception)
-        {
-            // The process may have exited or be inaccessible: keep an empty process name.
-            Logger.Debug(exception, "Cannot resolve process name for PID {ProcessId}", processId);
-        }
-
-        processNameByPid[processId] = processName;
-        return processName;
     }
 
     public override Task<bool> TryActivateWindowAsync(
