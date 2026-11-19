@@ -42,6 +42,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private volatile bool _isPointerInside;
     private bool _closeRequestedByHost;
     private bool _isPreviewSelected;
+    private bool _isPreviewHidden;
+    private PixelPoint _positionBeforeHide;
     private bool _isSelectionPending;
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly WinAccessorBase _winAccessorBase;
@@ -350,6 +352,32 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _isPreviewSelected = isSelected;
         if (!_isSelectionPending)
             _service.SetPreviewHighlight(isSelected);
+    }
+
+    public void SetPreviewHidden(bool isHidden)
+    {
+        if (isHidden == _isPreviewHidden)
+            return;
+
+        _isPreviewHidden = isHidden;
+        if (isHidden)
+        {
+            // WindowConfig only tracks the position after a pointer release, so a preview that was
+            // never moved would come back at (0, 0); keep the actual position instead.
+            _positionBeforeHide = Position;
+            Hide();
+            return;
+        }
+
+        // Some Linux window managers do not restore the position of a window shown again.
+        Position = _positionBeforeHide;
+        Show();
+
+        // X11 window managers drop _NET_WM_STATE (including "above") when a window is withdrawn,
+        // and Avalonia does not send it again on map because Topmost did not change; toggle it so
+        // the preview stays above other windows after being shown again.
+        Topmost = false;
+        Topmost = true;
     }
 
     internal void SetSelectionPending(bool isPending)

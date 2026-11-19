@@ -28,6 +28,9 @@
                                   IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
                         <CheckBox Content="Enable previews"
                                   IsChecked="{Binding EnablePreviews, Mode=TwoWay}" />
+                        <CheckBox Content="Hide active preview"
+                                  IsChecked="{Binding HideActivePreview, Mode=TwoWay}"
+                                  ToolTip.Tip="Hides the preview of the window activated through Window Switcher until another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back." />
                         <CheckBox Content="Start minimized"
                                   IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
                 </StackPanel>

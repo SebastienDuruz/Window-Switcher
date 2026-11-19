@@ -128,6 +128,7 @@ Renaming is especially useful when several clients initially share the same titl
 - Enable **Fixed size** to use the configured width and height for every preview.
 - Enable **Focus on hover** to activate a client by moving the pointer over its preview.
 - Enable **Enable previews** to show live content inside floating windows.
+- Enable **Hide active preview** to hide the preview of the window you just activated through Window Switcher; it comes back when another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back.
 - Choose **Highlight color** to change the active-preview outline.
 
 Position and size are saved per window key and restored on a later launch. Use `File > Clean config` to clear saved preview layouts without resetting every preference.
@@ -161,6 +162,7 @@ The keybind editor rejects duplicate shortcuts on one target and conflicts betwe
 | `Move windows` | Allows floating previews to be dragged. |
 | `Focus on hover` | Focuses a client when the pointer enters its preview. |
 | `Enable previews` | Enables live content in floating preview windows. |
+| `Hide active preview` | Hides the preview of the window activated through Window Switcher until another window is activated. |
 | `Start minimized` | Starts the main window hidden in the system tray. |
 | `Resize windows` | Allows previews to be resized individually. |
 | `Fixed size` | Applies one width and height to all previews. |
