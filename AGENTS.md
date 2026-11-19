@@ -2,6 +2,8 @@
 
 Purpose: Define strict, enforceable engineering guidelines for contributing to Window Switcher. This document targets senior .NET developers and MUST be followed during development and code review.
 
+For the contribution process (branches, commit messages, pull requests), see [`CONTRIBUTING.md`](CONTRIBUTING.md). User-facing documentation and build-from-source instructions live in [`README.md`](README.md).
+
 ---
 
 ## Stack and Structure
@@ -30,7 +32,7 @@ All changes MUST compile and all tests MUST pass before submission.
 - UI layer MUST NOT contain business logic.
 - ViewModels MUST NOT perform direct I/O or OS calls.
 - All system/OS interactions MUST go through `WindowSwitcher.Lib`.
-- OS-specific code MUST be isolated in `src/WindowSwitcher.Lib/Data/WindowAccess`.
+- OS-specific code MUST be isolated in `src/WindowSwitcher.Lib/Data/Platform/WindowAccess`.
 - Direct access from UI to OS APIs (including P/Invoke) is strictly forbidden.
 - No cross-layer shortcuts are allowed.
 
