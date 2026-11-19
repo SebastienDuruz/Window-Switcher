@@ -31,7 +31,8 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - [Configuration and data](#configuration-and-data)
 - [Privacy and error reporting](#privacy-and-error-reporting)
 - [Troubleshooting](#troubleshooting)
-- [Build and contribute](#build-and-contribute)
+- [Build from source](#build-from-source)
+- [Contributing](#contributing)
 - [Packaging](#packaging)
 - [Demo videos](#demo-videos)
 
@@ -75,17 +76,15 @@ The application still runs when optional preview or keyboard dependencies are un
 
 ## Installation
 
-Window Switcher is GPL-3.0 software and can always be built from source.
-
-Official precompiled builds are not currently distributed for free. Paid, ready-to-install builds may be offered through channels such as Microsoft Store. Those packages are intended for users who prefer a managed installation and are compiled with Sentry enabled, without a runtime opt-out.
+Window Switcher is GPL-3.0 software. Released builds are published on [GitHub Releases](https://github.com/SebastienDuruz/Window-Switcher/releases), and the application can always be built from source.
 
 | Operating system | Recommended route |
 | --- | --- |
-| Windows | Use an official packaged build when available, or [build from source](#build-from-source). |
-| Linux | [Install the Linux dependencies](#linux-runtime-dependencies), then [build from source](#build-from-source). |
+| Windows | Download the installer from [GitHub Releases](https://github.com/SebastienDuruz/Window-Switcher/releases), or [build from source](#build-from-source). |
+| Linux | [Install the Linux dependencies](#linux-runtime-dependencies), then download the AppImage from [GitHub Releases](https://github.com/SebastienDuruz/Window-Switcher/releases) or [build from source](#build-from-source). The AppImage supports delta updates through AppImageUpdate. |
 
 > [!IMPORTANT]
-> Source builds also include Sentry by default. To produce a build without Sentry or any Sentry network traffic, use the [compile-time opt-out](#build-without-sentry).
+> Released builds and source builds include Sentry by default, without a runtime opt-out. To produce a build without Sentry or any Sentry network traffic, use the [compile-time opt-out](#build-without-sentry).
 
 ## Quick start
 
@@ -389,9 +388,7 @@ Use `File > Generate new config`. This restores default settings, filters, saved
 
 When reporting a reproducible problem, include the application version and the non-sensitive diagnostic information shown under `Help > About`. Do not post `config.json` publicly without reviewing it first.
 
-## Build and contribute
-
-### Build from source
+## Build from source
 
 Prerequisites:
 
@@ -429,7 +426,7 @@ Window-Switcher/
 ├── src/WindowSwitcher.Lib/      Platform and application services
 ├── src/WindowSwitcher.Tests/    Unit and integration tests
 ├── build/                       C# packaging build project
-├── docs/                        Screenshots and documentation assets
+├── docs/                        Screenshots, work plans, and design notes
 ├── Directory.Build.props        Shared version and build properties
 ├── Makefile                     Common development commands
 └── Window-Switcher.slnx         .NET solution
@@ -457,17 +454,9 @@ Run commands from the repository root:
 
 The application version is defined once as `WindowSwitcherVersion` in `Directory.Build.props`.
 
-### Contributing
+## Contributing
 
-Contributions and focused bug reports are welcome:
-
-1. Search the [existing issues](https://github.com/SebastienDuruz/Window-Switcher/issues).
-2. Open an issue for significant behavioral or architectural changes before investing in a large implementation.
-3. Keep changes small and focused, and add tests for business logic.
-4. Run `dotnet build Window-Switcher.slnx` and `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`.
-5. Run `dotnet csharpier check .` before submitting a pull request.
-
-All contributions must follow the engineering rules in [`AGENTS.md`](AGENTS.md), including the MVVM boundaries, asynchronous-programming requirements, nullability rules, and XML documentation for public library APIs.
+Contributions are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening an issue or a pull request.
 
 ## Packaging
 
@@ -507,13 +496,13 @@ The release artifacts are produced by a small C# console project in `build/` (`_
 ./build/build.sh --help
 ```
 
-Useful options:
+Commonly used options:
 
 - `--version <x.y.z>` overrides `WindowSwitcherVersion` for one build.
 - `--enable-sentry-telemetry false` excludes Sentry.
-- `--distribution-channel <name>` and `--package-kind <name>` label packaged builds.
-- `--makensis-path <path>` selects a specific NSIS compiler.
 - `--self-contained false` publishes a framework-dependent build that requires the .NET 10 runtime on the target machine. Packaged builds are self-contained by default, and the AppImage target rejects framework-dependent output.
+
+Run `./build/build.sh --help` (or `./build/build.cmd --help` on Windows) for the complete, up-to-date list, including the build configuration, target runtimes, output and publish folders, build labels, and explicit tool paths.
 
 The installer target uses `makensis` from `PATH`. On Windows it falls back to the restored NSIS NuGet package; on Linux, install the distribution `nsis` package (the NuGet package is not restored on non-Windows hosts). When the Windows installer is built on Linux, the Linux-only PipeWire native library is excluded from the Windows publish output. The AppImage target downloads the current tool from the [`AppImage/appimagetool`](https://github.com/AppImage/appimagetool) release stream to `build/artifacts/tools/`; use `--app-image-tool-path` only to select an explicit tool. This modern tool embeds the current Type 2 AppImage runtime and GitHub Releases update information for AppImageUpdate-compatible delta updates.
 
