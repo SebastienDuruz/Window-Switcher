@@ -12,6 +12,10 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
     private const int DamageEventOffset = 0;
     private const int ShmPermissions = 0x180;
     private const string DisableShmEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_SHM";
+    private const string DisableRenderEnvironmentVariable = "WINDOW_SWITCHER_X11_DISABLE_RENDER";
+
+    // Picture transforms and filters were added in RENDER 0.6.
+    private const int MinimumRenderMinorVersion = 6;
     private static readonly ILogger Logger = Log.ForContext<X11WindowCaptureSession>();
     private static readonly nint XImageDataOffset = Marshal.OffsetOf<XImage>(nameof(XImage.Data));
 
@@ -28,8 +32,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
     private int _width;
     private int _height;
     private int _depth;
+    private X11RenderScaler? _scaler;
+    private int _readbackWidth;
+    private int _readbackHeight;
     private bool _isRedirected;
     private bool _sharedMemoryDisabled;
+    private bool? _renderSupported;
+    private bool _renderDisabled;
     private bool _disposed;
 
     private X11WindowCaptureSession(
@@ -142,7 +151,7 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             if (!_bufferPool.HasAvailableBuffer)
                 return true;
 
-            if (!EnsureCaptureSurface())
+            if (!EnsureCaptureSurface(request))
                 return false;
 
             frame = X11CaptureFallback.Capture(
@@ -304,7 +313,7 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         return true;
     }
 
-    private bool EnsureCaptureSurface()
+    private bool EnsureCaptureSurface(ScreenshotRequest request)
     {
         if (
             X11Native.XGetWindowAttributes(_display, _window, out XWindowAttributes attributes) == 0
@@ -313,26 +322,161 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         if (attributes.Width <= 0 || attributes.Height <= 0)
             return false;
 
-        if (_pixmap != IntPtr.Zero && _width == attributes.Width && _height == attributes.Height)
-            return true;
-
-        ReleaseCaptureSurface();
-
-        _pixmap = X11Native.XCompositeNameWindowPixmap(_display, _window);
-        if (_pixmap == IntPtr.Zero)
-            return false;
-
-        if (!TryReadPixmapGeometry(out int width, out int height, out int depth))
+        if (_pixmap == IntPtr.Zero || _width != attributes.Width || _height != attributes.Height)
         {
             ReleaseCaptureSurface();
+
+            _pixmap = X11Native.XCompositeNameWindowPixmap(_display, _window);
+            if (_pixmap == IntPtr.Zero)
+                return false;
+
+            if (!TryReadPixmapGeometry(out int width, out int height, out int depth))
+            {
+                ReleaseCaptureSurface();
+                return false;
+            }
+
+            _width = width;
+            _height = height;
+            _depth = depth;
+        }
+
+        EnsureReadbackSurface(attributes.Visual, request);
+        return true;
+    }
+
+    /// <summary>
+    /// Sizes the readback (XRender scaler and SHM image) for the requested thumbnail size.
+    /// The SHM image matches the scaler output, or the full pixmap when the X server does not
+    /// downscale. Both are rebuilt when the target size changes (preview window resized).
+    /// </summary>
+    private void EnsureReadbackSurface(IntPtr visual, ScreenshotRequest request)
+    {
+        (int targetWidth, int targetHeight) = X11FrameConverter.CalculateTargetSize(
+            _width,
+            _height,
+            request
+        );
+        bool scaleOnServer = X11RenderScalePlan.ShouldScaleOnServer(
+            _width,
+            _height,
+            targetWidth,
+            targetHeight,
+            IsRenderAvailable()
+        );
+        int readbackWidth = scaleOnServer ? targetWidth : _width;
+        int readbackHeight = scaleOnServer ? targetHeight : _height;
+        if (
+            _readbackWidth == readbackWidth
+            && _readbackHeight == readbackHeight
+            && scaleOnServer == (_scaler is not null)
+        )
+            return;
+
+        ReleaseReadbackSurface();
+
+        if (scaleOnServer)
+            _scaler = TryCreateScaler(visual, targetWidth, targetHeight);
+
+        _readbackWidth = _scaler?.Width ?? _width;
+        _readbackHeight = _scaler?.Height ?? _height;
+        TryCreateShmImage(visual);
+    }
+
+    private X11RenderScaler? TryCreateScaler(IntPtr visual, int targetWidth, int targetHeight)
+    {
+        try
+        {
+            X11RenderScaler? scaler = X11RenderScaler.TryCreate(
+                _display,
+                _pixmap,
+                visual,
+                _depth,
+                _width,
+                _height,
+                targetWidth,
+                targetHeight
+            );
+            if (scaler is null)
+            {
+                if (TryDisableRender())
+                {
+                    Logger.Warning(
+                        "X11 XRender has no format for the visual of window {WindowId}, using CPU scaling",
+                        WindowIdText
+                    );
+                }
+
+                return null;
+            }
+
+            _ = X11Native.XSync(_display, discard: 0);
+            return scaler;
+        }
+        catch (Exception exception)
+        {
+            if (TryDisableRender())
+            {
+                Logger.Warning(
+                    exception,
+                    "X11 XRender scaler creation failed for window {WindowId}, using CPU scaling",
+                    WindowIdText
+                );
+            }
+
+            return null;
+        }
+    }
+
+    private bool IsRenderAvailable()
+    {
+        if (_renderDisabled)
+            return false;
+
+        _renderSupported ??= QueryRender();
+        return _renderSupported.Value;
+    }
+
+    private bool QueryRender()
+    {
+        if (IsEnvironmentFlagSet(DisableRenderEnvironmentVariable))
+        {
+            Logger.Warning(
+                "X11 XRender scaling disabled by {EnvironmentVariable}, using CPU scaling",
+                DisableRenderEnvironmentVariable
+            );
             return false;
         }
 
-        _width = width;
-        _height = height;
-        _depth = depth;
+        try
+        {
+            if (
+                X11Native.XRenderQueryExtension(_display, out _, out _) != 0
+                && X11Native.XRenderQueryVersion(_display, out int major, out int minor) != 0
+                && (major > 0 || minor >= MinimumRenderMinorVersion)
+            )
+                return true;
 
-        TryCreateShmImage(attributes.Visual);
+            Logger.Warning("X11 RENDER extension unavailable, using CPU scaling");
+            return false;
+        }
+        catch (Exception exception)
+        {
+            Logger.Warning(exception, "X11 XRender probe failed, using CPU scaling");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Switches this session to the CPU scaling path for good.
+    /// </summary>
+    /// <returns><see langword="true"/> the first time, so the caller logs the cause once.</returns>
+    private bool TryDisableRender()
+    {
+        if (_renderDisabled)
+            return false;
+
+        _renderDisabled = true;
         return true;
     }
 
@@ -391,8 +535,8 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                 X11Native.ZPixmap,
                 IntPtr.Zero,
                 ref _shmInfo,
-                (uint)_width,
-                (uint)_height
+                (uint)_readbackWidth,
+                (uint)_readbackHeight
             );
             if (_shmImage == IntPtr.Zero)
                 return;
@@ -455,21 +599,57 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         }
     }
 
-    private static bool IsShmDisabled()
+    private static bool IsShmDisabled() => IsEnvironmentFlagSet(DisableShmEnvironmentVariable);
+
+    private static bool IsEnvironmentFlagSet(string variable)
     {
-        string? value = Environment.GetEnvironmentVariable(DisableShmEnvironmentVariable);
+        string? value = Environment.GetEnvironmentVariable(variable);
         return string.Equals(value, "1", StringComparison.Ordinal)
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns the drawable to read back: the downscaled pixmap when XRender is used, the
+    /// window pixmap otherwise. Returns <see cref="IntPtr.Zero"/> when the composite chain
+    /// failed; XRender is then disabled and the next frame is resized for the CPU path.
+    /// </summary>
+    private IntPtr RenderReadbackDrawable()
+    {
+        if (_scaler is null)
+            return _pixmap;
+
+        try
+        {
+            return _scaler.Render();
+        }
+        catch (Exception exception)
+        {
+            if (TryDisableRender())
+            {
+                Logger.Warning(
+                    exception,
+                    "X11 XRender composite failed for window {WindowId}, using CPU scaling",
+                    WindowIdText
+                );
+            }
+
+            return IntPtr.Zero;
+        }
     }
 
     private X11CaptureAttempt CaptureShmFrame(ScreenshotRequest request)
     {
         try
         {
+            IntPtr drawable = RenderReadbackDrawable();
+            // A composite failure is not a SHM failure: skip the frame but keep SHM enabled.
+            if (drawable == IntPtr.Zero)
+                return new X11CaptureAttempt(BackendSucceeded: true, Frame: null);
+
             if (
                 X11Native.XShmGetImage(
                     _display,
-                    _pixmap,
+                    drawable,
                     _shmImage,
                     x: 0,
                     y: 0,
@@ -506,13 +686,17 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         IntPtr image = IntPtr.Zero;
         try
         {
+            IntPtr drawable = RenderReadbackDrawable();
+            if (drawable == IntPtr.Zero)
+                return null;
+
             image = X11Native.XGetImage(
                 _display,
-                _pixmap,
+                drawable,
                 x: 0,
                 y: 0,
-                (uint)_width,
-                (uint)_height,
+                (uint)_readbackWidth,
+                (uint)_readbackHeight,
                 X11Native.AllPlanes,
                 X11Native.ZPixmap
             );
@@ -594,7 +778,8 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
 
     private void ReleaseCaptureSurface()
     {
-        ReleaseShmImage();
+        // The scaler holds a picture on _pixmap: release it before freeing the pixmap.
+        ReleaseReadbackSurface();
 
         try
         {
@@ -610,6 +795,27 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         _width = 0;
         _height = 0;
         _depth = 0;
+    }
+
+    private void ReleaseReadbackSurface()
+    {
+        try
+        {
+            _scaler?.Dispose();
+        }
+        catch (Exception exception)
+        {
+            Logger.Debug(
+                exception,
+                "XRender scaler release failed for window {WindowId}",
+                WindowIdText
+            );
+        }
+
+        _scaler = null;
+        ReleaseShmImage();
+        _readbackWidth = 0;
+        _readbackHeight = 0;
     }
 
     private void ReleaseShmImage()

@@ -19,6 +19,8 @@ internal static class X11Native
     public const nint SubstructureNotifyMask = 1 << 19;
     public const nint SubstructureRedirectMask = 1 << 20;
     public const ulong AllPlanes = ulong.MaxValue;
+    public const int PictOpSrc = 1;
+    public const string RenderFilterBilinear = "bilinear";
 
     private static readonly ILogger Logger = Log.ForContext(typeof(X11Native));
     private static readonly XErrorHandler ErrorHandler = IgnoreXError;
@@ -114,6 +116,15 @@ internal static class X11Native
         int propagate,
         nint eventMask,
         ref XClientMessageEvent sendEvent
+    );
+
+    [DllImport("libX11.so.6")]
+    public static extern IntPtr XCreatePixmap(
+        IntPtr display,
+        IntPtr drawable,
+        uint width,
+        uint height,
+        uint depth
     );
 
     [DllImport("libX11.so.6")]
@@ -245,6 +256,68 @@ internal static class X11Native
         ulong planeMask
     );
 
+    [DllImport("libXrender.so.1")]
+    public static extern int XRenderQueryExtension(
+        IntPtr display,
+        out int eventBase,
+        out int errorBase
+    );
+
+    [DllImport("libXrender.so.1")]
+    public static extern int XRenderQueryVersion(
+        IntPtr display,
+        out int majorVersion,
+        out int minorVersion
+    );
+
+    [DllImport("libXrender.so.1")]
+    public static extern IntPtr XRenderFindVisualFormat(IntPtr display, IntPtr visual);
+
+    [DllImport("libXrender.so.1")]
+    public static extern IntPtr XRenderCreatePicture(
+        IntPtr display,
+        IntPtr drawable,
+        IntPtr format,
+        ulong valueMask,
+        IntPtr attributes
+    );
+
+    [DllImport("libXrender.so.1")]
+    public static extern void XRenderFreePicture(IntPtr display, IntPtr picture);
+
+    [DllImport("libXrender.so.1")]
+    public static extern void XRenderSetPictureTransform(
+        IntPtr display,
+        IntPtr picture,
+        ref XTransform transform
+    );
+
+    [DllImport("libXrender.so.1", CharSet = CharSet.Ansi)]
+    public static extern void XRenderSetPictureFilter(
+        IntPtr display,
+        IntPtr picture,
+        string filter,
+        IntPtr parameters,
+        int parameterCount
+    );
+
+    [DllImport("libXrender.so.1")]
+    public static extern void XRenderComposite(
+        IntPtr display,
+        int op,
+        IntPtr source,
+        IntPtr mask,
+        IntPtr destination,
+        int sourceX,
+        int sourceY,
+        int maskX,
+        int maskY,
+        int destinationX,
+        int destinationY,
+        uint width,
+        uint height
+    );
+
     [DllImport("libc", SetLastError = true)]
     public static extern int shmget(int key, UIntPtr size, int shmflg);
 
@@ -338,6 +411,24 @@ internal struct XClientMessageData
     public nint Data2;
     public nint Data3;
     public nint Data4;
+}
+
+/// <summary>
+/// XRender projective transform: a 3x3 matrix of 16.16 fixed-point values, row-major.
+/// It maps destination coordinates to source coordinates.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct XTransform
+{
+    public int Matrix11;
+    public int Matrix12;
+    public int Matrix13;
+    public int Matrix21;
+    public int Matrix22;
+    public int Matrix23;
+    public int Matrix31;
+    public int Matrix32;
+    public int Matrix33;
 }
 
 [StructLayout(LayoutKind.Sequential, Size = 192)]
