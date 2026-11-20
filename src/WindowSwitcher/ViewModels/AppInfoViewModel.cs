@@ -15,6 +15,7 @@ public partial class AppInfoViewModel : ObservableObject
     private readonly IPlatformAppInfoProvider _appInfoProvider;
     private readonly IAppUpdateService _appUpdateService;
     private readonly Action _requestApplicationShutdown;
+    private readonly TimeProvider _timeProvider;
     private UpdateCheckResult? _lastUpdateCheckResult;
     private DateTimeOffset _lastUpdateCheckUtc = DateTimeOffset.MinValue;
 
@@ -65,7 +66,8 @@ public partial class AppInfoViewModel : ObservableObject
     public AppInfoViewModel(
         IPlatformAppInfoProvider appInfoProvider,
         IAppUpdateService appUpdateService,
-        Action requestApplicationShutdown
+        Action requestApplicationShutdown,
+        TimeProvider? timeProvider = null
     )
     {
         ArgumentNullException.ThrowIfNull(appInfoProvider);
@@ -75,6 +77,7 @@ public partial class AppInfoViewModel : ObservableObject
         _appInfoProvider = appInfoProvider;
         _appUpdateService = appUpdateService;
         _requestApplicationShutdown = requestApplicationShutdown;
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         CheckForUpdatesCommand = new AsyncRelayCommand(
             () => CheckForUpdatesAsync(force: true, showUpToDateMessage: true),
@@ -111,7 +114,7 @@ public partial class AppInfoViewModel : ObservableObject
         if (
             !force
             && _lastUpdateCheckResult is not null
-            && DateTimeOffset.UtcNow - _lastUpdateCheckUtc < TimeSpan.FromMinutes(5)
+            && _timeProvider.GetUtcNow() - _lastUpdateCheckUtc < TimeSpan.FromMinutes(5)
         )
         {
             return _lastUpdateCheckResult.IsUpdateAvailable;
@@ -126,7 +129,7 @@ public partial class AppInfoViewModel : ObservableObject
                 .CheckForUpdatesAsync(AppVersion, cancellationToken)
                 .ConfigureAwait(true);
             _lastUpdateCheckResult = result;
-            _lastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            _lastUpdateCheckUtc = _timeProvider.GetUtcNow();
 
             IsUpdateAvailable = result.IsUpdateAvailable;
             LatestVersion = result.LatestVersion ?? string.Empty;

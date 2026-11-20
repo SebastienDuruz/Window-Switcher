@@ -26,6 +26,38 @@ internal interface IPipeWireNativeStreamFactory
     );
 }
 
+/// <summary>
+/// Native calls a running PipeWire stream makes; abstracted so frame and state callbacks can be
+/// exercised without the native library.
+/// </summary>
+internal interface IPipeWireStreamNative
+{
+    int SetActive(IntPtr stream, bool active);
+    int SetDmaBufEnabled(IntPtr stream, bool enabled);
+    int UpdateTarget(IntPtr stream, uint width, uint height);
+    void DestroyStream(IntPtr stream);
+    void ReleaseFrame(IntPtr frameLease);
+}
+
+internal sealed class PipeWireStreamNative : IPipeWireStreamNative
+{
+    public static PipeWireStreamNative Instance { get; } = new();
+
+    public int SetActive(IntPtr stream, bool active) =>
+        WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0);
+
+    public int SetDmaBufEnabled(IntPtr stream, bool enabled) =>
+        WindowSwitcherPipeWireNative.SetDmaBufEnabled(stream, enabled ? 1 : 0);
+
+    public int UpdateTarget(IntPtr stream, uint width, uint height) =>
+        WindowSwitcherPipeWireNative.UpdateTarget(stream, width, height);
+
+    public void DestroyStream(IntPtr stream) => WindowSwitcherPipeWireNative.DestroyStream(stream);
+
+    public void ReleaseFrame(IntPtr frameLease) =>
+        WindowSwitcherPipeWireNative.ReleaseFrame(frameLease);
+}
+
 internal sealed class PipeWireNativeStreamFactory(ILogger? logger = null)
     : IPipeWireNativeStreamFactory
 {
@@ -61,6 +93,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private readonly LatestFrameChannel _frames = new();
     private readonly NativeFrameBufferPool _bufferPool = new(BufferPoolSize);
     private readonly ILogger _logger;
+    private readonly IPipeWireStreamNative _native;
     private readonly WindowSwitcherPipeWireNative.FrameCallback _frameCallback;
     private readonly WindowSwitcherPipeWireNative.StateCallback _stateCallback;
     private GCHandle _selfHandle;
@@ -73,10 +106,26 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
     private BgraScalePlan? _scalePlan;
 
     private PipeWireNativeStream(int width, int height, ILogger logger)
+        : this(width, height, logger, PipeWireStreamNative.Instance, IntPtr.Zero) { }
+
+    /// <summary>
+    /// Wraps an existing native stream; tests pass a fake <paramref name="native"/> and handle.
+    /// </summary>
+    internal PipeWireNativeStream(
+        int width,
+        int height,
+        ILogger logger,
+        IPipeWireStreamNative native,
+        IntPtr nativeStream
+    )
     {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(native);
         _targetWidth = width;
         _targetHeight = height;
         _logger = logger;
+        _native = native;
+        _nativeStream = nativeStream;
         _frameCallback = OnFrame;
         _stateCallback = OnStateChanged;
     }
@@ -188,11 +237,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
         if (
             stream != IntPtr.Zero
-            && WindowSwitcherPipeWireNative.UpdateTarget(
-                stream,
-                checked((uint)width),
-                checked((uint)height)
-            ) < 0
+            && _native.UpdateTarget(stream, checked((uint)width), checked((uint)height)) < 0
             && TryMarkFaulted()
         )
             _logger.Error(
@@ -212,11 +257,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
             stream = _nativeStream;
         }
 
-        if (
-            stream != IntPtr.Zero
-            && WindowSwitcherPipeWireNative.SetActive(stream, active ? 1 : 0) < 0
-            && TryMarkFaulted()
-        )
+        if (stream != IntPtr.Zero && _native.SetActive(stream, active) < 0 && TryMarkFaulted())
             _logger.Error("PipeWire could not change stream activity to {Active}", active);
         if (!active)
             _frames.Drain();
@@ -234,7 +275,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
 
         if (
             stream != IntPtr.Zero
-            && WindowSwitcherPipeWireNative.SetDmaBufEnabled(stream, 0) < 0
+            && _native.SetDmaBufEnabled(stream, enabled: false) < 0
             && TryMarkFaulted()
         )
             _logger.Error("PipeWire could not renegotiate CPU preview buffers");
@@ -252,7 +293,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         }
     }
 
-    private void OnFrame(
+    internal void OnFrame(
         IntPtr userData,
         IntPtr source,
         uint accessibleSize,
@@ -297,7 +338,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
                         checked((int)sourceHeight),
                         drmFormat,
                         modifier,
-                        () => WindowSwitcherPipeWireNative.ReleaseFrame(frameLease)
+                        () => _native.ReleaseFrame(frameLease)
                     )
                 );
                 dmaBufPublished = true;
@@ -389,7 +430,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         finally
         {
             if (frameLease != IntPtr.Zero && !dmaBufPublished)
-                WindowSwitcherPipeWireNative.ReleaseFrame(frameLease);
+                _native.ReleaseFrame(frameLease);
         }
     }
 
@@ -404,7 +445,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         _logger.Information("First {FrameKind} frame published by the PipeWire backend", frameKind);
     }
 
-    private void OnStateChanged(IntPtr userData, int state, string? message)
+    internal void OnStateChanged(IntPtr userData, int state, string? message)
     {
         try
         {
@@ -510,7 +551,7 @@ internal sealed class PipeWireNativeStream : IPipeWireNativeStream
         {
             try
             {
-                WindowSwitcherPipeWireNative.DestroyStream(stream);
+                _native.DestroyStream(stream);
             }
             catch (Exception exception)
             {

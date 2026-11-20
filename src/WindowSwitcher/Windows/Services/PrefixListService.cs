@@ -9,13 +9,17 @@ namespace WindowSwitcher.Windows.Services;
 internal sealed class PrefixListService : IPrefixListService
 {
     private readonly List<string> _prefixes;
-    private readonly StaticData.PrefixWindowType _prefixWindowType;
+    private readonly Action<List<string>> _persist;
 
     public PrefixListService(List<string> prefixes, StaticData.PrefixWindowType prefixWindowType)
+        : this(prefixes, CreatePersister(prefixWindowType)) { }
+
+    internal PrefixListService(List<string> prefixes, Action<List<string>> persist)
     {
         ArgumentNullException.ThrowIfNull(prefixes);
+        ArgumentNullException.ThrowIfNull(persist);
         _prefixes = prefixes;
-        _prefixWindowType = prefixWindowType;
+        _persist = persist;
     }
 
     public IReadOnlyCollection<string> GetPrefixes()
@@ -67,16 +71,17 @@ internal sealed class PrefixListService : IPrefixListService
         return (value ?? string.Empty).Trim().ToLowerInvariant();
     }
 
-    private void Persist()
-    {
-        switch (_prefixWindowType)
+    private void Persist() => _persist(_prefixes);
+
+    private static Action<List<string>> CreatePersister(
+        StaticData.PrefixWindowType prefixWindowType
+    ) =>
+        prefixWindowType switch
         {
-            case StaticData.PrefixWindowType.whitelist:
-                ConfigFileAccessor.GetInstance().SavePrefixesList(_prefixes);
-                break;
-            case StaticData.PrefixWindowType.blacklist:
-                ConfigFileAccessor.GetInstance().SaveBlacklist(_prefixes);
-                break;
-        }
-    }
+            StaticData.PrefixWindowType.whitelist => prefixes =>
+                ConfigFileAccessor.GetInstance().SavePrefixesList(prefixes),
+            StaticData.PrefixWindowType.blacklist => prefixes =>
+                ConfigFileAccessor.GetInstance().SaveBlacklist(prefixes),
+            _ => _ => { },
+        };
 }

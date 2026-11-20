@@ -18,12 +18,15 @@ namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux;
 internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 {
     private static readonly TimeSpan DefaultReconciliationInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DefaultReconnectDelay = TimeSpan.FromMilliseconds(500);
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private readonly SemaphoreSlim _deviceGate = new(1, 1);
     private readonly ILinuxInputDeviceDiscovery _discovery;
     private readonly ILinuxKeyboardForwarderFactory _forwarderFactory;
     private readonly ILogger _logger;
     private readonly TimeSpan _reconciliationInterval;
+    private readonly ILinuxEvdevIo _evdev;
+    private readonly TimeSpan _reconnectDelay;
     private readonly EventDecoder _decoder = new();
     private readonly Dictionary<string, DeviceRoutingState> _routingByDevice = (
         new(StringComparer.Ordinal)
@@ -54,7 +57,9 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         ILinuxInputDeviceDiscovery discovery,
         ILinuxKeyboardForwarderFactory forwarderFactory,
         ILogger logger,
-        TimeSpan reconciliationInterval
+        TimeSpan reconciliationInterval,
+        ILinuxEvdevIo? evdev = null,
+        TimeSpan? reconnectDelay = null
     )
     {
         ArgumentNullException.ThrowIfNull(discovery);
@@ -67,6 +72,8 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         _forwarderFactory = forwarderFactory;
         _logger = logger;
         _reconciliationInterval = reconciliationInterval;
+        _evdev = evdev ?? LinuxEvdevIo.Instance;
+        _reconnectDelay = reconnectDelay ?? DefaultReconnectDelay;
     }
 
     /// <inheritdoc />
@@ -469,10 +476,9 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            int fd = LinuxNative.OpenReadOnlyNonBlocking(devicePath);
+            int fd = _evdev.Open(devicePath, out int openErrno);
             if (fd < 0)
             {
-                int openErrno = LinuxNative.GetLastErrno();
                 if (LinuxNative.IsPermissionError(openErrno))
                 {
                     _logger.Warning(
@@ -491,9 +497,8 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             bool grabbed = false;
             try
             {
-                if (LinuxNative.Ioctl(fd, LinuxIoctl.EviocGrab, 1) < 0)
+                if (_evdev.SetGrab(fd, grabbed: true, out int grabErrno) < 0)
                 {
-                    int grabErrno = LinuxNative.GetLastErrno();
                     if (LinuxNative.IsPermissionError(grabErrno))
                     {
                         _logger.Warning(
@@ -512,7 +517,7 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    nint bytesRead = LinuxNative.Read(fd, readBuffer, readBuffer.Length);
+                    nint bytesRead = _evdev.Read(fd, readBuffer, out int errno);
                     if (bytesRead > 0)
                     {
                         Buffer.BlockCopy(readBuffer, 0, parseBuffer, buffered, (int)bytesRead);
@@ -551,7 +556,6 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
                     if (bytesRead == 0)
                         throw new DeviceDisconnectedException();
 
-                    int errno = LinuxNative.GetLastErrno();
                     if (errno == LinuxNative.Eintr)
                         continue;
                     if (LinuxNative.IsWouldBlockError(errno))
@@ -582,9 +586,9 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
             finally
             {
                 if (grabbed)
-                    _ = LinuxNative.Ioctl(fd, LinuxIoctl.EviocGrab, 0);
+                    _ = _evdev.SetGrab(fd, grabbed: false, out _);
 
-                _ = LinuxNative.Close(fd);
+                _evdev.Close(fd);
             }
 
             await DelayReconnectAsync(cancellationToken).ConfigureAwait(false);
@@ -784,12 +788,11 @@ internal sealed class LinuxGlobalKeyboardListener : IGlobalKeyboardListener
         }
     }
 
-    private static async Task DelayReconnectAsync(CancellationToken cancellationToken)
+    private async Task DelayReconnectAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken)
-                .ConfigureAwait(false);
+            await Task.Delay(_reconnectDelay, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

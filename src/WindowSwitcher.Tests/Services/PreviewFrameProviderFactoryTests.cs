@@ -17,8 +17,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_SelectsX11ProviderWithoutPipeWireFallback()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var capabilities = new PlatformCapabilityStatus();
         var factory = CreateFactory(
@@ -38,8 +37,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_DoesNotUsePipeWireWhenX11CaptureIsUnavailable()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var capabilities = new PlatformCapabilityStatus();
         var factory = CreateFactory(
@@ -59,8 +57,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_DoesNotUseX11WhenPipeWireIsUnavailableOnWayland()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var dependencies = new FakeLinuxDependencyRegistry();
         var capabilities = new PlatformCapabilityStatus();
@@ -85,8 +82,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_ReportsKWinWindowBackendForCompositeAccessor()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var capabilities = new PlatformCapabilityStatus();
         var factory = CreateFactory(
@@ -106,8 +102,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_ReturnsNoOpForUnsupportedSession()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var capabilities = new PlatformCapabilityStatus();
         var factory = CreateFactory(
@@ -127,8 +122,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_SelectsPipeWireOnlyWhenBothNativeLibrariesAreAvailable()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var capabilities = new PlatformCapabilityStatus();
         var factory = CreateFactory(
@@ -149,8 +143,7 @@ public sealed class PreviewFrameProviderFactoryTests
     [Fact]
     public void Create_ReportsMissingProjectNativeAdapterSeparately()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var dependencies = new FakeLinuxDependencyRegistry();
         var capabilities = new PlatformCapabilityStatus();

@@ -1,11 +1,13 @@
 using System.Globalization;
+using WindowSwitcher.Lib.Data.Platform.Keybinds.Listeners.Linux.InputEventsCore.Models;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
-using WindowSwitcher.Lib.Data.Platform.Keybinds.Utilities;
 
 namespace WindowSwitcher.Lib.Data.Platform.Keybinds.Runtime;
 
 internal static class GlobalKeyEventKeyResolver
 {
+    private const int VirtualKeyReturn = 0x0D;
+
     public static bool TryResolve(
         GlobalKeyEventArgs keyEvent,
         out ResolvedGlobalKeyEvent resolvedEvent
@@ -53,6 +55,17 @@ internal static class GlobalKeyEventKeyResolver
             return true;
         }
 
+        if (virtualKeyCode == VirtualKeyReturn && keyEvent.IsExtendedKey)
+        {
+            resolvedEvent = new ResolvedGlobalKeyEvent(
+                keyEvent.State,
+                keyEvent.IsRepeat,
+                Modifier: null,
+                PrimaryKey: KeybindPrimaryKey.NumPadEnter
+            );
+            return true;
+        }
+
         if (TryResolveWindowsPrimaryKey(virtualKeyCode, out KeybindPrimaryKey primaryKey))
         {
             resolvedEvent = new ResolvedGlobalKeyEvent(
@@ -73,16 +86,15 @@ internal static class GlobalKeyEventKeyResolver
     )
     {
         resolvedEvent = default;
-        if (string.IsNullOrWhiteSpace(keyEvent.KeyName))
+        if (!TryParseLinuxKeyCode(keyEvent.KeyName, out KeyCode keyCode))
             return false;
 
-        string keyName = keyEvent.KeyName.Trim();
-        KeybindModifier? modifier = keyName switch
+        KeybindModifier? modifier = keyCode switch
         {
-            "LeftShift" or "RightShift" => KeybindModifier.Shift,
-            "LeftCtrl" or "RightCtrl" => KeybindModifier.Ctrl,
-            "LeftAlt" or "RightAlt" => KeybindModifier.Alt,
-            "LeftMeta" or "RightMeta" => KeybindModifier.Meta,
+            KeyCode.LeftShift or KeyCode.RightShift => KeybindModifier.Shift,
+            KeyCode.LeftCtrl or KeyCode.RightCtrl => KeybindModifier.Ctrl,
+            KeyCode.LeftAlt or KeyCode.RightAlt => KeybindModifier.Alt,
+            KeyCode.LeftMeta or KeyCode.RightMeta => KeybindModifier.Meta,
             _ => null,
         };
 
@@ -97,7 +109,8 @@ internal static class GlobalKeyEventKeyResolver
             return true;
         }
 
-        if (!KeyCombinationParser.TryParsePrimaryToken(keyName, out KeybindPrimaryKey primaryKey))
+        KeybindPrimaryKey primaryKey = ResolveLinuxPrimaryKey(keyCode);
+        if (primaryKey == KeybindPrimaryKey.None)
             return false;
 
         resolvedEvent = new ResolvedGlobalKeyEvent(
@@ -107,6 +120,127 @@ internal static class GlobalKeyEventKeyResolver
             PrimaryKey: primaryKey
         );
         return true;
+    }
+
+    /// <summary>
+    /// Reads the evdev key named by <see cref="GlobalKeyboardEventMapper.FromLinux"/>.
+    /// </summary>
+    private static bool TryParseLinuxKeyCode(string? keyName, out KeyCode keyCode)
+    {
+        keyCode = KeyCode.Reserved;
+        if (string.IsNullOrWhiteSpace(keyName))
+            return false;
+
+        string trimmedName = keyName.Trim();
+        // Enum.TryParse also accepts numeric strings; only key names are valid here.
+        if (char.IsDigit(trimmedName[0]) || trimmedName[0] is '-' or '+')
+            return false;
+
+        return Enum.TryParse(trimmedName, ignoreCase: false, out keyCode)
+            && Enum.IsDefined(keyCode);
+    }
+
+    /// <summary>
+    /// Maps evdev key codes to primary keys. The table is explicit so that multimedia keys whose
+    /// names look like keyboard keys (KEY_BACK, for instance) are never mistaken for them.
+    /// </summary>
+    private static KeybindPrimaryKey ResolveLinuxPrimaryKey(KeyCode keyCode)
+    {
+        if (keyCode is >= KeyCode.F1 and <= KeyCode.F10)
+            return (KeybindPrimaryKey)((int)KeybindPrimaryKey.F1 + (keyCode - KeyCode.F1));
+
+        if (keyCode is >= KeyCode.F13 and <= KeyCode.F24)
+            return (KeybindPrimaryKey)((int)KeybindPrimaryKey.F13 + (keyCode - KeyCode.F13));
+
+        if (keyCode is >= KeyCode.Digit1 and <= KeyCode.Digit9)
+            return (KeybindPrimaryKey)((int)KeybindPrimaryKey.D1 + (keyCode - KeyCode.Digit1));
+
+        return keyCode switch
+        {
+            KeyCode.A => KeybindPrimaryKey.A,
+            KeyCode.B => KeybindPrimaryKey.B,
+            KeyCode.C => KeybindPrimaryKey.C,
+            KeyCode.D => KeybindPrimaryKey.D,
+            KeyCode.E => KeybindPrimaryKey.E,
+            KeyCode.F => KeybindPrimaryKey.F,
+            KeyCode.G => KeybindPrimaryKey.G,
+            KeyCode.H => KeybindPrimaryKey.H,
+            KeyCode.I => KeybindPrimaryKey.I,
+            KeyCode.J => KeybindPrimaryKey.J,
+            KeyCode.K => KeybindPrimaryKey.K,
+            KeyCode.L => KeybindPrimaryKey.L,
+            KeyCode.M => KeybindPrimaryKey.M,
+            KeyCode.N => KeybindPrimaryKey.N,
+            KeyCode.O => KeybindPrimaryKey.O,
+            KeyCode.P => KeybindPrimaryKey.P,
+            KeyCode.Q => KeybindPrimaryKey.Q,
+            KeyCode.R => KeybindPrimaryKey.R,
+            KeyCode.S => KeybindPrimaryKey.S,
+            KeyCode.T => KeybindPrimaryKey.T,
+            KeyCode.U => KeybindPrimaryKey.U,
+            KeyCode.V => KeybindPrimaryKey.V,
+            KeyCode.W => KeybindPrimaryKey.W,
+            KeyCode.X => KeybindPrimaryKey.X,
+            KeyCode.Y => KeybindPrimaryKey.Y,
+            KeyCode.Z => KeybindPrimaryKey.Z,
+            KeyCode.Digit0 => KeybindPrimaryKey.D0,
+            KeyCode.F11 => KeybindPrimaryKey.F11,
+            KeyCode.F12 => KeybindPrimaryKey.F12,
+            KeyCode.Esc => KeybindPrimaryKey.Escape,
+            KeyCode.Tab => KeybindPrimaryKey.Tab,
+            KeyCode.Backspace => KeybindPrimaryKey.Backspace,
+            KeyCode.Enter => KeybindPrimaryKey.Enter,
+            KeyCode.Space => KeybindPrimaryKey.Space,
+            KeyCode.CapsLock => KeybindPrimaryKey.CapsLock,
+            KeyCode.NumLock => KeybindPrimaryKey.NumLock,
+            KeyCode.ScrollLock => KeybindPrimaryKey.ScrollLock,
+            KeyCode.Pause => KeybindPrimaryKey.Pause,
+            // KEY_SYSRQ is the PrtSc key; xkb also maps KEY_PRINT to the Print keysym.
+            KeyCode.PrintScreen or KeyCode.Print => KeybindPrimaryKey.PrintScreen,
+            KeyCode.Insert => KeybindPrimaryKey.Insert,
+            KeyCode.Delete => KeybindPrimaryKey.Delete,
+            KeyCode.Home => KeybindPrimaryKey.Home,
+            KeyCode.End => KeybindPrimaryKey.End,
+            KeyCode.PageUp => KeybindPrimaryKey.PageUp,
+            KeyCode.PageDown => KeybindPrimaryKey.PageDown,
+            KeyCode.ArrowLeft => KeybindPrimaryKey.Left,
+            KeyCode.ArrowUp => KeybindPrimaryKey.Up,
+            KeyCode.ArrowRight => KeybindPrimaryKey.Right,
+            KeyCode.ArrowDown => KeybindPrimaryKey.Down,
+            // The PC context-menu key sends KEY_COMPOSE; KEY_MENU comes from other keyboards.
+            KeyCode.Compose or KeyCode.Menu => KeybindPrimaryKey.Menu,
+            KeyCode.Keypad0 => KeybindPrimaryKey.NumPad0,
+            KeyCode.Keypad1 => KeybindPrimaryKey.NumPad1,
+            KeyCode.Keypad2 => KeybindPrimaryKey.NumPad2,
+            KeyCode.Keypad3 => KeybindPrimaryKey.NumPad3,
+            KeyCode.Keypad4 => KeybindPrimaryKey.NumPad4,
+            KeyCode.Keypad5 => KeybindPrimaryKey.NumPad5,
+            KeyCode.Keypad6 => KeybindPrimaryKey.NumPad6,
+            KeyCode.Keypad7 => KeybindPrimaryKey.NumPad7,
+            KeyCode.Keypad8 => KeybindPrimaryKey.NumPad8,
+            KeyCode.Keypad9 => KeybindPrimaryKey.NumPad9,
+            // Capture maps the Avalonia NumPadComma and NumPadEqual keys the same way.
+            KeyCode.KeypadDot or KeyCode.KeypadComma => KeybindPrimaryKey.NumPadDecimal,
+            KeyCode.KeypadEqual => KeybindPrimaryKey.Equal,
+            KeyCode.KeypadPlus => KeybindPrimaryKey.NumPadAdd,
+            KeyCode.KeypadMinus => KeybindPrimaryKey.NumPadSubtract,
+            KeyCode.KeypadAsterisk => KeybindPrimaryKey.NumPadMultiply,
+            KeyCode.KeypadSlash => KeybindPrimaryKey.NumPadDivide,
+            KeyCode.KeypadEnter => KeybindPrimaryKey.NumPadEnter,
+            KeyCode.Minus => KeybindPrimaryKey.Minus,
+            KeyCode.Equal => KeybindPrimaryKey.Equal,
+            KeyCode.LeftBrace => KeybindPrimaryKey.LeftBracket,
+            KeyCode.RightBrace => KeybindPrimaryKey.RightBracket,
+            KeyCode.Backslash => KeybindPrimaryKey.Backslash,
+            KeyCode.Semicolon => KeybindPrimaryKey.Semicolon,
+            KeyCode.Apostrophe => KeybindPrimaryKey.Apostrophe,
+            KeyCode.Grave => KeybindPrimaryKey.Grave,
+            KeyCode.Comma => KeybindPrimaryKey.Comma,
+            KeyCode.Dot => KeybindPrimaryKey.Period,
+            KeyCode.Slash => KeybindPrimaryKey.Slash,
+            KeyCode.IntlBackslash => KeybindPrimaryKey.IntlBackslash,
+            _ => KeybindPrimaryKey.None,
+        };
     }
 
     private static bool TryParseWindowsVirtualKeyCode(string keyCode, out int virtualKeyCode)

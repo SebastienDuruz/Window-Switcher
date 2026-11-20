@@ -12,8 +12,7 @@ public sealed class PlatformCommandRunnerIntegrationTests
     public async Task RunAsync_WhoAmI_ReturnsOutput_OnSupportedPlatform()
     {
         ICommandRunner? runner = CreateRunnerForCurrentPlatform();
-        if (runner is null)
-            return;
+        Assert.SkipWhen(runner is null, "Requires Linux or Windows.");
 
         CommandResult result = await runner.RunAsync(
             CommandRequest.ForShell("whoami") with

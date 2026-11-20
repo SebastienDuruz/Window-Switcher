@@ -22,6 +22,7 @@ For the contribution process (branches, commit messages, pull requests), see [`C
 - Build: `dotnet build Window-Switcher.slnx`
 - Run: `dotnet run --project src/WindowSwitcher/WindowSwitcher.csproj`
 - Tests: `dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj`
+- Coverage: `make coverage` (HTML and text report in `artifacts/coverage/report`, exclusions in `coverage.runsettings`)
 
 All changes MUST compile and all tests MUST pass before submission.
 
@@ -143,6 +144,9 @@ All changes MUST compile and all tests MUST pass before submission.
 - ViewModels MUST be testable without UI runtime.
 - External dependencies MUST be mockable.
 - Avoid static dependencies; prefer dependency injection.
+- Tests that only apply to one platform MUST call `Assert.Skip`/`Assert.SkipUnless` instead of returning early, so they are reported as skipped rather than passed.
+- A test that documents a confirmed, not yet fixed bug MAY be skipped with a `Known bug:` reason; remove the skip together with the fix.
+- Native integration tests carry `[Trait("Category", "Integration")]`. X11 tests need a display (`DISPLAY`, Xvfb in CI) and draw only off-screen override-redirect windows; they skip under rootless Xwayland (Wayland desktops), which the X11 capture backend does not target.
 
 ---
 

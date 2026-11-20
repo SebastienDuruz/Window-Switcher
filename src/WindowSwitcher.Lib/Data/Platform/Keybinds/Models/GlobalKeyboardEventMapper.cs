@@ -31,7 +31,8 @@ internal static class GlobalKeyboardEventMapper
         uint virtualKeyCode,
         string? keyName,
         GlobalKeyState state,
-        bool isRepeat
+        bool isRepeat,
+        bool isExtendedKey = false
     )
     {
         return new GlobalKeyEventArgs
@@ -41,6 +42,7 @@ internal static class GlobalKeyboardEventMapper
             KeyName = string.IsNullOrWhiteSpace(keyName) ? null : keyName,
             State = state,
             IsRepeat = isRepeat,
+            IsExtendedKey = isExtendedKey,
             Timestamp = DateTimeOffset.UtcNow,
         };
     }

@@ -16,6 +16,8 @@ internal static class X11Native
     public const int Success = 0;
     public const int PropModeReplace = 0;
     public const int ClientMessage = 33;
+    public const int MapNotify = 19;
+    public const nint StructureNotifyMask = 1 << 17;
     public const nint SubstructureNotifyMask = 1 << 19;
     public const nint SubstructureRedirectMask = 1 << 20;
     public const ulong AllPlanes = ulong.MaxValue;
@@ -164,6 +166,9 @@ internal static class X11Native
 
     [DllImport("libX11.so.6")]
     public static extern int XDestroyImage(IntPtr image);
+
+    [DllImport("libX11.so.6")]
+    public static extern int XSelectInput(IntPtr display, IntPtr window, nint eventMask);
 
     [DllImport("libX11.so.6")]
     public static extern int XPending(IntPtr display);
