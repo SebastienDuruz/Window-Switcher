@@ -12,8 +12,7 @@ public sealed class X11EwmhWindowAccessorTests
     [Trait("Category", "Integration")]
     public async Task NativeAccessor_ReturnsWellFormedWindowIds_WhenDisplayIsAvailable()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         using var sut = new X11EwmhWindowAccessor();
 

@@ -1,0 +1,78 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # WindowSwitcher.Lib compiles the PipeWire native helper on Linux hosts; Xvfb provides the
+      # X server (Composite, Damage, MIT-SHM, RENDER) used by the X11 integration tests.
+      - name: Install Linux build and test dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential pkg-config libpipewire-0.3-dev xvfb xauth
+
+      - name: Restore
+        run: |
+          dotnet tool restore
+          dotnet restore Window-Switcher.slnx
+
+      - name: Check formatting
+        if: runner.os == 'Linux'
+        run: dotnet csharpier check .
+
+      - name: Test with coverage
+        shell: bash
+        run: |
+          # On Linux the X11 integration tests need a display: run the suite inside Xvfb.
+          launcher=()
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            launcher=(xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24")
+          fi
+          "${launcher[@]}" dotnet test src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj \
+            --no-restore \
+            --settings coverage.runsettings \
+            --collect "Code Coverage" \
+            --results-directory artifacts/coverage/raw \
+            --logger "console;verbosity=normal"
+
+      - name: Coverage report
+        if: always()
+        run: >
+          dotnet reportgenerator
+          "-reports:artifacts/coverage/raw/**/*.cobertura.xml"
+          -targetdir:artifacts/coverage/report
+          "-reporttypes:Html;TextSummary;MarkdownSummaryGithub"
+
+      - name: Publish coverage summary
+        if: always()
+        shell: bash
+        run: cat artifacts/coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}
+          path: artifacts/coverage/report

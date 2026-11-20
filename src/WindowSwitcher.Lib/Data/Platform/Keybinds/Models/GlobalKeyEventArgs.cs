@@ -31,6 +31,12 @@ public sealed class GlobalKeyEventArgs : EventArgs
     public bool IsRepeat { get; init; }
 
     /// <summary>
+    /// Indicates a Windows extended key (<c>LLKHF_EXTENDED</c>), which tells Numpad Enter apart
+    /// from the main Enter key since both report <c>VK_RETURN</c>.
+    /// </summary>
+    public bool IsExtendedKey { get; init; }
+
+    /// <summary>
     /// Event timestamp assigned by the application.
     /// </summary>
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;

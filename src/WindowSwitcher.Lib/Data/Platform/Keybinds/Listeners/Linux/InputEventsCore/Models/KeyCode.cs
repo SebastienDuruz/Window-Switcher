@@ -116,6 +116,7 @@ internal enum KeyCode : ushort
     Power = 116,
     KeypadEqual = 117,
     Pause = 119,
+    KeypadComma = 121,
     LeftMeta = 125,
     RightMeta = 126,
     Compose = 127,

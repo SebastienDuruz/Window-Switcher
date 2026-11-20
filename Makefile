@@ -1,6 +1,7 @@
 SOLUTION := Window-Switcher.slnx
 APP_PROJECT := src/WindowSwitcher/WindowSwitcher.csproj
 TEST_PROJECT := src/WindowSwitcher.Tests/WindowSwitcher.Tests.csproj
+COVERAGE_DIR := artifacts/coverage
 SENTRY_TELEMETRY ?= true
 TELEMETRY_DISTRIBUTION_CHANNEL ?= source
 TELEMETRY_PACKAGE_KIND ?= unpackaged
@@ -9,7 +10,7 @@ BUILD_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
 BUILD_TELEMETRY_ARGUMENTS := $(BUILD_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
 BUILD_SCRIPT := ./build/build.sh
 
-.PHONY: help restore build run test test-no-build clean format format-check artifacts appimage installer
+.PHONY: help restore build run test test-no-build coverage clean format format-check artifacts appimage installer
 
 help:
 	@echo "Window Switcher development commands"
@@ -19,6 +20,7 @@ help:
 	@echo "  make run           Run the desktop app"
 	@echo "  make test          Run the test project"
 	@echo "  make test-no-build Run tests without rebuilding"
+	@echo "  make coverage      Run tests with coverage (report in $(COVERAGE_DIR))"
 	@echo "  make clean         Clean the solution"
 	@echo "  make format        Format source with CSharpier"
 	@echo "  make format-check  Check source formatting with CSharpier"
@@ -44,6 +46,13 @@ test:
 
 test-no-build:
 	dotnet test $(TEST_PROJECT) --no-build
+
+coverage:
+	dotnet tool restore
+	rm -rf $(COVERAGE_DIR)
+	dotnet test $(TEST_PROJECT) $(MSBUILD_SENTRY_PROPERTY) --settings coverage.runsettings --collect "Code Coverage" --results-directory $(COVERAGE_DIR)/raw
+	dotnet reportgenerator -reports:"$(COVERAGE_DIR)/raw/**/*.cobertura.xml" -targetdir:$(COVERAGE_DIR)/report -reporttypes:"Html;TextSummary;Cobertura"
+	@cat $(COVERAGE_DIR)/report/Summary.txt
 
 clean:
 	dotnet clean $(SOLUTION)

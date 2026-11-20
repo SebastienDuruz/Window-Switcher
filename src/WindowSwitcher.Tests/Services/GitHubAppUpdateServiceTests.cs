@@ -81,11 +81,10 @@ public sealed class GitHubAppUpdateServiceTests
         string assetName
     )
     {
-        if (
-            !OperatingSystem.IsLinux()
-            || RuntimeInformation.ProcessArchitecture != Architecture.X64
-        )
-            return;
+        Assert.SkipUnless(
+            OperatingSystem.IsLinux() && RuntimeInformation.ProcessArchitecture == Architecture.X64,
+            "Requires Linux x64, the only platform that publishes an AppImage."
+        );
 
         var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -215,6 +214,190 @@ public sealed class GitHubAppUpdateServiceTests
         Assert.Contains("No update launch target", launchResult.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("v1.2.3", "1.2.3")]
+    [InlineData("V1.2.3+build.7", "1.2.3")]
+    [InlineData(" 1.2.3-beta.1 ", "1.2.3")]
+    [InlineData("1.2", "1.2")]
+    [InlineData("  ", "")]
+    public void NormalizeVersionLabel_StripsPrefixAndPrereleaseMetadata(
+        string rawVersion,
+        string expected
+    )
+    {
+        Assert.Equal(expected, GitHubAppUpdateService.NormalizeVersionLabel(rawVersion));
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_SendsGitHubApiHeaders()
+    {
+        HttpRequestMessage? captured = null;
+        var handler = new StubHttpMessageHandler(request =>
+        {
+            captured = request;
+            return JsonResponse("""{ "tag_name": "v0.9.0" }""");
+        });
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        _ = await sut.CheckForUpdatesAsync("v0.9.0-dev");
+
+        Assert.NotNull(captured);
+        Assert.Equal(
+            "https://api.github.com/repos/SebastienDuruz/Window-Switcher/releases/latest",
+            captured.RequestUri?.ToString()
+        );
+        Assert.Equal("WindowSwitcher/0.9.0", captured.Headers.UserAgent.ToString());
+        Assert.Contains(
+            captured.Headers.Accept,
+            header => header.MediaType == "application/vnd.github+json"
+        );
+        Assert.True(captured.Headers.Contains("X-GitHub-Api-Version"));
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_DoesNotCallFeed_WhenCurrentVersionIsInvalid()
+    {
+        int calls = 0;
+        var handler = new StubHttpMessageHandler(_ =>
+        {
+            calls++;
+            return JsonResponse("""{ "tag_name": "v1.0.0" }""");
+        });
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("development");
+
+        Assert.False(result.IsUpdateAvailable);
+        Assert.Equal("Current version format is invalid.", result.Message);
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_ReturnsMessage_WhenFeedIsUnreachable()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            throw new HttpRequestException("Name resolution failed")
+        );
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("0.9.0");
+
+        Assert.False(result.IsUpdateAvailable);
+        Assert.Equal("Unable to reach release feed: Name resolution failed", result.Message);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_PropagatesCancellationInsteadOfReportingFailure()
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse("{}"));
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            sut.CheckForUpdatesAsync("0.9.0", cancellation.Token)
+        );
+    }
+
+    [Theory]
+    [InlineData("not json", "Release feed payload is invalid")]
+    [InlineData("""{ "tag_name": "nightly" }""", "Latest release version format is invalid.")]
+    [InlineData(
+        """{ "html_url": "https://example.invalid" }""",
+        "Latest release version format is invalid."
+    )]
+    public async Task CheckForUpdatesAsync_ReturnsMessage_WhenPayloadIsUnusable(
+        string payload,
+        string expectedMessage
+    )
+    {
+        var handler = new StubHttpMessageHandler(_ => JsonResponse(payload));
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("0.9.0");
+
+        Assert.False(result.IsUpdateAvailable);
+        Assert.StartsWith(expectedMessage, result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_IgnoresPrereleaseOfCurrentVersion()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            JsonResponse("""{ "tag_name": "v1.0.0-rc.1" }""")
+        );
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("1.0.0");
+
+        Assert.False(result.IsUpdateAvailable);
+        Assert.Equal("1.0.0", result.LatestVersion);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_TruncatesLongReleaseNotes()
+    {
+        string body = new('x', 1500);
+        var handler = new StubHttpMessageHandler(_ =>
+            JsonResponse($$"""{ "tag_name": "v2.0.0", "body": "  {{body}}  " }""")
+        );
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("1.0.0");
+
+        Assert.Equal(new string('x', 1200) + "...", result.ReleaseNotes);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_ExplainsMissingAsset_WhenReleaseHasNoCompatibleFile()
+    {
+        var handler = new StubHttpMessageHandler(_ =>
+            JsonResponse(
+                """{ "tag_name": "v2.0.0", "html_url": "https://example.invalid/release", "assets": [] }"""
+            )
+        );
+        var sut = new GitHubAppUpdateService(new HttpClient(handler), new CapturingLauncher());
+
+        UpdateCheckResult result = await sut.CheckForUpdatesAsync("1.0.0");
+
+        Assert.True(result.IsUpdateAvailable);
+        Assert.Null(result.AssetDownloadUrl);
+        Assert.True(result.CanStartUpdate);
+        Assert.Equal("Update found but no compatible direct asset was detected.", result.Message);
+    }
+
+    [Theory]
+    [InlineData("handler missing", "handler missing")]
+    [InlineData(null, "Unable to start update target.")]
+    public async Task LaunchUpdateAsync_ReturnsFailure_WhenLauncherFails(
+        string? launcherError,
+        string expectedMessage
+    )
+    {
+        var launcher = new CapturingLauncher { Succeeds = false, Error = launcherError };
+        var sut = new GitHubAppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(_ => JsonResponse("{}"))),
+            launcher
+        );
+
+        UpdateLaunchResult result = await sut.LaunchUpdateAsync(
+            new UpdateCheckResult { ReleasePageUrl = "https://example.invalid/release" }
+        );
+
+        Assert.False(result.Launched);
+        Assert.False(result.ShouldCloseApplication);
+        Assert.Equal("https://example.invalid/release", result.LaunchTarget);
+        Assert.Equal(expectedMessage, result.Message);
+    }
+
+    private static HttpResponseMessage JsonResponse(string json)
+    {
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+    }
+
     private sealed class StubHttpMessageHandler(
         Func<HttpRequestMessage, HttpResponseMessage> callback
     ) : HttpMessageHandler
@@ -224,19 +407,23 @@ public sealed class GitHubAppUpdateServiceTests
             CancellationToken cancellationToken
         )
         {
+            // Real handlers abort on cancellation; the service must rethrow instead of reporting it.
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(callback(request));
         }
     }
 
     private sealed class CapturingLauncher : IUpdateLinkLauncher
     {
+        public bool Succeeds { get; init; } = true;
+        public string? Error { get; init; }
         public string? LastTarget { get; private set; }
 
         public bool TryLaunch(string launchTarget, out string? errorMessage)
         {
             LastTarget = launchTarget;
-            errorMessage = null;
-            return true;
+            errorMessage = Succeeds ? null : Error;
+            return Succeeds;
         }
     }
 }

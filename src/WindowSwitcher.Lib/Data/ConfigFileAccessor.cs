@@ -20,7 +20,8 @@ public class ConfigFileAccessor
     // Set at startup when an unreadable configuration file could not be moved aside.
     private bool _persistenceSuspended;
 
-    private ConfigFileAccessor()
+    // Internal so tests can bind an instance to a temporary data folder.
+    internal ConfigFileAccessor()
     {
         StaticData.CheckFolders();
         _filePath = Path.Combine(StaticData.DataFolder, "config.json");

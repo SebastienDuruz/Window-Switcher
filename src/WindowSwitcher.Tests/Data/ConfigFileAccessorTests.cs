@@ -1,9 +1,9 @@
-using System.Reflection;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Models;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Pipewire;
 using WindowSwitcher.Lib.Models;
 using Xunit;
+using static WindowSwitcher.Tests.TestConfig.ConfigFileAccessorTestFactory;
 
 namespace WindowSwitcher.Tests.Data;
 
@@ -237,8 +237,15 @@ public sealed class ConfigFileAccessorTests
     [Fact]
     public void ReadUserSettings_LeavesConfigUntouched_WhenItCannotBeMovedAside()
     {
-        if (!OperatingSystem.IsLinux() || Environment.IsPrivilegedProcess)
-            return;
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("Requires Linux file permissions.");
+            return; // Never reached: tells the platform analyzer (CA1416) the guard exits.
+        }
+        Assert.SkipWhen(
+            Environment.IsPrivilegedProcess,
+            "A privileged process bypasses file permissions."
+        );
 
         string dataFolder = CreateTempDataFolder();
         string configPath = Path.Combine(dataFolder, "config.json");
@@ -594,45 +601,5 @@ public sealed class ConfigFileAccessorTests
         {
             DeleteDirectory(dataFolder);
         }
-    }
-
-    private static ConfigFileAccessor CreateAccessor(string dataFolder)
-    {
-        string originalDataFolder = StaticData.DataFolder;
-        StaticData.DataFolder = dataFolder;
-        try
-        {
-            ConstructorInfo? ctor = typeof(ConfigFileAccessor).GetConstructor(
-                BindingFlags.Instance | BindingFlags.NonPublic,
-                binder: null,
-                Type.EmptyTypes,
-                modifiers: null
-            );
-            Assert.NotNull(ctor);
-            return (ConfigFileAccessor)ctor.Invoke(null);
-        }
-        finally
-        {
-            StaticData.DataFolder = originalDataFolder;
-        }
-    }
-
-    private static string CreateTempDataFolder()
-    {
-        string folder = Path.Combine(
-            Path.GetTempPath(),
-            "WindowSwitcher.Tests",
-            Guid.NewGuid().ToString("N")
-        );
-        Directory.CreateDirectory(folder);
-        return folder;
-    }
-
-    private static void DeleteDirectory(string folder)
-    {
-        if (!Directory.Exists(folder))
-            return;
-
-        Directory.Delete(folder, recursive: true);
     }
 }

@@ -16,15 +16,8 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
     private const int WhKeyboardLl = 13;
     private const int HcAction = 0;
     private const uint WmQuit = 0x0012;
-    private const uint WmKeyDown = 0x0100;
-    private const uint WmKeyUp = 0x0101;
-    private const uint WmSysKeyDown = 0x0104;
-    private const uint WmSysKeyUp = 0x0105;
-    private const uint LlkhfExtended = 0x00000001;
-    private const uint LlkhfInjected = 0x00000010;
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
-    private readonly object _pressedKeysSync = new();
-    private readonly HashSet<uint> _pressedKeys = [];
+    private readonly WindowsKeyboardHookProcessor _processor;
     private Thread? _hookThread;
     private uint _hookThreadId;
     private IntPtr _hookHandle;
@@ -44,6 +37,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        _processor = new WindowsKeyboardHookProcessor(ResolveKeyName, logger);
     }
 
     /// <inheritdoc />
@@ -234,38 +228,19 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
 
         try
         {
-            uint message = unchecked((uint)wParam.ToInt64());
-            bool isDown = message == WmKeyDown || message == WmSysKeyDown;
-            bool isUp = message == WmKeyUp || message == WmSysKeyUp;
-            if (!isDown && !isUp)
-                return CallNextHookEx(_hookHandle, code, wParam, lParam);
-
             KeyboardHookData keyboardData = Marshal.PtrToStructure<KeyboardHookData>(lParam);
-            if ((keyboardData.Flags & LlkhfInjected) != 0)
+            GlobalKeyEventArgs? eventArgs = _processor.TryCreateEvent(
+                unchecked((uint)wParam.ToInt64()),
+                keyboardData.VirtualKeyCode,
+                keyboardData.ScanCode,
+                keyboardData.Flags
+            );
+            if (eventArgs is null)
                 return CallNextHookEx(_hookHandle, code, wParam, lParam);
 
-            GlobalKeyState state = isDown ? GlobalKeyState.Down : GlobalKeyState.Up;
-            bool isRepeat = false;
-
-            lock (_pressedKeysSync)
-            {
-                if (state == GlobalKeyState.Down)
-                    isRepeat = !_pressedKeys.Add(keyboardData.VirtualKeyCode);
-                else
-                    _pressedKeys.Remove(keyboardData.VirtualKeyCode);
-            }
-
-            string? keyName = ResolveKeyName(keyboardData);
-            var eventArgs = GlobalKeyboardEventMapper.FromWindows(
-                keyboardData.VirtualKeyCode,
-                keyName,
-                state,
-                isRepeat
-            );
-
-            KeyboardFilterDecision decision = EvaluateFilter(eventArgs);
+            bool consume = _processor.ShouldConsume(eventArgs, InputFilter);
             Emit(eventArgs);
-            return ApplyDecision(decision, code, wParam, lParam);
+            return consume ? new IntPtr(1) : CallNextHookEx(_hookHandle, code, wParam, lParam);
         }
         catch (Exception exception)
         {
@@ -274,48 +249,11 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
         }
     }
 
-    private KeyboardFilterDecision EvaluateFilter(GlobalKeyEventArgs eventArgs)
+    private static string? ResolveKeyName(int keyNameParameter)
     {
-        IKeyboardInputFilter? filter = InputFilter;
-        if (filter is null)
-            return KeyboardFilterDecision.Forward();
-
-        try
-        {
-            return filter.ProcessEvent(eventArgs);
-        }
-        catch (Exception exception)
-        {
-            _logger.Error(exception, "Windows keyboard filter failed");
-            return KeyboardFilterDecision.Forward();
-        }
-    }
-
-    private IntPtr ApplyDecision(
-        KeyboardFilterDecision decision,
-        int code,
-        IntPtr wParam,
-        IntPtr lParam
-    )
-    {
-        return decision.Routing == KeyboardEventRouting.Consume
-            ? new IntPtr(1)
-            : CallNextHookEx(_hookHandle, code, wParam, lParam);
-    }
-
-    private static string? ResolveKeyName(KeyboardHookData keyboardData)
-    {
-        uint scanCode = keyboardData.ScanCode;
-        if ((keyboardData.Flags & LlkhfExtended) != 0)
-            scanCode |= 0xE000;
-
-        int lParam = unchecked((int)(scanCode << 16));
         var keyNameBuilder = new StringBuilder(64);
-        int length = GetKeyNameText(lParam, keyNameBuilder, keyNameBuilder.Capacity);
-        if (length <= 0)
-            return null;
-
-        return keyNameBuilder.ToString();
+        int length = GetKeyNameText(keyNameParameter, keyNameBuilder, keyNameBuilder.Capacity);
+        return length > 0 ? keyNameBuilder.ToString() : null;
     }
 
     private void CleanupHook()
@@ -333,10 +271,7 @@ public sealed class WindowsGlobalKeyboardListener : IGlobalKeyboardListener
             _hookHandle = IntPtr.Zero;
         }
 
-        lock (_pressedKeysSync)
-        {
-            _pressedKeys.Clear();
-        }
+        _processor.Reset();
 
         _hookThreadId = 0;
         _hookProc = null;

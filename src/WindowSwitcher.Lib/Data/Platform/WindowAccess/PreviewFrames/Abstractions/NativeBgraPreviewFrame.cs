@@ -110,6 +110,10 @@ public sealed class NativeBgraPreviewFrame : PreviewFrame
         Interlocked.Exchange(ref _release, null)?.Invoke();
     }
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "memcpy")]
-    private static extern IntPtr NativeMemoryCopy(IntPtr destination, IntPtr source, UIntPtr count);
+    // Buffer.MemoryCopy works on every OS; a libc memcpy import fails to load on Windows.
+    private static unsafe void NativeMemoryCopy(IntPtr destination, IntPtr source, UIntPtr count)
+    {
+        ulong byteCount = count.ToUInt64();
+        Buffer.MemoryCopy((void*)source, (void*)destination, byteCount, byteCount);
+    }
 }

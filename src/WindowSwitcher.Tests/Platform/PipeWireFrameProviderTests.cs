@@ -43,8 +43,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task ConcurrentRequests_CoalescePortalCreation()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new BlockingPortalClient();
         using var cache = new WaylandScreenCastMemoryCache();
@@ -69,8 +68,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task RestoreToken_IsPassedThenConsumedBeforePortalRequest()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new RecordingPortalClient();
         using var cache = new WaylandScreenCastMemoryCache();
@@ -91,8 +89,7 @@ public sealed class PipeWireFrameProviderTests
         string secondProcessName
     )
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new RecordingPortalClient();
         var accessor = new FakeWinAccessor(
@@ -135,8 +132,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task MissingRestoreToken_RaisesTargetBeforeOpeningPicker()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new RecordingPortalClient();
         var accessor = new FakeWinAccessor();
@@ -152,8 +148,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task MissingRestoreToken_RepeatedPortalFailureRaisesTargetOnlyOnce()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new RecordingPortalClient();
         var accessor = new FakeWinAccessor();
@@ -175,8 +170,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task MissingRestoreToken_ReportsSelectionPromptLifetime()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var portal = new RecordingPortalClient();
         using var cache = new WaylandScreenCastMemoryCache();
@@ -198,8 +192,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task ForgetWindow_DoesNotWaitForLeasedFramesBeforeReturning()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         var stream = new LeaseAwareNativeStream();
         using var cache = new WaylandScreenCastMemoryCache();
@@ -234,8 +227,7 @@ public sealed class PipeWireFrameProviderTests
     [Fact]
     public async Task PortalFailure_LogsCaptureCreationErrorWithException()
     {
-        if (!OperatingSystem.IsLinux())
-            return;
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
 
         using var cache = new WaylandScreenCastMemoryCache();
         await using var provider = new PipeWireFrameProvider(

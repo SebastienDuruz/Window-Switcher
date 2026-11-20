@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Code coverage settings used by `make coverage`.
+  Only production assemblies are measured. Files that cannot carry meaningful unit tests
+  (P/Invoke declarations, XAML views and code-behind, process composition) are excluded so the
+  reported percentage reflects the code that tests are expected to cover.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <CodeCoverage>
+            <ModulePaths>
+              <Include>
+                <ModulePath>.*[\\/]WindowSwitcher\.dll$</ModulePath>
+                <ModulePath>.*[\\/]WindowSwitcher\.Lib\.dll$</ModulePath>
+              </Include>
+            </ModulePaths>
+            <Sources>
+              <Exclude>
+                <!-- Native function declarations: nothing to assert without the native library. -->
+                <Source>.*[\\/]Data[\\/]Platform[\\/]Interop[\\/].*</Source>
+                <Source>.*[\\/]X11Native\.cs$</Source>
+                <Source>.*[\\/]LinuxNative\.cs$</Source>
+                <Source>.*[\\/]LibPipeWireNative\.cs$</Source>
+                <Source>.*[\\/]WindowSwitcherPipeWireNative\.cs$</Source>
+                <!-- Avalonia views, code-behind and generated sources. -->
+                <Source>.*\.axaml$</Source>
+                <Source>.*\.axaml\.cs$</Source>
+                <Source>.*[\\/]obj[\\/].*</Source>
+                <!-- Process composition and thin adapters over static SDKs. -->
+                <Source>.*[\\/]WindowSwitcher[\\/]Program\.cs$</Source>
+                <Source>.*[\\/]Hosting[\\/]AppServiceProvider\.cs$</Source>
+                <Source>.*[\\/]Diagnostics[\\/]SentrySdkAdapter\.cs$</Source>
+              </Exclude>
+            </Sources>
+            <Attributes>
+              <Exclude>
+                <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
+                <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+                <Attribute>^System\.Runtime\.CompilerServices\.CompilerGeneratedAttribute$</Attribute>
+              </Exclude>
+            </Attributes>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -36,6 +36,7 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
     private int _readbackWidth;
     private int _readbackHeight;
     private bool _isRedirected;
+    private bool _pixmapStale;
     private bool _sharedMemoryDisabled;
     private bool? _renderSupported;
     private bool _renderDisabled;
@@ -120,6 +121,8 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
             if (damage == IntPtr.Zero)
                 return CloseAndReturnNull(display);
 
+            // MapNotify tells the session that the composite pixmap was reallocated.
+            _ = X11Native.XSelectInput(display, window, X11Native.StructureNotifyMask);
             _ = X11Native.XFlush(display);
             return new X11WindowCaptureSession(display, window, damageEventBase, damage)
             {
@@ -322,9 +325,15 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
         if (attributes.Width <= 0 || attributes.Height <= 0)
             return false;
 
-        if (_pixmap == IntPtr.Zero || _width != attributes.Width || _height != attributes.Height)
+        if (
+            _pixmap == IntPtr.Zero
+            || _pixmapStale
+            || _width != attributes.Width
+            || _height != attributes.Height
+        )
         {
             ReleaseCaptureSurface();
+            _pixmapStale = false;
 
             _pixmap = X11Native.XCompositeNameWindowPixmap(_display, _window);
             if (_pixmap == IntPtr.Zero)
@@ -754,6 +763,13 @@ internal sealed class X11WindowCaptureSession : IX11WindowCaptureSession
                     _ = X11Native.XNextEvent(_display, out XEvent xevent);
                     if (xevent.Type == _damageEventType)
                         sawDamage = true;
+                    else if (xevent.Type == X11Native.MapNotify)
+                    {
+                        // Mapping reallocates the window pixmap: the named one stops updating
+                        // (for example after a minimize and restore). Capture the new one.
+                        _pixmapStale = true;
+                        sawDamage = true;
+                    }
                 }
 
                 if (sawDamage && _damage != IntPtr.Zero)
