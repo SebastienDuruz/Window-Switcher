@@ -166,7 +166,7 @@ The keybind editor rejects duplicate shortcuts on one target and conflicts betwe
 | General | `Drag previews` | Allows floating previews to be dragged. |
 | General | `Focus on hover` | Focuses a client when the pointer enters its preview. |
 | General | `Reset layout…` | Removes saved preview positions and sizes, after confirmation, and moves the open previews back to the default layout. |
-| General | `Reset settings…` | Restores the default configuration, including filters, keybinds, and the preview layout, after confirmation. |
+| General | `Reset settings…` | Restores the default configuration, including filters, keybinds, the preview layout, and screen capture selections, after confirmation. |
 | Previews | `Show floating previews` | Shows a floating preview window for each tracked window; when off, windows are switched from the main list or with keybinds. |
 | Previews | `Live content` | Enables live content in floating preview windows. |
 | Previews | `Hide active preview` | Hides the preview of the window activated through Window Switcher until another window is activated. |

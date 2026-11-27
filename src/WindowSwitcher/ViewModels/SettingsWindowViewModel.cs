@@ -20,7 +20,7 @@ public partial class SettingsWindowViewModel : ObservableObject
 
     internal static readonly ConfirmationRequest ResetSettingsConfirmation = new(
         "Reset all settings",
-        "Restore the default configuration? Filters, keybinds and the preview layout are reset too.",
+        "Restore the default configuration? Filters, keybinds, the preview layout and screen capture selections are reset too.",
         "Reset settings"
     );
 
@@ -29,6 +29,7 @@ public partial class SettingsWindowViewModel : ObservableObject
     private readonly Action? _resetAllPreviews;
     private readonly Func<ConfirmationRequest, Task<bool>> _confirm;
     private readonly Action<SettingsPage> _pageShown;
+    private SettingsPage _lastValidPage = SettingsPage.General;
 
     [ObservableProperty]
     private int _selectedPageIndex;
@@ -104,9 +105,17 @@ public partial class SettingsWindowViewModel : ObservableObject
 
     partial void OnSelectedPageIndexChanged(int value)
     {
+        // The sidebar can clear its selection (index -1); keep the last page instead, so
+        // the window never shows an empty page and SelectedPage stays a defined value.
+        if (!Enum.IsDefined((SettingsPage)value))
+        {
+            SelectedPageIndex = (int)_lastValidPage;
+            return;
+        }
+
+        _lastValidPage = (SettingsPage)value;
         OnPropertyChanged(nameof(SelectedPage));
-        if (Enum.IsDefined((SettingsPage)value))
-            _pageShown((SettingsPage)value);
+        _pageShown((SettingsPage)value);
     }
 
     private async Task ResetLayoutAsync()

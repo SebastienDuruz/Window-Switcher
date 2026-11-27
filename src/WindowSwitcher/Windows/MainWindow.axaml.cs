@@ -263,12 +263,16 @@ public partial class MainWindow : Window, IFloatingWindowHost
 
     /// <summary>
     /// Restores the default configuration, then reloads the state that was read from the
-    /// previous configuration: preview layout, filter lists and the global keybind catalog. The settings
+    /// previous configuration: Wayland capture selections, preview layout, filter lists and
+    /// the global keybind catalog. The settings
     /// themselves are reloaded by the settings view model.
     /// </summary>
     private void ResetUserSettings(IWindowKeybindManager keybindManager)
     {
         _configurationService.ResetUserSettings();
+        // The Wayland restore tokens are cached in memory and written back whole on the next
+        // save; clear them too, otherwise the old tokens return to the reset configuration.
+        _previewSelectionReset?.ResetAllSelections();
         _floatingWindowRegistry.ResetLayout();
         Filters.Whitelist.Reload(_configurationService.GetWhitelistPrefixes());
         Filters.Blacklist.Reload(_configurationService.GetBlacklistPrefixes());
