@@ -33,6 +33,12 @@ internal sealed class FloatingPreviewCoordinator : IDisposable
         _windowKeybindActivator.WindowActivated += OnWindowKeybindActivated;
     }
 
+    /// <summary>
+    /// Raised with the newly highlighted preview, or <see langword="null"/> when no
+    /// preview is highlighted any more.
+    /// </summary>
+    public event EventHandler<IFloatingPreviewWindow?>? ActivePreviewChanged;
+
     public void SetActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         ArgumentNullException.ThrowIfNull(floatingWindow);
@@ -43,6 +49,7 @@ internal sealed class FloatingPreviewCoordinator : IDisposable
         _activePreviewWindow?.SetPreviewHighlight(false);
         _activePreviewWindow = floatingWindow;
         _activePreviewWindow.SetPreviewHighlight(true);
+        ActivePreviewChanged?.Invoke(this, floatingWindow);
     }
 
     public void ClearActivePreview(IFloatingPreviewWindow floatingWindow)
@@ -58,6 +65,7 @@ internal sealed class FloatingPreviewCoordinator : IDisposable
 
         _activePreviewWindow.SetPreviewHighlight(false);
         _activePreviewWindow = null;
+        ActivePreviewChanged?.Invoke(this, null);
     }
 
     public void NotifyPreviewWindowActivated(string windowId)
@@ -81,6 +89,22 @@ internal sealed class FloatingPreviewCoordinator : IDisposable
         IFloatingPreviewWindow previewToShow = _hiddenPreviewWindow;
         _hiddenPreviewWindow = null;
         previewToShow.SetPreviewHidden(false);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="floatingWindow"/> again when "Hide active preview" hid it,
+    /// for example when the user asks to bring it next to the main window. Activating
+    /// that window again hides it again.
+    /// </summary>
+    public void RevealPreview(IFloatingPreviewWindow floatingWindow)
+    {
+        ArgumentNullException.ThrowIfNull(floatingWindow);
+
+        if (_hiddenPreviewWindow != floatingWindow)
+            return;
+
+        _hiddenPreviewWindow = null;
+        floatingWindow.SetPreviewHidden(false);
     }
 
     public void Dispose()

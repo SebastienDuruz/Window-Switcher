@@ -75,6 +75,18 @@ public sealed class PrefixListServiceTests
     }
 
     [Fact]
+    public void ReplaceAll_ReplacesThePrefixesWithoutPersisting()
+    {
+        int saves = 0;
+        var sut = new PrefixListService(["firefox", "code"], _ => saves++);
+
+        sut.ReplaceAll(["terminal"]);
+
+        Assert.Equal(["terminal"], sut.GetPrefixes());
+        Assert.Equal(0, saves);
+    }
+
+    [Fact]
     public void GetPrefixes_ReturnsASnapshot()
     {
         var sut = new PrefixListService(["firefox"], _ => { });

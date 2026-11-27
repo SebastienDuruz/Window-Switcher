@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         xmlns:models="clr-namespace:WindowSwitcher.Lib.Models;assembly=WindowSwitcher.Lib"
+        xmlns:converters="clr-namespace:WindowSwitcher.Windows.Converters"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d" CanResize="False"
         Width="300"
@@ -22,29 +23,66 @@
                 <MenuItem Header="Open _logs folder" Command="{Binding OpenLogsFolderCommand}" />
                 <MenuItem Header="_Open config folder" Command="{Binding OpenConfigFolderCommand}" />
             </MenuItem>
-            <MenuItem Header="_Help" Padding="4">
-                <MenuItem Header="_About" Command="{Binding OpenAboutCommand}" />
-            </MenuItem>
         </Menu>
         <StackPanel Orientation="Vertical" Margin="8" Spacing="0">
-            <ListBox x:Name="WindowsListBox"
-                     ItemsSource="{Binding WindowList.WindowsConfigs}"
-                     SelectedItem="{Binding WindowList.SelectedWindow, Mode=TwoWay}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="Transparent"
-                                HorizontalAlignment="Stretch">
-                            <TextBlock Text="{Binding ShortWindowTitle}" />
-                        </Border>
+            <!-- A click on a row activates its window; a translucent background marks the active window. -->
+            <ItemsControl x:Name="WindowsList"
+                          ItemsSource="{Binding WindowList.WindowsConfigs}"
+                          IsVisible="{Binding WindowList.HasWindows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="models:WindowConfig">
+                        <Button Classes="window-row"
+                                Command="{Binding $parent[ItemsControl].((viewModels:MainWindowViewModel)DataContext).ActivateWindowCommand}"
+                                CommandParameter="{Binding WindowId}">
+                            <Grid>
+                                <!-- Translucent highlight-colored background on the active window's row. -->
+                                <Border CornerRadius="4"
+                                        Opacity="0.25"
+                                        Background="{DynamicResource HighlightBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static converters:StringEqualsMultiConverter.Instance}">
+                                            <Binding Path="WindowId" />
+                                            <Binding Path="$parent[ItemsControl].((viewModels:MainWindowViewModel)DataContext).WindowList.ActiveWindowId" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <DockPanel Margin="8,2">
+                                    <TextBlock DockPanel.Dock="Right"
+                                               MaxWidth="90"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="{Binding ProcessName}" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="{Binding ShortWindowTitle}" />
+                                </DockPanel>
+                            </Grid>
+                        </Button>
                     </DataTemplate>
-                </ListBox.ItemTemplate>
-                <ListBox.Styles>
-                    <Style Selector="ListBoxItem">
-                        <Setter Property="Name"
-                                Value="{Binding WindowId, RelativeSource={RelativeSource AncestorType=models:WindowConfig}}" />
-                    </Style>
-                </ListBox.Styles>
-            </ListBox>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Margin="8,18"
+                        Spacing="4"
+                        HorizontalAlignment="Center"
+                        IsVisible="{Binding !WindowList.HasWindows}">
+                <TextBlock HorizontalAlignment="Center"
+                           FontSize="13"
+                           Text="No window matches your filters." />
+                <TextBlock HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Text="Add part of a window title to the shown windows." />
+                <Button Classes="link"
+                        HorizontalAlignment="Center"
+                        Content="Open filters"
+                        Command="{Binding OpenFiltersCommand}" />
+            </StackPanel>
         </StackPanel>
     </DockPanel>
 </Window>

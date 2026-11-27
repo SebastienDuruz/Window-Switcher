@@ -52,6 +52,12 @@ internal sealed class PipeWireFrameProvider
     /// Initializes a Wayland PipeWire preview provider.
     /// </summary>
     /// <param name="accessorBase">Window accessor used to derive stable restore-token keys.</param>
+    // A restore token does not guarantee a silent restore: when it is stale (the window was
+    // closed and opened again), the portal shows its picker anyway. A portal that has not
+    // answered after this delay is treated as showing the picker.
+    private static readonly TimeSpan DefaultRestoredPickerDelay = TimeSpan.FromMilliseconds(500);
+    private readonly TimeSpan _restoredPickerDelay;
+
     public PipeWireFrameProvider(WinAccessorBase accessorBase)
         : this(
             accessorBase,
@@ -68,7 +74,8 @@ internal sealed class PipeWireFrameProvider
         IPipeWirePortalClient portalClient,
         IPipeWireNativeStreamFactory streamFactory,
         ILogger logger,
-        WaylandScreenCastMemoryCache restoreTokenCache
+        WaylandScreenCastMemoryCache restoreTokenCache,
+        TimeSpan? restoredPickerDelay = null
     )
     {
         ArgumentNullException.ThrowIfNull(accessorBase);
@@ -81,6 +88,7 @@ internal sealed class PipeWireFrameProvider
         _streamFactory = streamFactory;
         _logger = logger;
         _restoreTokenCache = restoreTokenCache;
+        _restoredPickerDelay = restoredPickerDelay ?? DefaultRestoredPickerDelay;
     }
 
     /// <inheritdoc />
@@ -352,9 +360,21 @@ internal sealed class PipeWireFrameProvider
                         .ConfigureAwait(false);
                 }
             }
-            portalCapture = await _portalClient
-                .OpenAsync(restoreToken, cancellationToken)
-                .ConfigureAwait(false);
+            Task<PortalCapture?> openTask = _portalClient.OpenAsync(
+                restoreToken,
+                cancellationToken
+            );
+            if (!pickerExpected && !openTask.IsCompleted)
+            {
+                Task delay = Task.Delay(_restoredPickerDelay, cancellationToken);
+                Task first = await Task.WhenAny(openTask, delay).ConfigureAwait(false);
+                if (first != openTask && !cancellationToken.IsCancellationRequested)
+                {
+                    selectionPromptRaised = true;
+                    NotifySelectionPrompt(windowId, isPending: true);
+                }
+            }
+            portalCapture = await openTask.ConfigureAwait(false);
             if (portalCapture is null)
                 return null;
 

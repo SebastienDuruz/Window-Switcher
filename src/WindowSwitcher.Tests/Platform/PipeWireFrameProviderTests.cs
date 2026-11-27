@@ -265,6 +265,72 @@ public sealed class PipeWireFrameProviderTests
         Assert.Equal("restore-other", cache.TakeRestoreToken(otherAliases));
     }
 
+    [Fact]
+    public async Task RestoreToken_ReportsSelectionPrompt_WhenThePortalShowsAPickerAnyway()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
+
+        var portal = new DelayedPortalClient(TimeSpan.FromMilliseconds(400));
+        using var cache = new WaylandScreenCastMemoryCache();
+        cache.SetRestoreToken(["window:42"], "stale-token");
+        await using var provider = CreateProvider(
+            portal,
+            cache,
+            restoredPickerDelay: TimeSpan.FromMilliseconds(20)
+        );
+        var notifications = new List<PreviewSelectionPromptEventArgs>();
+        provider.SelectionPromptChanged += (_, eventArgs) => notifications.Add(eventArgs);
+
+        await StartStreamAsync(provider, "42");
+
+        Assert.Equal("stale-token", portal.RestoreToken);
+        Assert.Equal(
+            [
+                new PreviewSelectionPromptEventArgs("42", IsPending: true),
+                new PreviewSelectionPromptEventArgs("42", IsPending: false),
+            ],
+            notifications
+        );
+    }
+
+    [Fact]
+    public async Task RestoreToken_ReportsNoSelectionPrompt_WhenThePortalRestoresSilently()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Requires Linux.");
+
+        var portal = new RecordingPortalClient();
+        using var cache = new WaylandScreenCastMemoryCache();
+        cache.SetRestoreToken(["window:42"], "valid-token");
+        await using var provider = CreateProvider(
+            portal,
+            cache,
+            restoredPickerDelay: TimeSpan.FromSeconds(5)
+        );
+        var notifications = new List<PreviewSelectionPromptEventArgs>();
+        provider.SelectionPromptChanged += (_, eventArgs) => notifications.Add(eventArgs);
+
+        await StartStreamAsync(provider, "42");
+
+        Assert.Equal("valid-token", portal.RestoreToken);
+        Assert.Empty(notifications);
+    }
+
+    private static PipeWireFrameProvider CreateProvider(
+        IPipeWirePortalClient portal,
+        WaylandScreenCastMemoryCache cache,
+        TimeSpan restoredPickerDelay
+    )
+    {
+        return new PipeWireFrameProvider(
+            new FakeWinAccessor(),
+            portal,
+            new UnusedNativeStreamFactory(),
+            TestLogger.Create(out _),
+            cache,
+            restoredPickerDelay
+        );
+    }
+
     private static PipeWireFrameProvider CreateProvider(
         IPipeWirePortalClient portal,
         WaylandScreenCastMemoryCache cache
@@ -314,6 +380,26 @@ public sealed class PipeWireFrameProviderTests
             Interlocked.Increment(ref _openCount);
             Started.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
+            return null;
+        }
+
+        public Task CloseAsync(string sessionPath, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public void Dispose() { }
+    }
+
+    private sealed class DelayedPortalClient(TimeSpan delay) : IPipeWirePortalClient
+    {
+        internal string? RestoreToken { get; private set; }
+
+        public async Task<PortalCapture?> OpenAsync(
+            string? restoreToken,
+            CancellationToken cancellationToken
+        )
+        {
+            RestoreToken = restoreToken;
+            await Task.Delay(delay, cancellationToken);
             return null;
         }
 

@@ -18,6 +18,10 @@ public class ConfigFile
     public int WindowHeight { get; set; } = 200;
     public string PreviewHighlightColor { get; set; } = "#E3008C";
     public bool EnablePreviews { get; set; } = true;
+
+    // When false, floating previews stay hidden and windows are switched from the main
+    // list or with keybinds.
+    public bool ShowFloatingWindows { get; set; } = true;
     public bool HideActivePreview { get; set; } = false;
 
     // Prefix / Blacklist

@@ -19,16 +19,28 @@
                     <Border Classes="settings-row">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Show previews" />
+                                <TextBlock Text="Show floating previews" />
                                 <TextBlock Classes="settings-description"
-                                           Text="Show a live, always-on-top preview for each tracked window." />
+                                           Text="Show an always-on-top preview window for each tracked window. When off, switch windows from the main list or with keybinds." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Settings.ShowFloatingWindows, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settings-divider" />
+                    <Border Classes="settings-row" IsEnabled="{Binding Settings.ShowFloatingWindows}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Live content" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Show the live content of each window inside its preview." />
                             </StackPanel>
                             <ToggleSwitch Grid.Column="1"
                                           IsChecked="{Binding Settings.EnablePreviews, Mode=TwoWay}" />
                         </Grid>
                     </Border>
                     <Border Classes="settings-divider" />
-                    <Border Classes="settings-row">
+                    <Border Classes="settings-row" IsEnabled="{Binding Settings.ShowFloatingWindows}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Hide active preview" />
@@ -109,16 +121,20 @@
                                 Background="{StaticResource FloatingWindowBackgroundBrush}"
                                 BorderThickness="2"
                                 BorderBrush="{Binding Settings.PreviewHighlightColor, Converter={StaticResource ColorStringToBrushConverter}}">
-                            <TextBlock Margin="2,0"
-                                       FontSize="9"
-                                       FontWeight="Bold"
-                                       Text="window name"
-                                       Foreground="{Binding Settings.PreviewHighlightColor, Converter={StaticResource ColorStringToBrushConverter}}" />
+                            <Border Classes="preview-label"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Padding="3,0,4,0">
+                                <TextBlock FontSize="9"
+                                           FontWeight="Bold"
+                                           Text="window name"
+                                           Foreground="{Binding Settings.PreviewHighlightColor, Converter={StaticResource ColorStringToBrushConverter}}" />
+                            </Border>
                         </Border>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Highlight color" />
                             <TextBlock Classes="settings-description"
-                                       Text="Color of the preview labels, of the border around the active preview, and of the app accents." />
+                                       Text="Color of the preview labels, of the border around the active preview, and of the active window in the main list." />
                         </StackPanel>
                         <colorPicker:ColorPicker Grid.Column="2"
                                                  Width="60"

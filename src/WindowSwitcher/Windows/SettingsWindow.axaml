@@ -20,20 +20,15 @@
         <Border Background="{StaticResource SettingsSidebarBrush}"
                 BorderBrush="{StaticResource SettingsSectionBorderBrush}"
                 BorderThickness="0,0,1,0">
-            <DockPanel Margin="4,6">
-                <TextBlock DockPanel.Dock="Bottom"
-                           Margin="8,6"
-                           Classes="settings-description"
-                           Text="Changes are saved automatically." />
-                <ListBox Classes="settings-nav"
-                         SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}">
-                    <ListBoxItem Content="General" />
-                    <ListBoxItem Content="Previews" />
-                    <ListBoxItem Content="Filters" />
-                    <ListBoxItem Content="Keybinds" />
-                    <ListBoxItem Content="About" />
-                </ListBox>
-            </DockPanel>
+            <ListBox Margin="4,6"
+                     Classes="settings-nav"
+                     SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}">
+                <ListBoxItem Content="General" />
+                <ListBoxItem Content="Previews" />
+                <ListBoxItem Content="Filters" />
+                <ListBoxItem Content="Keybinds" />
+                <ListBoxItem Content="About" />
+            </ListBox>
         </Border>
 
         <Carousel Grid.Column="1" SelectedIndex="{Binding SelectedPageIndex}">

@@ -84,6 +84,24 @@ public class WindowConfig : INotifyPropertyChanged
         }
     } = 100;
 
+    /// <summary>
+    /// Gets or sets the title the window had before Window Switcher first renamed it, or
+    /// an empty string when the window was never renamed (or was renamed back).
+    /// </summary>
+    public string OriginalWindowTitle
+    {
+        get;
+        set
+        {
+            // A null title from a hand-edited config.json must not prevent loading it.
+            string title = value ?? string.Empty;
+            if (field == title)
+                return;
+            field = title;
+            OnPropertyChanged();
+        }
+    } = string.Empty;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -15,7 +15,7 @@ public sealed class MainWindowViewModelTests
     public void MenuCommands_InvokeProvidedDelegates()
     {
         int openSettings = 0;
-        int openAbout = 0;
+        int openFilters = 0;
         int openConfigFolder = 0;
         int openLogsFolder = 0;
         string? blacklisted = null;
@@ -23,7 +23,7 @@ public sealed class MainWindowViewModelTests
 
         var sut = CreateSut(
             () => openSettings++,
-            () => openAbout++,
+            () => openFilters++,
             () => openConfigFolder++,
             () => openLogsFolder++,
             value => blacklisted = value,
@@ -32,12 +32,12 @@ public sealed class MainWindowViewModelTests
         );
 
         sut.OpenSettingsCommand.Execute(null);
-        sut.OpenAboutCommand.Execute(null);
+        sut.OpenFiltersCommand.Execute(null);
         sut.OpenConfigFolderCommand.Execute(null);
         sut.OpenLogsFolderCommand.Execute(null);
 
         Assert.Equal(1, openSettings);
-        Assert.Equal(1, openAbout);
+        Assert.Equal(1, openFilters);
         Assert.Equal(1, openConfigFolder);
         Assert.Equal(1, openLogsFolder);
 
@@ -68,6 +68,36 @@ public sealed class MainWindowViewModelTests
     }
 
     [Fact]
+    public void BringPreviewHereCommand_PassesTheWindowId()
+    {
+        string? broughtWindowId = null;
+        var sut = CreateSut(bringPreviewHere: windowId => broughtWindowId = windowId);
+
+        sut.BringPreviewHereCommand.Execute("window-42");
+
+        sut.WindowList.Dispose();
+
+        Assert.Equal("window-42", broughtWindowId);
+    }
+
+    [Fact]
+    public async Task ActivateWindowCommand_PassesTheWindowId()
+    {
+        string? activatedWindowId = null;
+        var sut = CreateSut(activateWindow: windowId =>
+        {
+            activatedWindowId = windowId;
+            return Task.CompletedTask;
+        });
+
+        await sut.ActivateWindowCommand.ExecuteAsync("window-42");
+
+        sut.WindowList.Dispose();
+
+        Assert.Equal("window-42", activatedWindowId);
+    }
+
+    [Fact]
     public void WindowList_IsExposed()
     {
         var sut = CreateSut();
@@ -80,12 +110,14 @@ public sealed class MainWindowViewModelTests
 
     private static MainWindowViewModel CreateSut(
         Action? openSettings = null,
-        Action? openAbout = null,
+        Action? openFilters = null,
         Action? openConfigFolder = null,
         Action? openLogsFolder = null,
         Action<string?>? addToBlacklist = null,
         Action<string?>? addToTemporaryBlacklist = null,
-        Func<string?, Task>? renameWindow = null
+        Func<string?, Task>? renameWindow = null,
+        Action<string?>? bringPreviewHere = null,
+        Func<string?, Task>? activateWindow = null
     )
     {
         var windowList = new WindowListViewModel(
@@ -99,12 +131,14 @@ public sealed class MainWindowViewModelTests
         return new MainWindowViewModel(
             windowList,
             openSettings ?? (() => { }),
-            openAbout ?? (() => { }),
+            openFilters ?? (() => { }),
             openConfigFolder ?? (() => { }),
             openLogsFolder ?? (() => { }),
             addToBlacklist ?? (_ => { }),
             addToTemporaryBlacklist ?? (_ => { }),
-            renameWindow ?? (_ => Task.CompletedTask)
+            renameWindow ?? (_ => Task.CompletedTask),
+            bringPreviewHere ?? (_ => { }),
+            activateWindow ?? (_ => Task.CompletedTask)
         );
     }
 

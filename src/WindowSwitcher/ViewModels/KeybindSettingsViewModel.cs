@@ -12,6 +12,10 @@ using WindowSwitcher.ViewModels.Abstractions;
 
 namespace WindowSwitcher.ViewModels;
 
+/// <summary>
+/// Backs the Keybinds page: one table row per target (built-in actions, then client
+/// windows) with its shortcuts, an inline capture to add a shortcut, and a status line.
+/// </summary>
 public partial class KeybindSettingsViewModel : ObservableObject
 {
     private readonly IWindowKeybindManager _keybindManager;
@@ -19,35 +23,25 @@ public partial class KeybindSettingsViewModel : ObservableObject
     private readonly IGlobalKeyboardStartupStatusService _globalKeyboardStartupStatusService;
     private readonly IViewModelDispatcher _dispatcher;
     private readonly Func<IReadOnlyCollection<WindowConfig>> _selectedClientsProvider;
-    private readonly RelayCommand _beginCaptureCommand;
-    private readonly RelayCommand _confirmCaptureCommand;
-    private readonly RelayCommand _cancelCaptureCommand;
-    private readonly RelayCommand _removeShortcutCommand;
+    private KeybindTargetRowViewModel? _capturingRow;
     private KeyCombination? _capturedCombination;
 
     [ObservableProperty]
-    private ObservableCollection<KeybindTargetDescriptor> _actionTargets = [];
+    [NotifyPropertyChangedFor(nameof(HasClientRows))]
+    private ObservableCollection<KeybindTargetRowViewModel> _actionRows = [];
 
     [ObservableProperty]
-    private ObservableCollection<KeybindTargetDescriptor> _clientTargets = [];
+    [NotifyPropertyChangedFor(nameof(HasClientRows))]
+    private ObservableCollection<KeybindTargetRowViewModel> _clientRows = [];
 
     [ObservableProperty]
-    private KeybindTargetDescriptor? _selectedTarget;
-
-    [ObservableProperty]
-    private ObservableCollection<KeybindShortcutOption> _shortcuts = [];
-
-    [ObservableProperty]
-    private KeybindShortcutOption? _selectedShortcut;
-
-    [ObservableProperty]
-    private bool _isCapturing;
-
-    [ObservableProperty]
-    private string _capturePreview = "Press the shortcut to capture";
-
-    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
     private string _statusMessage = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsStatusSuccess))]
+    [NotifyPropertyChangedFor(nameof(IsStatusError))]
+    private KeybindStatusKind _statusKind;
 
     [ObservableProperty]
     private bool _showGlobalKeyboardSetupBanner;
@@ -68,32 +62,19 @@ public partial class KeybindSettingsViewModel : ObservableObject
     private string _globalKeyboardSetupGuidance = string.Empty;
 
     public IRelayCommand RefreshTargetsCommand { get; }
-    public IRelayCommand BeginCaptureCommand { get; }
-    public IRelayCommand ConfirmCaptureCommand { get; }
-    public IRelayCommand CancelCaptureCommand { get; }
-    public IRelayCommand RemoveShortcutCommand { get; }
 
-    public bool CanConfirmCapture => IsCapturing && _capturedCombination is not null;
+    public bool HasClientRows => ClientRows.Count > 0;
 
-    public KeybindTargetDescriptor? SelectedActionTarget
-    {
-        get => SelectedTarget?.IsBuiltIn == true ? SelectedTarget : null;
-        set
-        {
-            if (value is not null)
-                SelectedTarget = value;
-        }
-    }
+    public bool HasStatusMessage => !string.IsNullOrEmpty(StatusMessage);
 
-    public KeybindTargetDescriptor? SelectedClientTarget
-    {
-        get => SelectedTarget?.IsBuiltIn == false ? SelectedTarget : null;
-        set
-        {
-            if (value is not null)
-                SelectedTarget = value;
-        }
-    }
+    public bool IsStatusSuccess => StatusKind == KeybindStatusKind.Success;
+
+    public bool IsStatusError => StatusKind == KeybindStatusKind.Error;
+
+    /// <summary>
+    /// Gets the row waiting for a shortcut, if any.
+    /// </summary>
+    public KeybindTargetRowViewModel? CapturingRow => _capturingRow;
 
     public KeybindSettingsViewModel(
         IWindowKeybindManager keybindManager,
@@ -116,14 +97,6 @@ public partial class KeybindSettingsViewModel : ObservableObject
         _selectedClientsProvider = selectedClientsProvider;
 
         RefreshTargetsCommand = new RelayCommand(RefreshTargets);
-        _beginCaptureCommand = new RelayCommand(BeginCapture, CanBeginCapture);
-        _confirmCaptureCommand = new RelayCommand(ConfirmCapture, () => CanConfirmCapture);
-        _cancelCaptureCommand = new RelayCommand(CancelCapture, CanCancelCapture);
-        _removeShortcutCommand = new RelayCommand(RemoveShortcut, CanRemoveShortcut);
-        BeginCaptureCommand = _beginCaptureCommand;
-        ConfirmCaptureCommand = _confirmCaptureCommand;
-        CancelCaptureCommand = _cancelCaptureCommand;
-        RemoveShortcutCommand = _removeShortcutCommand;
 
         _globalKeyboardStartupStatusService.StatusChanged += OnGlobalKeyboardStartupStatusChanged;
         ApplyGlobalKeyboardStartupStatus(_globalKeyboardStartupStatusService.Current);
@@ -142,184 +115,140 @@ public partial class KeybindSettingsViewModel : ObservableObject
         _dispatcher.Post(() => ApplyGlobalKeyboardStartupStatus(status));
     }
 
+    /// <summary>
+    /// Rebuilds the rows from the current targets and their shortcuts; any capture in
+    /// progress is cancelled.
+    /// </summary>
     public void RefreshTargets()
     {
-        string? previousTargetId = SelectedTarget?.TargetId;
+        CancelCapture();
 
         KeybindTargetCatalogSnapshot targetCatalog = _targetCatalogService.GetTargets(
             _selectedClientsProvider()
         );
 
-        ActionTargets = new ObservableCollection<KeybindTargetDescriptor>(
-            targetCatalog.ActionTargets
+        ActionRows = new ObservableCollection<KeybindTargetRowViewModel>(
+            targetCatalog.ActionTargets.Select(CreateRow)
         );
-        ClientTargets = new ObservableCollection<KeybindTargetDescriptor>(
-            targetCatalog.ClientTargets
+        ClientRows = new ObservableCollection<KeybindTargetRowViewModel>(
+            targetCatalog.ClientTargets.Select(CreateRow)
         );
-
-        SelectTargetById(previousTargetId);
     }
 
+    /// <summary>
+    /// Feeds a key press to the row waiting for a shortcut. Returns <see langword="false"/>
+    /// when no capture is in progress, so the key keeps its normal behavior.
+    /// </summary>
     public bool TryCaptureKey(KeybindCaptureResult captureResult)
     {
         ArgumentNullException.ThrowIfNull(captureResult);
 
-        if (!IsCapturing)
+        KeybindTargetRowViewModel? row = _capturingRow;
+        if (row is null)
             return false;
 
         if (!captureResult.Succeeded || captureResult.Combination is null)
         {
             _capturedCombination = null;
-            CapturePreview = captureResult.Message;
-            StatusMessage = captureResult.Message;
-            UpdateCommandStates();
+            row.HasCapturedCombination = false;
+            row.CapturePreview = captureResult.Message;
             return true;
         }
 
         _capturedCombination = KeyCombinationParser.Normalize(captureResult.Combination);
-        CapturePreview = KeyCombinationParser.ToCanonicalString(_capturedCombination);
-        StatusMessage = string.Empty;
-        UpdateCommandStates();
+        row.HasCapturedCombination = true;
+        row.CapturePreview = KeyCombinationParser.ToCanonicalString(_capturedCombination);
         return true;
     }
 
-    partial void OnSelectedShortcutChanged(KeybindShortcutOption? value)
+    private KeybindTargetRowViewModel CreateRow(KeybindTargetDescriptor target)
     {
-        UpdateCommandStates();
+        return new KeybindTargetRowViewModel(
+            target,
+            LoadShortcuts(target),
+            BeginCapture,
+            ConfirmCapture,
+            CancelCapture,
+            RemoveShortcut
+        );
     }
 
-    partial void OnIsCapturingChanged(bool value)
+    private IEnumerable<KeybindShortcutOption> LoadShortcuts(KeybindTargetDescriptor target)
     {
-        UpdateCommandStates();
-    }
-
-    partial void OnSelectedTargetChanged(KeybindTargetDescriptor? value)
-    {
-        OnPropertyChanged(nameof(SelectedActionTarget));
-        OnPropertyChanged(nameof(SelectedClientTarget));
-        LoadShortcutsForSelectedTarget();
-        StatusMessage = string.Empty;
-        CancelCapture();
-        UpdateCommandStates();
-    }
-
-    private void SelectTargetById(string? targetId)
-    {
-        SelectedTarget =
-            ActionTargets.FirstOrDefault(target =>
-                string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
+        return _keybindManager
+            .GetShortcutsForTarget(target.TargetId)
+            .OrderBy(
+                shortcut => KeyCombinationParser.ToCanonicalString(shortcut.Combination),
+                StringComparer.Ordinal
             )
-            ?? ClientTargets.FirstOrDefault(target =>
-                string.Equals(target.TargetId, targetId, StringComparison.Ordinal)
-            );
+            .Select(shortcut => new KeybindShortcutOption(shortcut))
+            .ToArray();
     }
 
-    private void BeginCapture()
+    private void BeginCapture(KeybindTargetRowViewModel row)
     {
-        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
-        if (selectedTarget is null)
-        {
-            StatusMessage = "Select an action or a client target first.";
-            return;
-        }
+        CancelCapture();
 
-        _capturedCombination = null;
-        IsCapturing = true;
-        CapturePreview = "Press the shortcut to capture";
-        StatusMessage = string.Empty;
+        _capturingRow = row;
+        row.IsCapturing = true;
+        row.CapturePreview = KeybindTargetRowViewModel.CapturePrompt;
+        row.HasCapturedCombination = false;
+        SetStatus(string.Empty, KeybindStatusKind.None);
+        OnPropertyChanged(nameof(CapturingRow));
     }
 
     private void ConfirmCapture()
     {
-        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
-        if (selectedTarget is null || _capturedCombination is null)
+        KeybindTargetRowViewModel? row = _capturingRow;
+        if (row is null || _capturedCombination is null)
             return;
 
         KeybindShortcutAddResult result = _keybindManager.AddShortcut(
-            selectedTarget.TargetId,
-            selectedTarget.DisplayName,
+            row.Target.TargetId,
+            row.Target.DisplayName,
             _capturedCombination
         );
         if (!result.Succeeded)
         {
-            StatusMessage = result.Message;
+            SetStatus(result.Message, KeybindStatusKind.Error);
             return;
         }
 
-        LoadShortcutsForSelectedTarget();
+        row.ReplaceShortcuts(LoadShortcuts(row.Target));
         CancelCapture();
-        StatusMessage = "Shortcut added.";
+        SetStatus($"Shortcut added to {row.DisplayName}.", KeybindStatusKind.Success);
     }
 
     private void CancelCapture()
     {
+        KeybindTargetRowViewModel? row = _capturingRow;
+        _capturingRow = null;
         _capturedCombination = null;
-        IsCapturing = false;
-        CapturePreview = "Press the shortcut to capture";
-        UpdateCommandStates();
-    }
-
-    private void RemoveShortcut()
-    {
-        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
-        if (selectedTarget is null || SelectedShortcut is null)
+        if (row is null)
             return;
 
-        bool removed = _keybindManager.RemoveShortcut(
-            selectedTarget.TargetId,
-            SelectedShortcut.Combination
-        );
-        if (!removed)
+        row.IsCapturing = false;
+        row.HasCapturedCombination = false;
+        row.CapturePreview = KeybindTargetRowViewModel.CapturePrompt;
+        OnPropertyChanged(nameof(CapturingRow));
+    }
+
+    private void RemoveShortcut(KeybindTargetRowViewModel row, KeybindShortcutOption shortcut)
+    {
+        if (!_keybindManager.RemoveShortcut(row.Target.TargetId, shortcut.Combination))
         {
-            StatusMessage = "Unable to remove this shortcut.";
+            SetStatus("Unable to remove this shortcut.", KeybindStatusKind.Error);
             return;
         }
 
-        LoadShortcutsForSelectedTarget();
-        StatusMessage = "Shortcut removed.";
+        row.ReplaceShortcuts(LoadShortcuts(row.Target));
+        SetStatus($"Shortcut removed from {row.DisplayName}.", KeybindStatusKind.Success);
     }
 
-    private void LoadShortcutsForSelectedTarget()
+    private void SetStatus(string message, KeybindStatusKind kind)
     {
-        KeybindTargetDescriptor? selectedTarget = SelectedTarget;
-        if (selectedTarget is null)
-        {
-            Shortcuts = [];
-            SelectedShortcut = null;
-            return;
-        }
-
-        Shortcuts = new ObservableCollection<KeybindShortcutOption>(
-            _keybindManager
-                .GetShortcutsForTarget(selectedTarget.TargetId)
-                .OrderBy(shortcut => KeyCombinationParser.ToCanonicalString(shortcut.Combination))
-                .Select(shortcut => new KeybindShortcutOption(shortcut))
-        );
-        SelectedShortcut = null;
-    }
-
-    private bool CanBeginCapture()
-    {
-        return SelectedTarget is not null && !IsCapturing;
-    }
-
-    private bool CanCancelCapture()
-    {
-        return IsCapturing;
-    }
-
-    private bool CanRemoveShortcut()
-    {
-        return SelectedTarget is not null && SelectedShortcut is not null;
-    }
-
-    private void UpdateCommandStates()
-    {
-        OnPropertyChanged(nameof(CanConfirmCapture));
-        _beginCaptureCommand.NotifyCanExecuteChanged();
-        _confirmCaptureCommand.NotifyCanExecuteChanged();
-        _cancelCaptureCommand.NotifyCanExecuteChanged();
-        _removeShortcutCommand.NotifyCanExecuteChanged();
+        StatusMessage = message;
+        StatusKind = kind;
     }
 
     private void ApplyGlobalKeyboardStartupStatus(GlobalKeyboardStartupStatus status)
@@ -346,19 +275,4 @@ public partial class KeybindSettingsViewModel : ObservableObject
         ShowGlobalKeyboardSetupCommand = !string.IsNullOrWhiteSpace(status.RemediationCommand);
         GlobalKeyboardSetupGuidance = status.Guidance ?? string.Empty;
     }
-}
-
-public sealed class KeybindShortcutOption
-{
-    public KeybindShortcutOption(WindowKeybindShortcut shortcut)
-    {
-        ArgumentNullException.ThrowIfNull(shortcut);
-
-        Combination = shortcut.Combination.Clone();
-        Display = KeyCombinationParser.ToCanonicalString(shortcut.Combination);
-    }
-
-    public KeyCombination Combination { get; }
-
-    public string Display { get; }
 }

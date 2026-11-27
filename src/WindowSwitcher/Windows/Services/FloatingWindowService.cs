@@ -18,7 +18,10 @@ namespace WindowSwitcher.Windows.Services;
 
 internal sealed class FloatingWindowService
 {
-    private const double TitleReservedHeight = 12;
+    // Native thumbnails (Windows DWM) are drawn by the system over the window, so a band
+    // is kept above them for the label. Previews drawn by the app (Linux) fill the whole
+    // window and the label sits on top of them.
+    private const double NativeThumbnailLabelHeight = 12;
     private const double PreviewBorderThickness = 2;
     private const int PreviewRequestTimeoutMs = 1_500;
     private static readonly TimeSpan ResizePreviewRefreshDebounce = TimeSpan.FromMilliseconds(250);
@@ -108,6 +111,9 @@ internal sealed class FloatingWindowService
     public void OnPointerReleased() => _resizePreviewRefresh.Flush();
 
     public void SetPreviewHighlight(bool isSelected) => _previewBorder.IsVisible = isSelected;
+
+    private double TitleReservedHeight =>
+        _floatingPreviewPolicy.UseNativeThumbnailPreview ? NativeThumbnailLabelHeight : 0;
 
     public void UpdateLayout()
     {
@@ -456,8 +462,11 @@ internal sealed class FloatingWindowService
 
     private bool IsPreviewCaptureEnabled() => Volatile.Read(ref _previewCaptureEnabled) != 0;
 
+    // A hidden preview needs no capture (and must not open a Wayland picker).
     private static bool ReadPreviewCaptureEnabled() =>
-        ConfigFileAccessor.GetInstance().ReadConfig(config => config.EnablePreviews);
+        ConfigFileAccessor
+            .GetInstance()
+            .ReadConfig(config => config.EnablePreviews && config.ShowFloatingWindows);
 
     private void RegisterWindowThumbnail()
     {

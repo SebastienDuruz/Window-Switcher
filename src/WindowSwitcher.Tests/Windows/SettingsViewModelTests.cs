@@ -58,6 +58,7 @@ public sealed class SettingsViewModelTests
         new()
         {
             { nameof(SettingsViewModel.EnablePreviews), false, true },
+            { nameof(SettingsViewModel.ShowFloatingWindows), false, true },
             { nameof(SettingsViewModel.HideActivePreview), true, true },
             { nameof(SettingsViewModel.StartMinimized), true, false },
             { nameof(SettingsViewModel.ResizeWindows), false, true },

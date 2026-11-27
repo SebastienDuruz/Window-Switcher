@@ -74,7 +74,7 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         StaticData.CheckFolders();
-        ApplyAccentColorFromConfig();
+        ApplyHighlightColorFromConfig();
         RecordApplicationStartupTelemetry();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -100,13 +100,13 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static void ApplyAccentColorFromConfig()
+    private static void ApplyHighlightColorFromConfig()
     {
         string configValue = ConfigFileAccessor
             .GetInstance()
             .ReadConfig(config => config.PreviewHighlightColor);
-        if (Color.TryParse(configValue, out Color accentColor))
-            AccentColorApplier.Apply(accentColor);
+        if (Color.TryParse(configValue, out Color highlightColor))
+            HighlightColorApplier.Apply(highlightColor);
     }
 
     private void RecordApplicationStartupTelemetry()

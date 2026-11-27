@@ -382,6 +382,42 @@ public sealed class ConfigFileAccessorTests
     }
 
     [Fact]
+    public void SaveFloatingWindowSettings_PersistsTheOriginalTitleAcrossReloads()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            CreateAccessor(dataFolder)
+                .SaveFloatingWindowSettings(
+                    new WindowConfig
+                    {
+                        WindowId = "1",
+                        ProcessName = "wow",
+                        WindowTitle = "Client 2",
+                        OriginalWindowTitle = "World of Warcraft",
+                    }
+                );
+
+            WindowConfig? reloaded = CreateAccessor(dataFolder)
+                .GetFloatingWindowConfig(
+                    new WindowConfig
+                    {
+                        WindowId = "1",
+                        ProcessName = "wow",
+                        WindowTitle = "Client 2",
+                    }
+                );
+
+            Assert.NotNull(reloaded);
+            Assert.Equal("World of Warcraft", reloaded!.OriginalWindowTitle);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
     public void GetFloatingWindowConfig_UsesTitleFallbackAndReturnsDetachedClone()
     {
         string dataFolder = CreateTempDataFolder();
@@ -492,6 +528,26 @@ public sealed class ConfigFileAccessorTests
 
             Assert.True(sut.Config.HideActivePreview);
             Assert.True(CreateAccessor(dataFolder).Config.HideActivePreview);
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
+    [Fact]
+    public void ShowFloatingWindows_SurvivesSnapshotAndReload()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            var sut = CreateAccessor(dataFolder);
+            Assert.True(sut.Config.ShowFloatingWindows);
+
+            sut.UpdateConfig(config => config.ShowFloatingWindows = false);
+
+            Assert.False(sut.Config.ShowFloatingWindows);
+            Assert.False(CreateAccessor(dataFolder).Config.ShowFloatingWindows);
         }
         finally
         {

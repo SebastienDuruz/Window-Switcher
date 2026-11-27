@@ -291,6 +291,12 @@ public sealed class WindowKeybindManager : IWindowKeybindManager
         );
     }
 
+    /// <inheritdoc />
+    public void NotifyConfigurationReplaced()
+    {
+        RaiseBindingsChanged();
+    }
+
     private void RaiseBindingsChanged()
     {
         BindingsChanged?.Invoke(this, EventArgs.Empty);

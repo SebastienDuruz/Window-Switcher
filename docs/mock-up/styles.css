@@ -10,7 +10,7 @@
     --error: #ff6347;             /* ErrorTextBrush (Tomato) */
     --floating-bg: #000000;       /* FloatingWindowBackgroundBrush */
     --pending: #ffb900;           /* PendingSelectionBorderBrush */
-    --highlight: #e3008c;         /* default PreviewHighlightColor, also applied as the app accent color */
+    --highlight: #e3008c;         /* default PreviewHighlightColor: preview labels, active border, active row of the main list */
 
     --text: #ffffff;
     --text-secondary: #c5c5c5;
@@ -20,7 +20,7 @@
     --control-border: #464646;
     --input-bg: #1a1a1a;
     --accent: #0078d4;
-    --accent-light: #60cdff;
+    --accent-light: #60cdff;      /* fixed app accent (Fluent default), independent of the highlight color */
     --list-selected: rgba(255, 255, 255, 0.10);
     --menu-bg: #2c2c2c;
 
@@ -209,7 +209,7 @@ ul.notes {
     font: inherit;
 }
 
-.textbox.focused { border-bottom-color: var(--highlight); }
+.textbox.focused { border-bottom-color: var(--accent-light); }
 .textbox.mono { font-family: "Cascadia Mono", "JetBrains Mono", monospace; font-size: 12px; }
 
 .caret {
@@ -252,7 +252,7 @@ ul.notes {
     bottom: 5px;
     width: 3px;
     border-radius: 2px;
-    background: var(--highlight);
+    background: var(--accent-light);
 }
 
 .listbox.bordered {
@@ -281,8 +281,8 @@ ul.notes {
 }
 
 .checkbox.checked .box {
-    background: var(--highlight);
-    border-color: var(--highlight);
+    background: var(--accent-light);
+    border-color: var(--accent-light);
     color: #000;
 }
 
@@ -392,6 +392,26 @@ ul.notes {
 
 .main-window { width: 300px; }
 
+/* Proposal: active marker, process name and empty state of the main list */
+.listbox .item.win-row { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.listbox .item.win-row.active { background: rgba(227, 0, 140, 0.25); }
+.win-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.win-process { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+
+.empty-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 18px 8px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.empty-list .muted { font-size: 12px; }
+
+.link-button { margin-top: 4px; color: var(--accent-light); text-decoration: underline; cursor: pointer; }
+
 /* ---------- Floating previews ---------- */
 
 .desktop {
@@ -440,13 +460,22 @@ ul.notes {
     opacity: 0.8;
 }
 
+/* A translucent dark background keeps the label legible on any capture. */
 .preview .label {
     position: absolute;
-    top: 0;
+    top: 2px;
     left: 2px;
+    max-width: calc(100% - 4px);
+    padding: 1px 5px 1px 4px;
+    border-bottom-right-radius: 4px;
+    background: rgba(0, 0, 0, 0.65);
     font-size: 10px;
     font-weight: 700;
+    line-height: 13px;
     color: var(--highlight);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     z-index: 2;
 }
 
@@ -597,13 +626,6 @@ ul.notes {
 
 .settings-shell .sidebar label:hover { background: rgba(255, 255, 255, 0.05); }
 
-.settings-shell .sidebar .sidebar-footer {
-    margin-top: auto;
-    padding: 6px 8px;
-    color: var(--muted);
-    font-size: 11px;
-}
-
 .settings-shell .content {
     overflow-y: auto;
     padding: 10px 14px 14px;
@@ -644,7 +666,7 @@ ul.notes {
     bottom: 7px;
     width: 3px;
     border-radius: 2px;
-    background: var(--highlight);
+    background: var(--accent-light);
 }
 
 .settings-shell .page.active,
@@ -727,7 +749,7 @@ ul.notes {
     background: #cfcfcf;
 }
 
-.toggle.on .track { background: var(--highlight); border-color: var(--highlight); }
+.toggle.on .track { background: var(--accent-light); border-color: var(--accent-light); }
 .toggle.on .track::after { left: 23px; background: #000; }
 
 /* ---------- Radio buttons ---------- */
@@ -748,7 +770,7 @@ ul.notes {
     position: relative;
 }
 
-.radio.checked .dot { border: 5px solid var(--highlight); }
+.radio.checked .dot { border: 5px solid var(--accent-light); }
 
 .radio.checked .dot::after {
     content: "";
@@ -816,21 +838,14 @@ ul.notes {
 .highlight-sample span {
     position: absolute;
     top: 0;
-    left: 3px;
+    left: 0;
+    padding: 0 4px 0 3px;
+    border-bottom-right-radius: 3px;
+    background: rgba(0, 0, 0, 0.65);
     color: var(--highlight);
     font-size: 9px;
     font-weight: 700;
 }
-
-/* ---------- Keybinds page ---------- */
-
-.keybinds-page {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.keybinds-page > .span { grid-column: 1 / -1; }
 
 .banner {
     border: 1px solid var(--error);
@@ -842,6 +857,85 @@ kbd {
     font-family: inherit;
     font-weight: 500;
 }
+
+/* ---------- Keybinds table ---------- */
+
+.kb-row {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 10px;
+    align-items: center;
+    min-height: 30px;
+    padding: 3px 6px 3px 10px;
+    border-top: 1px solid var(--section-border);
+}
+
+.kb-row.kb-head {
+    border-top: 0;
+    min-height: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.kb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kb-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+
+.kb-group {
+    margin: 0;
+    padding: 6px 10px 4px;
+    border-top: 1px solid var(--section-border);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.kb-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    min-height: 24px;
+    padding: 0 2px 0 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.kb-remove {
+    padding: 0 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.kb-add {
+    display: inline-grid;
+    place-items: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--control-border);
+    border-radius: 4px;
+    background: var(--control);
+}
+
+.kb-capture {
+    display: inline-flex;
+    align-items: center;
+    min-width: 110px;
+    min-height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--section-border);
+    border-radius: 4px;
+}
+
+.kb-status { margin: 0 0 8px; font-size: 13px; }
+.kb-status.success { color: #6ccb5f; }
+.kb-status.error { color: var(--error); }
+
+/* ---------- Rename dialog ---------- */
+
+.original-title { font-size: 12px; }
+.original-title strong { font-weight: 600; color: var(--text-secondary); }
 
 /* ---------- About page ---------- */
 

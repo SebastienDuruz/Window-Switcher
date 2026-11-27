@@ -3,22 +3,80 @@
              xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
              x:Class="WindowSwitcher.Windows.Settings.KeybindSettingsPage"
              x:DataType="viewModels:KeybindSettingsViewModel">
-    <Grid ColumnDefinitions="*,*"
-          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
-          ColumnSpacing="10"
-          RowSpacing="6">
-        <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
-                   Classes="settings-page-title"
-                   Margin="0"
-                   Text="Keybinds" />
-        <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
-                   Classes="settings-group-intro"
-                   Margin="0"
-                   Text="Configure global keybinds per target." />
+    <UserControl.Resources>
+        <!-- One table row: target name, its shortcuts, then "+" or the inline capture. -->
+        <DataTemplate x:Key="KeybindTargetRowTemplate"
+                      x:DataType="viewModels:KeybindTargetRowViewModel">
+            <StackPanel>
+                <Border Classes="settings-divider" />
+                <Grid Margin="10,3,6,3"
+                      MinHeight="30"
+                      ColumnDefinitions="160,*"
+                      ColumnSpacing="10">
+                    <TextBlock VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding DisplayName}"
+                               ToolTip.Tip="{Binding DisplayName}" />
+                    <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                        <ItemsControl ItemsSource="{Binding Shortcuts}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:KeybindShortcutOption">
+                                    <Border Classes="keybind-chip">
+                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                            <TextBlock VerticalAlignment="Center"
+                                                       FontWeight="Medium"
+                                                       Text="{Binding Display}" />
+                                            <Button Classes="keybind-chip-remove"
+                                                    Content="✕"
+                                                    ToolTip.Tip="Remove shortcut"
+                                                    Command="{Binding $parent[ItemsControl].((viewModels:KeybindTargetRowViewModel)DataContext).RemoveShortcutCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-        <Border Grid.Row="2"
-                Grid.ColumnSpan="2"
-                Padding="10"
+                        <Button Classes="keybind-add"
+                                Content="+"
+                                ToolTip.Tip="Add shortcut"
+                                IsVisible="{Binding !IsCapturing}"
+                                Command="{Binding BeginCaptureCommand}" />
+
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,2"
+                                    IsVisible="{Binding IsCapturing}">
+                            <Border Classes="keybind-capture">
+                                <TextBlock VerticalAlignment="Center" Text="{Binding CapturePreview}" />
+                            </Border>
+                            <Button Content="Save" Command="{Binding ConfirmCaptureCommand}" />
+                            <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
+                        </StackPanel>
+                    </WrapPanel>
+                </Grid>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="settings-page-title" Margin="0" Text="Keybinds" />
+            <Button Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Content="Refresh client targets"
+                    Command="{Binding RefreshTargetsCommand}" />
+        </Grid>
+        <TextBlock Classes="settings-group-intro"
+                   Margin="0"
+                   Text="Global shortcuts per target. Use + to add one, then press the keys." />
+
+        <Border Padding="10"
                 CornerRadius="6"
                 BorderThickness="1"
                 BorderBrush="{StaticResource ErrorTextBrush}"
@@ -41,63 +99,36 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="3" Grid.Column="0" Spacing="8">
-            <TextBlock Classes="settings-group-title" Margin="0" Text="Actions" />
-            <ListBox ItemsSource="{Binding ActionTargets}"
-                     SelectedItem="{Binding SelectedActionTarget, Mode=TwoWay}"
-                     MaxHeight="110">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding DisplayName}" />
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-
-            <TextBlock Classes="settings-group-title" Margin="0" Text="Client windows" />
-            <ListBox ItemsSource="{Binding ClientTargets}"
-                     SelectedItem="{Binding SelectedClientTarget, Mode=TwoWay}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding DisplayName}" />
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-
-            <Button Content="Refresh client targets"
-                    Command="{Binding RefreshTargetsCommand}"
-                    HorizontalAlignment="Right" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="8">
-            <TextBlock Classes="settings-group-title" Margin="0" Text="Shortcuts for selected target" />
-            <ListBox ItemsSource="{Binding Shortcuts}"
-                     SelectedItem="{Binding SelectedShortcut, Mode=TwoWay}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Display}" FontWeight="Medium" />
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Add shortcut" Command="{Binding BeginCaptureCommand}" />
-                <Button Content="Remove selected" Command="{Binding RemoveShortcutCommand}" />
-            </StackPanel>
-        </StackPanel>
-
-        <StackPanel Grid.Row="4" Grid.ColumnSpan="2"
-                    Orientation="Horizontal"
-                    Spacing="10"
-                    VerticalAlignment="Center"
-                    IsVisible="{Binding IsCapturing}">
-            <TextBlock Text="Capture mode:" VerticalAlignment="Center" />
-            <TextBlock Text="{Binding CapturePreview}" VerticalAlignment="Center" />
-            <Button Content="Save" Command="{Binding ConfirmCaptureCommand}" />
-            <Button Content="Cancel" Command="{Binding CancelCaptureCommand}" />
-        </StackPanel>
-
-        <TextBlock Grid.Row="5" Grid.ColumnSpan="2"
+        <TextBlock Classes="keybind-status"
+                   Classes.success="{Binding IsStatusSuccess}"
+                   Classes.error="{Binding IsStatusError}"
+                   IsVisible="{Binding HasStatusMessage}"
                    Text="{Binding StatusMessage}"
-                   Foreground="{StaticResource ErrorTextBrush}"
                    TextWrapping="Wrap" />
-    </Grid>
+
+        <Border Classes="settings-card">
+            <StackPanel>
+                <Grid Margin="10,4,6,4" ColumnDefinitions="160,*" ColumnSpacing="10">
+                    <TextBlock Classes="settings-description" Text="TARGET" />
+                    <TextBlock Grid.Column="1" Classes="settings-description" Text="SHORTCUTS" />
+                </Grid>
+
+                <Border Classes="settings-divider" />
+                <TextBlock Classes="keybind-group" Text="Actions" />
+                <ItemsControl ItemsSource="{Binding ActionRows}"
+                              ItemTemplate="{StaticResource KeybindTargetRowTemplate}" />
+
+                <Border Classes="settings-divider" />
+                <TextBlock Classes="keybind-group" Text="Client windows" />
+                <ItemsControl ItemsSource="{Binding ClientRows}"
+                              ItemTemplate="{StaticResource KeybindTargetRowTemplate}" />
+                <StackPanel IsVisible="{Binding !HasClientRows}">
+                    <Border Classes="settings-divider" />
+                    <TextBlock Margin="10,6"
+                               Classes="settings-description"
+                               Text="No client window yet: windows tracked by the filters appear here." />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
 </UserControl>

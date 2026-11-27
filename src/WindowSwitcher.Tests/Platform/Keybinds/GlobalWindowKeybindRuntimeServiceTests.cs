@@ -371,6 +371,11 @@ public sealed class GlobalWindowKeybindRuntimeServiceTests
 
             BindingsChanged?.Invoke(this, EventArgs.Empty);
         }
+
+        public void NotifyConfigurationReplaced()
+        {
+            BindingsChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private sealed class FakeWindowKeybindActivator : IWindowKeybindActivator

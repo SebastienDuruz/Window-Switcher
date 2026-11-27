@@ -66,6 +66,14 @@ internal sealed class PrefixListService : IPrefixListService
         return true;
     }
 
+    public void ReplaceAll(IReadOnlyCollection<string> prefixes)
+    {
+        ArgumentNullException.ThrowIfNull(prefixes);
+
+        _prefixes.Clear();
+        _prefixes.AddRange(prefixes);
+    }
+
     private static string Normalize(string? value)
     {
         return (value ?? string.Empty).Trim().ToLowerInvariant();

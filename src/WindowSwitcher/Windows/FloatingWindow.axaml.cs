@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Serilog;
 using WindowSwitcher.Controls;
 using WindowSwitcher.Hosting;
@@ -20,6 +21,8 @@ namespace WindowSwitcher.Windows;
 public partial class FloatingWindow : Window, IFloatingPreviewWindow
 {
     private const double ResizeGripThickness = 8d;
+    private const double DefaultSlotMargin = 16d;
+    private const double DefaultSlotGap = 8d;
     private static readonly ILogger Logger = Log.ForContext<FloatingWindow>();
     private static readonly Cursor DefaultCursor = new(StandardCursorType.Arrow);
     private static readonly Cursor TopSideCursor = new(StandardCursorType.TopSide);
@@ -43,6 +46,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
     private bool _closeRequestedByHost;
     private bool _isPreviewSelected;
     private bool _isPreviewHidden;
+    private bool _showFloatingWindow = true;
+    private bool _isConstructed;
     private PixelPoint _positionBeforeHide;
     private bool _isSelectionPending;
     private readonly IFloatingWindowHost _floatingWindowHost;
@@ -57,7 +62,8 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         WinAccessorBase winAccessorBase,
         IPreviewFrameProvider previewFrameProvider,
         IFloatingWindowHost floatingWindowHost,
-        IFloatingWindowSettingsService floatingWindowSettingsService
+        IFloatingWindowSettingsService floatingWindowSettingsService,
+        Func<string, int> acquireDefaultSlot
     )
     {
         ArgumentNullException.ThrowIfNull(windowConfig);
@@ -65,6 +71,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         ArgumentNullException.ThrowIfNull(previewFrameProvider);
         ArgumentNullException.ThrowIfNull(floatingWindowHost);
         ArgumentNullException.ThrowIfNull(floatingWindowSettingsService);
+        ArgumentNullException.ThrowIfNull(acquireDefaultSlot);
 
         InitializeComponent();
 
@@ -80,7 +87,7 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         var floatingWindowHandleConfigurator =
             AppServiceProvider.GetRequiredService<IFloatingWindowHandleConfigurator>();
 
-        SetInitialWindowSettings();
+        SetInitialWindowSettings(acquireDefaultSlot);
 
         _service = new FloatingWindowService(
             this,
@@ -93,21 +100,33 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             PreviewBorder
         );
 
-        Show();
+        // The native handle exists once the window is shown, which can happen later when
+        // floating previews are hidden by the settings.
+        Opened += (_, _) =>
+        {
+            var platformHandle = TryGetPlatformHandle();
+            if (platformHandle is not null)
+                floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
+        };
+
+        _isConstructed = true;
+        if (IsHiddenForNow)
+            _positionBeforeHide = Position;
+        else
+            Show();
         _service.UpdateLayout();
         _service.Start();
-
-        var platformHandle = TryGetPlatformHandle();
-        if (platformHandle is not null)
-            floatingWindowHandleConfigurator.Configure(platformHandle.Handle);
     }
+
+    // Hidden by "Hide active preview" or by the "Show floating previews" setting.
+    private bool IsHiddenForNow => _isPreviewHidden || !_showFloatingWindow;
 
     public sealed override void Show()
     {
         base.Show();
     }
 
-    private void SetInitialWindowSettings()
+    private void SetInitialWindowSettings(Func<string, int> acquireDefaultSlot)
     {
         WindowConfig? settingsConfig = _floatingWindowSettingsService.GetPersistedConfig(
             WindowConfig
@@ -119,8 +138,14 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             // Position only for existing window configurations, avoid the window to pop outside the viewport on Linux
             Position = new PixelPoint(WindowConfig.WindowLeft, WindowConfig.WindowTop);
         }
+        else
+        {
+            // No saved position: place the preview in its own slot so new previews do not
+            // open on top of each other.
+            PlaceInDefaultSlot(acquireDefaultSlot(WindowConfig.WindowId));
+        }
 
-        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        WindowLabel.Text = WindowConfig.ShortWindowTitle;
 
         // Avalonia draws its own shadow and frame around BorderOnly windows on X11/XWayland,
         // which shows up as a black margin around the preview; resizing is handled by the canvas.
@@ -288,6 +313,16 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _ = RaiseWindowAndNotifyActivationAsync();
     }
 
+    /// <summary>
+    /// Activates the window of this preview as if the preview had been clicked: the
+    /// preview becomes the active one, then its window is brought to the foreground.
+    /// </summary>
+    internal Task ActivateFromHostAsync()
+    {
+        _floatingWindowHost.SetActivePreview(this);
+        return RaiseWindowAndNotifyActivationAsync();
+    }
+
     private async Task RaiseWindowAndNotifyActivationAsync()
     {
         try
@@ -360,7 +395,19 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             return;
 
         _isPreviewHidden = isHidden;
-        if (isHidden)
+        ApplyVisibility();
+    }
+
+    private void ApplyVisibility()
+    {
+        if (!_isConstructed)
+            return;
+
+        bool visible = !IsHiddenForNow;
+        if (visible == IsVisible)
+            return;
+
+        if (!visible)
         {
             // WindowConfig only tracks the position after a pointer release, so a preview that was
             // never moved would come back at (0, 0); keep the actual position instead.
@@ -387,13 +434,14 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _service.SetPreviewHighlight(isPending || _isPreviewSelected);
     }
 
-    public void UpdateWindowTitle(string newTitle)
+    public void UpdateWindowTitle(string newTitle, string originalTitle)
     {
         if (string.IsNullOrWhiteSpace(newTitle))
             return;
 
         WindowConfig.WindowTitle = newTitle;
-        WindowLabel.Content = WindowConfig.ShortWindowTitle;
+        WindowConfig.OriginalWindowTitle = originalTitle;
+        WindowLabel.Text = WindowConfig.ShortWindowTitle;
     }
 
     public void ApplySettings()
@@ -409,6 +457,90 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
         _closeRequestedByHost = true;
         _service.Stop(WindowConfig.WindowId);
         Close();
+    }
+
+    private void PlaceInDefaultSlot(int slot)
+    {
+        Screen? screen = Screens?.Primary;
+        if (screen is null)
+            return;
+
+        FloatingWindowAppearanceSettings appearance =
+            _floatingWindowSettingsService.GetAppearanceSettings();
+        double width = appearance.UseFixedWindowSize
+            ? appearance.WindowWidth
+            : WindowConfig.WindowWidth;
+        double height = appearance.UseFixedWindowSize
+            ? appearance.WindowHeight
+            : WindowConfig.WindowHeight;
+        double scaling = screen.Scaling;
+
+        PixelPoint position = PreviewSlotLayout.GetPosition(
+            slot,
+            screen.WorkingArea,
+            new PixelSize((int)Math.Ceiling(width * scaling), (int)Math.Ceiling(height * scaling)),
+            margin: (int)Math.Round(DefaultSlotMargin * scaling),
+            gap: (int)Math.Round(DefaultSlotGap * scaling)
+        );
+
+        // A hidden preview takes its position back when it is shown again.
+        if (IsHiddenForNow)
+            _positionBeforeHide = position;
+        else
+            Position = position;
+
+        // WindowConfig otherwise only follows the position after a pointer release, and it is
+        // what gets saved when the preview closes.
+        WindowConfig.WindowLeft = position.X;
+        WindowConfig.WindowTop = position.Y;
+    }
+
+    /// <summary>
+    /// Moves this preview next to <paramref name="anchor"/> (bounds in physical pixels)
+    /// and raises it above the other windows, so a preview lost off screen or behind
+    /// other windows can be found and placed again.
+    /// </summary>
+    internal void MoveNextTo(PixelRect anchor)
+    {
+        Screen? screen = Screens?.ScreenFromPoint(anchor.Center) ?? Screens?.Primary;
+        if (screen is null)
+            return;
+
+        double scaling = screen.Scaling;
+        PixelPoint position = PreviewPlacement.NextTo(
+            anchor,
+            PixelSize.FromSize(new Size(Width, Height), scaling),
+            screen.WorkingArea,
+            gap: (int)Math.Round(DefaultSlotGap * scaling)
+        );
+
+        if (IsHiddenForNow)
+        {
+            _positionBeforeHide = position;
+        }
+        else
+        {
+            Position = position;
+            // Re-assert "above" so the preview comes back over windows that cover it.
+            Topmost = false;
+            Topmost = true;
+        }
+
+        WindowConfig.WindowLeft = position.X;
+        WindowConfig.WindowTop = position.Y;
+    }
+
+    /// <summary>
+    /// Forgets the size and position of this preview, then places it in
+    /// <paramref name="slot"/>, as for a preview opened without a saved layout.
+    /// </summary>
+    internal void ResetLayout(int slot)
+    {
+        var defaults = new WindowConfig();
+        WindowConfig.WindowWidth = defaults.WindowWidth;
+        WindowConfig.WindowHeight = defaults.WindowHeight;
+        ApplySettingsCore(refreshPreviewPipeline: false);
+        PlaceInDefaultSlot(slot);
     }
 
     private void ApplySettingsCore(bool refreshPreviewPipeline)
@@ -436,6 +568,9 @@ public partial class FloatingWindow : Window, IFloatingPreviewWindow
             WindowLabel.Foreground = new SolidColorBrush(highlightColor);
 
         ApplyPreviewBorderAppearance();
+
+        _showFloatingWindow = configSnapshot.ShowFloatingWindows;
+        ApplyVisibility();
 
         if (refreshPreviewPipeline)
             _service.ApplySettings();

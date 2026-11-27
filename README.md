@@ -72,7 +72,7 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - Wayland preview capture shows a desktop portal selection prompt the first time a window is previewed. Pick the window that matches the preview: the portal cannot target a window on its own. The selection is remembered across restarts while the window title stays the same and no other window of the same application shares that title.
 - Linux previews use the same 20 FPS target for every window. The active-window highlight does not change capture cadence.
 
-The application still runs when optional preview or keyboard dependencies are unavailable. Open `Help > About` to see the active preview mode and dependency status.
+The application still runs when optional preview or keyboard dependencies are unavailable. Open `Settings > About` to see the active preview mode and dependency status.
 
 ## Installation
 
@@ -98,7 +98,7 @@ After installing or building the application:
 6. Optionally open `Settings > Keybinds` and assign shortcuts to built-in actions or individual clients.
 7. Use the **General** and **Previews** pages of `Settings` to adjust preview dragging, sizing, hover focus, startup behavior, and highlight color.
 
-The main window refreshes its matching-window list automatically. Preview windows are created and removed as matching applications open and close.
+The main window refreshes its matching-window list automatically. Each row shows the window title and its process name; a translucent background in the highlight color marks the window whose preview is highlighted as active. Click a row to activate its window, as with a click on its preview. When no window matches the filters, the main window says so and offers a link to `Settings > Filters`. Preview windows are created and removed as matching applications open and close.
 
 ## User guide
 
@@ -112,24 +112,29 @@ Window Switcher uses window titles to decide what appears:
 
 Open `Settings > Filters` to manage the persistent lists. Use the ✕ button next to an entry to remove it.
 
+Right-click a window in the main list and choose **Bring preview here** to move its preview next to the main window and above other windows, showing it even when **Hide active preview** had hidden it; this is how to find a preview that went off screen or behind other windows.
+
 You can also right-click a window in the main list or its preview to:
 
 - add its title to the blacklist;
 - add it to the temporary blacklist; or
 - rename the original window.
 
-Renaming is especially useful when several clients initially share the same title. It also gives each client a stable, recognizable preview and keybind target.
+The rename dialog also shows the title the window had before its first rename, with **Restore original** to put it back; this original title is saved with the preview settings. Renaming is especially useful when several clients initially share the same title. It also gives each client a stable, recognizable preview and keybind target.
 
 ### Arrange floating previews
 
 - Turn on **Drag previews** (`General`) to move previews with the mouse.
 - Turn on **Focus on hover** (`General`) to activate a client by moving the pointer over its preview.
 - Under **Size** (`Previews`), choose **Per preview** to keep an individual size for each preview, optionally resizable by dragging its edges, or **Fixed** to use one width and height for every preview.
-- Turn on **Show previews** (`Previews`) to show live content inside floating windows.
+- Turn off **Show floating previews** (`Previews`) to hide every preview window and switch windows only from the main list or with keybinds.
+- Turn on **Live content** (`Previews`) to show live content inside floating windows.
 - Turn on **Hide active preview** (`Previews`) to hide the preview of the window you just activated through Window Switcher; it comes back when another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back.
-- Choose **Highlight color** (`Previews`) to change the preview labels, the active-preview outline, and the app accents.
+- Choose **Highlight color** (`Previews`) to change the preview labels, the active-preview outline, and the active row of the main window. The rest of the interface keeps its own accent color.
 
-Position and size are saved per window key and restored on a later launch. Use **Reset layout…** under `Settings > General > Reset` to clear saved preview layouts without resetting every preference.
+Each preview shows its window title in the top-left corner, on a translucent dark background so it stays readable over any content.
+
+A preview without a saved position opens next to the others, filling the top-left corner of the primary screen row by row, instead of on top of the previous one. Position and size are saved per window key and restored on a later launch. Use **Reset layout…** under `Settings > General > Reset` to clear saved preview layouts without resetting every preference.
 
 The highlight follows the client activated through a preview or global keybind, making the currently active target easy to identify.
 
@@ -137,7 +142,7 @@ On Wayland, use **Reset all previews** under `Settings > Previews > Screen captu
 
 ### Configure global keybinds
 
-Open `Settings > Keybinds`, select a target, and choose **Add shortcut**.
+Open `Settings > Keybinds`. Each target has one row with its shortcuts: choose **+** on the row, press the keys, then **Save**. Use the **✕** on a shortcut to remove it.
 
 Built-in targets are:
 
@@ -160,13 +165,14 @@ The keybind editor rejects duplicate shortcuts on one target and conflicts betwe
 | General | `Start minimized` | Starts the main window hidden in the system tray. |
 | General | `Drag previews` | Allows floating previews to be dragged. |
 | General | `Focus on hover` | Focuses a client when the pointer enters its preview. |
-| General | `Reset layout…` | Removes saved preview positions and sizes, after confirmation. |
+| General | `Reset layout…` | Removes saved preview positions and sizes, after confirmation, and moves the open previews back to the default layout. |
 | General | `Reset settings…` | Restores the default configuration, including filters, keybinds, and the preview layout, after confirmation. |
-| Previews | `Show previews` | Enables live content in floating preview windows. |
+| Previews | `Show floating previews` | Shows a floating preview window for each tracked window; when off, windows are switched from the main list or with keybinds. |
+| Previews | `Live content` | Enables live content in floating preview windows. |
 | Previews | `Hide active preview` | Hides the preview of the window activated through Window Switcher until another window is activated. |
 | Previews | `Per preview` | Keeps an individual size for each preview; **Resize previews by dragging their edges** allows changing it. |
 | Previews | `Fixed` | Applies one width and height, from 10 to 2000 pixels, to all previews. |
-| Previews | `Highlight color` | Sets the color of the preview labels, the active-preview outline, and the app accents. |
+| Previews | `Highlight color` | Sets the color of the preview labels, the active-preview outline, and the active row of the main window. |
 | Previews | `Reset all previews` | Resets supported capture selections, primarily on Wayland. |
 
 Settings are persisted as they change.
@@ -175,14 +181,13 @@ Settings are persisted as they change.
 
 | Menu | Command | Purpose |
 | --- | --- | --- |
-| `Settings` | | Open the settings window (General, Previews, Filters, Keybinds, About) on the last page used. |
+| `Settings` | | Open the settings window (General, Previews, Filters, Keybinds, About) on the last page used. The About page shows diagnostics, version information, and updates. |
 | `File` | `Open logs folder` | Open the directory containing the application log files. |
 | `File` | `Open config folder` | Open the directory containing `config.json`. |
-| `Help` | `About` | Open the About page of the settings window: diagnostics, version information, and updates. |
 
 ### Diagnostics and updates
 
-Open `Help > About` to view:
+Open `Settings > About` to view:
 
 - the application version and update status;
 - an update action when a newer release is available;
@@ -356,15 +361,15 @@ On Windows, the equivalent packaging option is:
 2. Check that the window title contains that entry and is not an exact blacklist match.
 3. On Linux, confirm that the desktop window manager exposes the EWMH `_NET_CLIENT_LIST` property and that the target is an X11 or XWayland window.
 4. On Wayland outside KDE Plasma, confirm that the target application is using XWayland. Native Wayland windows are only discoverable on KDE Plasma.
-5. On KDE Plasma, open `Help > About` and check that the `window-control` line under **Dependency status** includes `KWin script`. If it does not, confirm that `XDG_CURRENT_DESKTOP` contains `KDE` in the environment that launches Window Switcher. If it does, open `File > Open logs` and look for `KWin window watcher started`; KWin script warnings in the log explain why the watcher could not start (for example, `XDG_RUNTIME_DIR` not set).
+5. On KDE Plasma, open `Settings > About` and check that the `window-control` line under **Dependency status** includes `KWin script`. If it does not, confirm that `XDG_CURRENT_DESKTOP` contains `KDE` in the environment that launches Window Switcher. If it does, open `File > Open logs` and look for `KWin window watcher started`; KWin script warnings in the log explain why the watcher could not start (for example, `XDG_RUNTIME_DIR` not set).
 
 ### A preview is blank or unavailable
 
-- Confirm that **Show previews** is turned on.
+- Confirm that **Show floating previews** and **Live content** are turned on.
 - Fullscreen applications are not supported; try windowed or borderless-windowed mode.
 - On X11, confirm that compositing and the XComposite/XDamage extensions are available.
 - On Wayland, install PipeWire and the appropriate XDG Desktop Portal backend, then accept the portal selection prompt.
-- Open `Help > About` and review **Preview mode** and **Dependency status**.
+- Open `Settings > About` and review **Preview mode** and **Dependency status**.
 - On Wayland, try **Reset all previews** under `Settings > Previews` and select the capture source again.
 
 ### Global shortcuts do not work on Linux
@@ -382,7 +387,7 @@ Use **Reset layout…** under `Settings > General` to remove saved preview posit
 
 Use **Reset settings…** under `Settings > General`. This restores default settings, filters, saved layouts, and keybind definitions.
 
-When reporting a reproducible problem, include the application version and the non-sensitive diagnostic information shown under `Help > About`. Do not post `config.json` publicly without reviewing it first.
+When reporting a reproducible problem, include the application version and the non-sensitive diagnostic information shown under `Settings > About`. Do not post `config.json` publicly without reviewing it first.
 
 ## Build from source
 

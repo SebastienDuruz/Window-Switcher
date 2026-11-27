@@ -40,6 +40,23 @@ public class SettingsViewModel : ObservableObject
             );
     }
 
+    /// <summary>
+    /// Gets or sets whether the floating previews are shown. When off, windows are
+    /// switched from the main list or with keybinds.
+    /// </summary>
+    public bool ShowFloatingWindows
+    {
+        get => ReadSetting(config => config.ShowFloatingWindows);
+        set =>
+            UpdateSetting(
+                nameof(ShowFloatingWindows),
+                value,
+                config => config.ShowFloatingWindows,
+                (config, currentValue) => config.ShowFloatingWindows = currentValue,
+                applyToWindows: true
+            );
+    }
+
     public bool HideActivePreview
     {
         get => ReadSetting(config => config.HideActivePreview);

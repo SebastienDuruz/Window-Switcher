@@ -14,7 +14,7 @@ Each documentation file has a single role:
 
 - Search the [existing issues](https://github.com/SebastienDuruz/Window-Switcher/issues) before opening a new one.
 - Open an issue before investing in a significant behavioral or architectural change, so the approach can be discussed first.
-- Bug reports should include the application version and the non-sensitive diagnostic information shown under `Help > About` (operating system, session type, desktop environment, preview mode, dependency status).
+- Bug reports should include the application version and the non-sensitive diagnostic information shown under `Settings > About` (operating system, session type, desktop environment, preview mode, dependency status).
 - Do not post `config.json` or log files publicly without reviewing them first. They can contain window identifiers, file paths, and other details about your system.
 
 ## Development setup

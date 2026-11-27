@@ -19,22 +19,45 @@ public partial class RenameViewModel : ObservableObject
     [ObservableProperty]
     private string _result = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOriginalTitle))]
+    [NotifyCanExecuteChangedFor(nameof(RestoreOriginalCommand))]
+    private string _originalTitle = string.Empty;
+
+    /// <summary>
+    /// Gets whether the window was renamed earlier and can get its original title back.
+    /// </summary>
+    public bool HasOriginalTitle => !string.IsNullOrWhiteSpace(OriginalTitle);
+
     public IRelayCommand ConfirmCommand { get; }
     public IRelayCommand CancelCommand { get; }
+
+    /// <summary>
+    /// Completes the session with the original title.
+    /// </summary>
+    public IRelayCommand RestoreOriginalCommand { get; }
 
     public RenameViewModel()
     {
         ConfirmCommand = new RelayCommand(Confirm);
         CancelCommand = new RelayCommand(Cancel);
+        RestoreOriginalCommand = new RelayCommand(
+            () => Complete(OriginalTitle.Trim()),
+            () => HasOriginalTitle
+        );
     }
 
-    public Task<string?> StartSessionAsync(string initialTitle)
+    /// <param name="initialTitle">Current title, shown in the text box.</param>
+    /// <param name="originalTitle">Title before the first rename, or <see langword="null"/>
+    /// when the window was never renamed.</param>
+    public Task<string?> StartSessionAsync(string initialTitle, string? originalTitle = null)
     {
         _session?.TrySetResult(null);
         _session = new TaskCompletionSource<string?>(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
         WindowTitle = initialTitle;
+        OriginalTitle = originalTitle ?? string.Empty;
         Result = string.Empty;
         return _session.Task;
     }
