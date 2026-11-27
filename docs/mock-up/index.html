@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Window Switcher – Mock-up</title>
+    <link rel="icon" href="../../src/WindowSwitcher/Assets/WS_logo.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="page-header">
+    <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="Window Switcher logo">
+    <div>
+        <h1>Window Switcher – screen mock-up</h1>
+        <p>Static HTML/CSS reproduction of the Avalonia windows in <code>src/WindowSwitcher/Windows</code> (dark Fluent theme + <code>AppTheme.axaml</code>).</p>
+    </div>
+</header>
+
+<nav class="toc" aria-label="Screens">
+    <a href="#main">Main window</a>
+    <a href="#previews">Floating previews</a>
+    <a href="#tray">Tray icon</a>
+    <a href="#filters">Filters</a>
+    <a href="#keybinds">Keybinds</a>
+    <a href="#settings">Settings</a>
+    <a href="#rename">Rename</a>
+    <a href="#about">About</a>
+</nav>
+
+<main>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="main">
+        <h2>Main window</h2>
+        <p class="screen-meta">
+            <code>MainWindow.axaml</code> · <code>MainWindowViewModel</code> · fixed width of 300 px, height sized to content, always on top.
+        </p>
+        <div class="stage">
+            <div class="variant">
+                <span class="variant-label">Tracked windows list</span>
+                <div class="window main-window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">WindowSwitcher</span>
+                        <span class="caption-buttons"><span>—</span><span class="disabled">▢</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="menubar">
+                        <span class="menu-header"><span class="access">C</span>onfig</span>
+                        <span class="menu-header"><span class="access">F</span>ile</span>
+                        <span class="menu-header"><span class="access">H</span>elp</span>
+                    </div>
+                    <div class="window-body" style="padding: 8px">
+                        <div class="listbox">
+                            <div class="item">Client 1 – Main</div>
+                            <div class="item selected">Client 2 – Alt</div>
+                            <div class="item">Client 3 – Trader</div>
+                            <div class="item">Firefox – Docs</div>
+                            <div class="item">Terminal</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="variant">
+                <span class="variant-label">"Config" menu open</span>
+                <div class="window main-window" style="height: 270px">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">WindowSwitcher</span>
+                        <span class="caption-buttons"><span>—</span><span class="disabled">▢</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="menubar">
+                        <span class="menu-header open"><span class="access">C</span>onfig
+                            <div class="popup-menu" style="left: 0; top: 26px">
+                                <div class="menu-item"><span class="access">F</span>ilters</div>
+                                <div class="menu-item hover"><span class="access">K</span>eybinds</div>
+                                <div class="menu-item"><span class="access">S</span>ettings</div>
+                                <div class="separator"></div>
+                                <div class="menu-item conditional"><span class="access">R</span>eset all previews</div>
+                            </div>
+                        </span>
+                        <span class="menu-header"><span class="access">F</span>ile</span>
+                        <span class="menu-header"><span class="access">H</span>elp</span>
+                    </div>
+                    <div class="window-body" style="padding: 8px">
+                        <div class="listbox">
+                            <div class="item">Client 1 – Main</div>
+                            <div class="item">Client 2 – Alt</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="variant">
+                <span class="variant-label">"File" menu open</span>
+                <div class="window main-window" style="height: 270px">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">WindowSwitcher</span>
+                        <span class="caption-buttons"><span>—</span><span class="disabled">▢</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="menubar">
+                        <span class="menu-header"><span class="access">C</span>onfig</span>
+                        <span class="menu-header open"><span class="access">F</span>ile
+                            <div class="popup-menu" style="left: 0; top: 26px">
+                                <div class="menu-item"><span>Open <span class="access">l</span>ogs</span></div>
+                                <div class="menu-item"><span class="access">O</span>pen config</div>
+                                <div class="menu-item hover"><span class="access">C</span>lean config</div>
+                                <div class="menu-item"><span class="access">G</span>enerate new config</div>
+                            </div>
+                        </span>
+                        <span class="menu-header"><span class="access">H</span>elp</span>
+                    </div>
+                    <div class="window-body" style="padding: 8px">
+                        <div class="listbox">
+                            <div class="item">Client 1 – Main</div>
+                            <div class="item">Client 2 – Alt</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>Each row shows <code>ShortWindowTitle</code>; selecting a row activates the target window.</li>
+            <li>"Reset all previews" is only visible when <code>CanResetAllPreviews</code> is true (remembered Wayland capture selections).</li>
+            <li>The "Help" menu has a single item, "About", which opens the <a href="#about">About</a> window; "Filters", "Keybinds" and "Settings" open the matching windows.</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="previews">
+        <h2>Floating previews</h2>
+        <p class="screen-meta">
+            <code>FloatingWindow.axaml</code> · one window per tracked window, no title bar, resizable, always on top, hidden from the taskbar.
+        </p>
+        <div class="stage">
+            <div class="desktop" aria-label="Desktop with four previews">
+                <div class="preview" style="left: 24px; top: 20px">
+                    <div class="shot game"></div>
+                    <span class="label">Client 1 – Main</span>
+                </div>
+                <div class="preview active" style="left: 256px; top: 20px">
+                    <div class="shot game"></div>
+                    <span class="label">Client 2 – Alt</span>
+                </div>
+                <div class="preview" style="left: 24px; top: 156px">
+                    <div class="shot browser"></div>
+                    <span class="label">Firefox – Docs</span>
+                </div>
+                <div class="preview" style="left: 256px; top: 156px">
+                    <div class="shot terminal"></div>
+                    <span class="label">Terminal</span>
+                </div>
+                <div class="popup-menu context-menu">
+                    <div class="menu-item">Add to blacklist</div>
+                    <div class="menu-item hover">Add to temp blacklist</div>
+                    <div class="menu-item">Rename window</div>
+                    <div class="separator"></div>
+                    <div class="menu-item conditional">Reset preview stream</div>
+                </div>
+                <div class="preview pending" style="left: 516px; top: 20px; width: 220px; height: 124px">
+                    <div class="shot editor"></div>
+                    <span class="label">Code – Window-Switcher</span>
+                </div>
+                <div class="taskbar">
+                    <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                    <div class="tray">14:32</div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>Black background (<code>FloatingWindowBackgroundBrush</code>), capture drawn at 80% opacity, bold 10 px fuchsia label in the top-left corner.</li>
+            <li>A 2 px border in the "Highlight color" (yellow by default) surrounds the preview of the active window; the dashed outline illustrates a pending capture selection (<code>PendingSelectionBorderBrush</code>).</li>
+            <li>Left click activates the window; dragging moves the preview (when "Move windows" is on); right click opens the context menu above. "Reset preview stream" only appears when the capture selection can be reset.</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="tray">
+        <h2>Tray icon</h2>
+        <p class="screen-meta"><code>App.axaml</code> · <code>TrayIcon</code> with a native menu.</p>
+        <div class="stage">
+            <div class="variant">
+                <span class="variant-label">Hover</span>
+                <div class="tray-scene">
+                    <div class="tooltip">WindowSwitcher Tray menu</div>
+                    <div class="taskbar"><img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt=""><span>14:32</span></div>
+                </div>
+            </div>
+            <div class="variant">
+                <span class="variant-label">Right click</span>
+                <div class="tray-scene">
+                    <div class="popup-menu">
+                        <div class="menu-item hover">Open</div>
+                        <div class="menu-item">Exit</div>
+                    </div>
+                    <div class="taskbar"><img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt=""><span>14:32</span></div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>A single click on the icon shows the main window again (useful with "Start minimized").</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="filters">
+        <h2>Filters</h2>
+        <p class="screen-meta">
+            <code>FiltersWindow.axaml</code> · <code>FiltersViewModel</code> · width of 300 px. The tabs in this mock-up are clickable.
+        </p>
+        <div class="stage">
+            <div class="window filters-window">
+                <div class="titlebar">
+                    <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                    <span class="title">Filters</span>
+                    <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                </div>
+                <div class="tabs">
+                    <input type="radio" name="filters-tab" id="tab-prefixes" checked>
+                    <input type="radio" name="filters-tab" id="tab-blacklist">
+                    <div class="tab-strip">
+                        <label for="tab-prefixes">Prefixes</label>
+                        <label for="tab-blacklist">Blacklist</label>
+                    </div>
+                    <div class="tab-panel panel-prefixes">
+                        <div class="row" style="gap: 6px">
+                            <div class="textbox focused grow">Client<span class="caret"></span></div>
+                            <button class="btn" type="button">Add</button>
+                        </div>
+                        <div class="listbox" style="margin-top: 10px">
+                            <div class="item">EVE -</div>
+                            <div class="item selected">Firefox</div>
+                            <div class="item">Terminal</div>
+                        </div>
+                    </div>
+                    <div class="tab-panel panel-blacklist">
+                        <div class="row" style="gap: 6px">
+                            <div class="textbox grow"></div>
+                            <button class="btn" type="button">Add</button>
+                        </div>
+                        <div class="listbox" style="margin-top: 10px">
+                            <div class="item">EVE - Launcher</div>
+                            <div class="item">Firefox – Private Browsing</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>"Prefixes": only windows whose title starts with one of the prefixes (case-insensitive) are tracked.</li>
+            <li>"Blacklist": titles that are persistently excluded. Pressing <kbd>Enter</kbd> in the text box is the same as clicking "Add".</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="keybinds">
+        <h2>Keybinds</h2>
+        <p class="screen-meta">
+            <code>KeybindsWindow.axaml</code> · <code>KeybindSettingsViewModel</code> · sized to content.
+        </p>
+        <div class="stage">
+            <div class="variant">
+                <span class="variant-label">Default state</span>
+                <div class="window keybinds-window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">Keybinds</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body">
+                        <div class="keybinds-grid">
+                            <div class="span">Configure global keybinds per target.</div>
+
+                            <div class="stack gap-8">
+                                <div>Actions</div>
+                                <div class="listbox bordered">
+                                    <div class="item selected">Next client</div>
+                                    <div class="item">Previous client</div>
+                                    <div class="item">Focus active client</div>
+                                </div>
+                                <div>Client windows</div>
+                                <div class="listbox bordered">
+                                    <div class="item">Client 1 – Main (exefile)</div>
+                                    <div class="item">Client 2 – Alt (exefile)</div>
+                                    <div class="item">Firefox – Docs (firefox)</div>
+                                </div>
+                                <div class="row end"><button class="btn" type="button">Refresh client targets</button></div>
+                            </div>
+
+                            <div class="stack gap-8">
+                                <div>Shortcuts for selected target</div>
+                                <div class="listbox bordered">
+                                    <div class="item selected"><kbd>Ctrl+Alt+Right</kbd></div>
+                                    <div class="item"><kbd>F13</kbd></div>
+                                </div>
+                                <div class="row end">
+                                    <button class="btn" type="button">Add shortcut</button>
+                                    <button class="btn" type="button">Remove selected</button>
+                                </div>
+                            </div>
+
+                            <div class="span error">Shortcut added.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="variant">
+                <span class="variant-label">Capture mode + Linux banner</span>
+                <div class="window keybinds-window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">Keybinds</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body">
+                        <div class="keybinds-grid">
+                            <div class="span">Configure global keybinds per target.</div>
+
+                            <div class="span banner stack gap-6">
+                                <div style="font-weight: 600">Global keyboard access is not available</div>
+                                <div>Window Switcher cannot read keyboard input devices, so global shortcuts are disabled.</div>
+                                <div class="muted">Recommended command</div>
+                                <div class="textbox mono">sudo usermod -aG input $USER</div>
+                                <div class="muted">Log out and back in after running the command, then reopen this window.</div>
+                            </div>
+
+                            <div class="stack gap-8">
+                                <div>Actions</div>
+                                <div class="listbox bordered">
+                                    <div class="item">Next client</div>
+                                    <div class="item">Previous client</div>
+                                    <div class="item">Focus active client</div>
+                                </div>
+                                <div>Client windows</div>
+                                <div class="listbox bordered">
+                                    <div class="item selected">Client 1 – Main (exefile)</div>
+                                    <div class="item">Client 2 – Alt (exefile)</div>
+                                </div>
+                                <div class="row end"><button class="btn" type="button">Refresh client targets</button></div>
+                            </div>
+
+                            <div class="stack gap-8">
+                                <div>Shortcuts for selected target</div>
+                                <div class="listbox bordered">
+                                    <div class="item"><kbd>Ctrl+1</kbd></div>
+                                </div>
+                                <div class="row end">
+                                    <button class="btn" type="button">Add shortcut</button>
+                                    <button class="btn" type="button">Remove selected</button>
+                                </div>
+                            </div>
+
+                            <div class="span row gap-10">
+                                <span>Capture mode:</span>
+                                <span>Ctrl+Shift+1</span>
+                                <button class="btn" type="button">Save</button>
+                                <button class="btn" type="button">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>"Actions" targets are the constants of <code>KeybindBuiltInTargets</code>. "Client windows" targets read <code>title (process)</code> and are sorted alphabetically.</li>
+            <li>"Add shortcut" enters capture mode (initial text: "Press the shortcut to capture"); the capture row is only visible while capturing.</li>
+            <li>The red-bordered banner only appears when global keyboard access has an issue (Linux); its exact text depends on the diagnostic, the text shown here is illustrative.</li>
+            <li>The status line at the bottom uses <code>ErrorTextBrush</code> for every message.</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="settings">
+        <h2>Settings</h2>
+        <p class="screen-meta">
+            <code>SettingsWindow.axaml</code> · <code>SettingsViewModel</code> · sized to content, minimum width of 200 px.
+        </p>
+        <div class="stage">
+            <div class="variant">
+                <span class="variant-label">Fixed size enabled</span>
+                <div class="window settings-window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">Settings</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body stack gap-8">
+                        <div class="stack gap-6">
+                            <div class="checkbox checked"><span class="box"></span>Move windows</div>
+                            <div class="checkbox"><span class="box"></span>Focus on hover</div>
+                            <div class="checkbox checked"><span class="box"></span>Enable previews</div>
+                            <div class="checkbox" title="Hides the preview of the window activated through Window Switcher until another window is activated."><span class="box"></span>Hide active preview</div>
+                            <div class="checkbox"><span class="box"></span>Start minimized</div>
+                        </div>
+                        <div class="stack gap-6">
+                            <div class="checkbox disabled"><span class="box"></span>Resize windows</div>
+                            <div class="checkbox checked"><span class="box"></span>Fixed size</div>
+                            <div class="indent stack gap-6">
+                                <div class="row"><span class="grow">Width</span><div class="numeric"><span class="value">220</span><span class="spin"><span>▲</span><span>▼</span></span></div></div>
+                                <div class="row"><span class="grow">Height</span><div class="numeric"><span class="value">124</span><span class="spin"><span>▲</span><span>▼</span></span></div></div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <span style="width: 120px">Highlight color</span>
+                            <div class="color-picker"><span class="swatch"></span><span class="chevron">▼</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="variant">
+                <span class="variant-label">Free size per preview</span>
+                <div class="window settings-window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">Settings</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body stack gap-8">
+                        <div class="stack gap-6">
+                            <div class="checkbox checked"><span class="box"></span>Move windows</div>
+                            <div class="checkbox checked"><span class="box"></span>Focus on hover</div>
+                            <div class="checkbox checked"><span class="box"></span>Enable previews</div>
+                            <div class="checkbox checked"><span class="box"></span>Hide active preview</div>
+                            <div class="checkbox checked"><span class="box"></span>Start minimized</div>
+                        </div>
+                        <div class="stack gap-6">
+                            <div class="checkbox checked"><span class="box"></span>Resize windows</div>
+                            <div class="checkbox"><span class="box"></span>Fixed size</div>
+                            <div class="indent stack gap-6">
+                                <div class="row muted"><span class="grow">Width</span><div class="numeric disabled"><span class="value">220</span><span class="spin"><span>▲</span><span>▼</span></span></div></div>
+                                <div class="row muted"><span class="grow">Height</span><div class="numeric disabled"><span class="value">124</span><span class="spin"><span>▲</span><span>▼</span></span></div></div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <span style="width: 120px">Highlight color</span>
+                            <div class="color-picker"><span class="swatch" style="background: #60cdff"></span><span class="chevron">▼</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>"Resize windows" is disabled when <code>CanEditResizeWindows</code> is false (fixed size active).</li>
+            <li>The Width / Height fields (10 to 2000) can only be edited when "Fixed size" is checked.</li>
+            <li>"Highlight color" is a <code>ColorPicker</code> without an alpha channel; the color is used for the border of the active preview.</li>
+        </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="rename">
+        <h2>Rename window</h2>
+        <p class="screen-meta">
+            <code>RenameWindow.axaml</code> · <code>RenameViewModel</code> · centered on screen, opened from the context menu of a preview.
+        </p>
+        <div class="stage">
+            <div class="window" style="width: 320px">
+                <div class="titlebar">
+                    <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                    <span class="title">Rename window</span>
+                    <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                </div>
+                <div class="window-body stack gap-8">
+                    <div class="section-title">Rename window</div>
+                    <div class="muted">Choose the title shown by Window Switcher.</div>
+                    <div class="textbox focused">Client 2 – Alt<span class="caret"></span></div>
+                    <div class="row end">
+                        <button class="btn" type="button">Cancel</button>
+                        <button class="btn" type="button">Rename</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <section class="screen" id="about">
+        <h2>About</h2>
+        <p class="screen-meta">
+            <code>AppInfoWindow.axaml</code> · <code>AppInfoViewModel</code> · centered on the main window, not resizable.
+        </p>
+        <div class="stage">
+            <div class="variant">
+                <span class="variant-label">Linux, update available</span>
+                <div class="window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">About</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body">
+                        <div class="about-grid">
+                            <span>Version:</span><span>0.8.0</span><button class="btn small" type="button">Update</button>
+                            <span>Updates:</span><span class="wide">Version 0.9.0 is available.</span>
+                            <span>UI backend:</span><span class="wide">X11</span>
+                            <span>Preview mode:</span><span class="wide">PipeWire</span>
+                            <span>OS:</span><span class="wide">Arch Linux (KDE Plasma, Wayland)</span>
+                            <span>.NET:</span><span class="wide">.NET 10.0.0</span>
+                            <span>Arch:</span><span class="wide">X64</span>
+                            <span>Config:</span><span class="wide">~/.config/WindowSwitcher/config.json</span>
+                            <span>Deps:</span><span class="wide">All required Linux dependencies are available.</span>
+                            <div class="actions row">
+                                <button class="btn" type="button">Check updates</button>
+                                <button class="btn" type="button">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="variant">
+                <span class="variant-label">Windows, up to date</span>
+                <div class="window">
+                    <div class="titlebar">
+                        <img src="../../src/WindowSwitcher/Assets/WS_logo.png" alt="">
+                        <span class="title">About</span>
+                        <span class="caption-buttons"><span>—</span><span class="close">✕</span></span>
+                    </div>
+                    <div class="window-body">
+                        <div class="about-grid">
+                            <span>Version:</span><span>0.8.0</span><span></span>
+                            <span>Updates:</span><span class="wide">You are up to date.</span>
+                            <span>UI backend:</span><span class="wide">Win32</span>
+                            <span>Preview mode:</span><span class="wide">Desktop Window Manager (DWM)</span>
+                            <span>OS:</span><span class="wide">Microsoft Windows 10.0.26100</span>
+                            <span>.NET:</span><span class="wide">.NET 10.0.0</span>
+                            <span>Arch:</span><span class="wide">X64</span>
+                            <span>Config:</span><span class="wide">%APPDATA%\WindowSwitcher\config.json</span>
+                            <span>Deps:</span><span class="wide">Not applicable</span>
+                            <div class="actions row">
+                                <button class="btn" type="button">Check updates</button>
+                                <button class="btn" type="button">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ul class="notes">
+            <li>The "Update" button is only visible when <code>CanUpdateNow</code> is true.</li>
+            <li>Possible "Updates" messages: "Checking for updates...", "Version X is available.", "You are up to date.", "Update check failed: …", "Preparing update...".</li>
+            <li>Environment values (OS, paths, dependencies) are examples.</li>
+        </ul>
+    </section>
+
+</main>
+</body>
+</html>
