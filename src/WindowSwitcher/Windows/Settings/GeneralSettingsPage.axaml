@@ -77,7 +77,7 @@
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="All settings" />
                                 <TextBlock Classes="settings-description"
-                                           Text="Restore the default configuration, including filters, keybinds and the preview layout." />
+                                           Text="Restore the default configuration, including filters, keybinds, the preview layout and screen capture selections." />
                             </StackPanel>
                             <Button Grid.Column="1"
                                     Classes="danger"

@@ -63,6 +63,23 @@ public sealed class SettingsWindowViewModelTests
     }
 
     [Theory]
+    [InlineData(-1)]
+    [InlineData(42)]
+    public void SelectedPageIndex_FallsBackToTheLastPage_WhenItIsInvalid(int invalidIndex)
+    {
+        var shown = new List<SettingsPage>();
+        var sut = CreateSut(pageShown: shown.Add);
+        sut.ShowPage(SettingsPage.Filters);
+
+        sut.SelectedPageIndex = invalidIndex;
+
+        Assert.Equal(SettingsPage.Filters, sut.SelectedPage);
+        Assert.Equal((int)SettingsPage.Filters, sut.SelectedPageIndex);
+        sut.ShowPage(sut.SelectedPage);
+        Assert.Equal(SettingsPage.Filters, shown[^1]);
+    }
+
+    [Theory]
     [InlineData(true, 1)]
     [InlineData(false, 0)]
     public async Task ResetLayoutCommand_ResetsOnlyWhenConfirmed(bool confirmed, int expectedResets)
