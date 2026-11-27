@@ -10,7 +10,7 @@ BUILD_SENTRY_ARGUMENT := --enable-sentry-telemetry $(SENTRY_TELEMETRY)
 BUILD_TELEMETRY_ARGUMENTS := $(BUILD_SENTRY_ARGUMENT) --distribution-channel $(TELEMETRY_DISTRIBUTION_CHANNEL) --package-kind $(TELEMETRY_PACKAGE_KIND)
 BUILD_SCRIPT := ./build/build.sh
 
-.PHONY: help restore build run test test-no-build coverage clean format format-check artifacts appimage installer
+.PHONY: help restore build run test test-no-build coverage clean format format-check artifacts appimage installer mockup-svg
 
 help:
 	@echo "Window Switcher development commands"
@@ -24,6 +24,7 @@ help:
 	@echo "  make clean         Clean the solution"
 	@echo "  make format        Format source with CSharpier"
 	@echo "  make format-check  Check source formatting with CSharpier"
+	@echo "  make mockup-svg    Regenerate the README images from docs/mock-up"
 	@echo "  make appimage      Build the Linux AppImage with the packaging build"
 	@echo "  make installer     Build the Windows installer (requires makensis)"
 	@echo "  make artifacts     Build every artifact the current host supports"
@@ -64,6 +65,9 @@ format:
 format-check:
 	dotnet tool restore
 	dotnet csharpier check .
+
+mockup-svg:
+	python3 scripts/export-mockup-svg.py
 
 appimage:
 	$(BUILD_SCRIPT) --target AppImage $(BUILD_TELEMETRY_ARGUMENTS)

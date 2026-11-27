@@ -25,9 +25,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private ObservableCollection<WindowConfig> _windowsConfigs = new();
 
-    [ObservableProperty]
-    private WindowConfig? _selectedWindow;
-
     /// <summary>
     /// Gets or sets the id of the window whose preview is highlighted as active, or
     /// <see langword="null"/> when none is.
@@ -112,21 +109,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         await FetchAndApplyWindowsAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public bool TrySelectWindowById(string windowId)
-    {
-        if (string.IsNullOrWhiteSpace(windowId))
-            return false;
-
-        WindowConfig? matchingWindow = WindowsConfigs.FirstOrDefault(window =>
-            string.Equals(window.WindowId, windowId, StringComparison.Ordinal)
-        );
-        if (matchingWindow is null)
-            return false;
-
-        SelectedWindow = matchingWindow;
-        return true;
-    }
-
     private void ApplyWindowsWithFilters(IReadOnlyCollection<WindowConfig> fetchedWindows)
     {
         WindowFilterSettings filterSettings = _windowFilterSettingsProvider.GetSettings();
@@ -181,20 +163,6 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
 
             WindowsConfigs.RemoveAt(i);
         }
-
-        if (SelectedWindow is null)
-            return;
-
-        WindowConfig? selectedWindow = WindowsConfigs.FirstOrDefault(window =>
-            string.Equals(window.WindowId, SelectedWindow.WindowId, StringComparison.Ordinal)
-        );
-        if (selectedWindow is not null)
-        {
-            SelectedWindow = selectedWindow;
-            return;
-        }
-
-        SelectedWindow = null;
     }
 
     private async Task RefreshWindowsAsync(CancellationToken cancellationToken)

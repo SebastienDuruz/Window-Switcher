@@ -42,13 +42,11 @@ public sealed class WindowListViewModelTests
         using var sut = CreateViewModel(snapshotProvider);
         await sut.FetchWindowsWithFiltersAsync();
         WindowConfig window = Assert.Single(sut.WindowsConfigs);
-        Assert.True(sut.TrySelectWindowById("1"));
 
         snapshotProvider.Windows = null;
         await sut.FetchWindowsWithFiltersAsync();
 
         Assert.Same(window, Assert.Single(sut.WindowsConfigs));
-        Assert.Same(window, sut.SelectedWindow);
     }
 
     [Fact]
