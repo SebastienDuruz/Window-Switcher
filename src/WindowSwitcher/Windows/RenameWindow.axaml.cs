@@ -20,9 +20,12 @@ public partial class RenameWindow : Window
         Closing += OnClosing;
     }
 
-    public async Task<bool> ShowAndWaitForResultAsync(string initialTitle)
+    public async Task<bool> ShowAndWaitForResultAsync(
+        string initialTitle,
+        string? originalTitle = null
+    )
     {
-        Task<string?> renameSessionTask = ViewModel.StartSessionAsync(initialTitle);
+        Task<string?> renameSessionTask = ViewModel.StartSessionAsync(initialTitle, originalTitle);
 
         if (IsVisible)
             Activate();

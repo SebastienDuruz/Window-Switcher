@@ -22,9 +22,20 @@
                 <TextBlock Foreground="{StaticResource MutedTextBrush}"
                            Text="Choose the title shown by Window Switcher." />
                 <TextBox Name="WindowTitleTextBox" Text="{Binding WindowTitle, Mode=TwoWay}"></TextBox>
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                        <Button Command="{Binding CancelCommand}">Cancel</Button>
-                        <Button Command="{Binding ConfirmCommand}">Rename</Button>
-                </StackPanel>
+                <TextBlock Foreground="{StaticResource MutedTextBrush}"
+                           FontSize="12"
+                           IsVisible="{Binding HasOriginalTitle}">
+                        <Run Text="Original title:" />
+                        <Run FontWeight="SemiBold" Text="{Binding OriginalTitle}" />
+                </TextBlock>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <Button Content="Restore original"
+                                IsVisible="{Binding HasOriginalTitle}"
+                                Command="{Binding RestoreOriginalCommand}" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                <Button Command="{Binding CancelCommand}">Cancel</Button>
+                                <Button Command="{Binding ConfirmCommand}">Rename</Button>
+                        </StackPanel>
+                </Grid>
         </StackPanel>
 </Window>

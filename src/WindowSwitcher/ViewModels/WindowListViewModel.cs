@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,6 +28,18 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private WindowConfig? _selectedWindow;
 
+    /// <summary>
+    /// Gets or sets the id of the window whose preview is highlighted as active, or
+    /// <see langword="null"/> when none is.
+    /// </summary>
+    [ObservableProperty]
+    private string? _activeWindowId;
+
+    /// <summary>
+    /// Gets whether at least one window matches the filters.
+    /// </summary>
+    public bool HasWindows => WindowsConfigs.Count > 0;
+
     public HashSet<string> TempWindowIdsBlacklist { get; } = new(StringComparer.Ordinal);
 
     public WindowListViewModel(
@@ -44,6 +57,7 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         _windowFilterSettingsProvider = windowFilterSettingsProvider;
         _dispatcher = dispatcher;
         _logger = logger ?? Log.ForContext<WindowListViewModel>();
+        WindowsConfigs.CollectionChanged += OnWindowsConfigsCollectionChanged;
         _ = Task.Run(() => RunPeriodicTask(_cts.Token));
     }
 
@@ -65,10 +79,30 @@ public partial class WindowListViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnWindowsConfigsChanged(
+        ObservableCollection<WindowConfig>? oldValue,
+        ObservableCollection<WindowConfig> newValue
+    )
+    {
+        if (oldValue is not null)
+            oldValue.CollectionChanged -= OnWindowsConfigsCollectionChanged;
+        newValue.CollectionChanged += OnWindowsConfigsCollectionChanged;
+        OnPropertyChanged(nameof(HasWindows));
+    }
+
+    private void OnWindowsConfigsCollectionChanged(
+        object? sender,
+        NotifyCollectionChangedEventArgs e
+    )
+    {
+        OnPropertyChanged(nameof(HasWindows));
+    }
+
     public void Dispose()
     {
         if (_cts.IsCancellationRequested)
             return;
+        WindowsConfigs.CollectionChanged -= OnWindowsConfigsCollectionChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

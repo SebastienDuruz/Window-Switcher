@@ -16,6 +16,7 @@ internal sealed class FloatingWindowRegistry
     private readonly IFloatingWindowHost _floatingWindowHost;
     private readonly IFloatingWindowSettingsService _floatingWindowSettingsService;
     private readonly Dictionary<string, FloatingWindow> _windows = new(StringComparer.Ordinal);
+    private readonly PreviewSlotAllocator _defaultSlots = new();
 
     public FloatingWindowRegistry(
         WinAccessorBase winAccessorBase,
@@ -98,11 +99,23 @@ internal sealed class FloatingWindowRegistry
             floatingWindow.ApplySettings();
     }
 
+    /// <summary>
+    /// Moves every open preview back to the default layout, after the saved layout was
+    /// cleared; otherwise each preview would save its old layout again when it closes.
+    /// </summary>
+    public void ResetLayout()
+    {
+        _defaultSlots.Clear();
+        foreach ((string windowId, FloatingWindow floatingWindow) in _windows.ToList())
+            floatingWindow.ResetLayout(_defaultSlots.Acquire(windowId));
+    }
+
     public void CloseAll()
     {
         foreach (FloatingWindow floatingWindow in _windows.Values.ToList())
             floatingWindow.RequestCloseFromHost();
         _windows.Clear();
+        _defaultSlots.Clear();
     }
 
     private void TryAdd(WindowConfig window)
@@ -115,12 +128,14 @@ internal sealed class FloatingWindowRegistry
             _winAccessorBase,
             _previewFrameProvider,
             _floatingWindowHost,
-            _floatingWindowSettingsService
+            _floatingWindowSettingsService,
+            _defaultSlots.Acquire
         );
     }
 
     private void Remove(string windowId)
     {
+        _defaultSlots.Release(windowId);
         if (!_windows.Remove(windowId, out FloatingWindow? floatingWindow))
             return;
 

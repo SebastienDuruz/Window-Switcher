@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Serilog;
+using WindowSwitcher.Controls;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
@@ -97,15 +98,18 @@ public partial class MainWindow : Window, IFloatingWindowHost
         _mainWindowViewModel = new MainWindowViewModel(
             ViewModel,
             openSettings: () => SettingsWindow.ShowLastPage(this),
-            openAbout: () => SettingsWindow.ShowPage(SettingsPage.About, this),
+            openFilters: () => SettingsWindow.ShowPage(SettingsPage.Filters, this),
             openConfigFolder: () => OpenFolder(StaticData.DataFolder),
             openLogsFolder: () => OpenFolder(StaticData.LogFolder),
             addToBlacklist: value => AddToBlacklist(value ?? string.Empty),
             addToTemporaryBlacklist: value => AddToTempBlacklist(value ?? string.Empty),
-            renameWindow: windowId => RenameWindowTitleAsync(windowId ?? string.Empty)
+            renameWindow: windowId => RenameWindowTitleAsync(windowId ?? string.Empty),
+            bringPreviewHere: windowId => BringPreviewHere(windowId ?? string.Empty),
+            activateWindow: windowId => ActivateWindowAsync(windowId ?? string.Empty)
         );
         DataContext = _mainWindowViewModel;
         Title = StaticData.AppName;
+        WindowsList.ContainerPrepared += OnWindowListContainerPrepared;
 
         _windowKeybindActivator = AppServiceProvider.GetRequiredService<IWindowKeybindActivator>();
         _previewCoordinator = new FloatingPreviewCoordinator(
@@ -114,6 +118,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
             SetActivePreviewByWindowId,
             () => ConfigFileAccessor.GetInstance().ReadConfig(config => config.HideActivePreview)
         );
+        _previewCoordinator.ActivePreviewChanged += OnActivePreviewChanged;
         _blacklistCoordinator = new WindowBlacklistCoordinator(
             Filters.Blacklist,
             ViewModel.TempWindowIdsBlacklist
@@ -149,8 +154,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (_previewSelectionReset is not null)
             _previewSelectionReset.SelectionPromptChanged -= OnSelectionPromptChanged;
         PropertyChanged -= OnWindowPropertyChanged;
+        _previewCoordinator.ActivePreviewChanged -= OnActivePreviewChanged;
         _previewCoordinator.Dispose();
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
+        WindowsList.ContainerPrepared -= OnWindowListContainerPrepared;
         SettingsWindow.Close();
         RenameWindow.Close();
         _missingDependencyNotificationService.Dispose();
@@ -217,8 +224,10 @@ public partial class MainWindow : Window, IFloatingWindowHost
             ApplySettings,
             ApplyPreviewHighlightColor
         );
+        IWindowKeybindManager keybindManager =
+            AppServiceProvider.GetRequiredService<IWindowKeybindManager>();
         var keybinds = new KeybindSettingsViewModel(
-            AppServiceProvider.GetRequiredService<IWindowKeybindManager>(),
+            keybindManager,
             AppServiceProvider.GetRequiredService<IWindowKeybindTargetCatalogService>(),
             AppServiceProvider.GetRequiredService<IGlobalKeyboardStartupStatusService>(),
             dispatcher,
@@ -239,17 +248,129 @@ public partial class MainWindow : Window, IFloatingWindowHost
             keybinds,
             about,
             new SettingsResetActions(
-                _configurationService.ResetFloatingWindowSettings,
-                _configurationService.ResetUserSettings,
+                ResetPreviewLayout,
+                () => ResetUserSettings(keybindManager),
                 resetAllPreviews
             )
         );
     }
 
+    private void ResetPreviewLayout()
+    {
+        _configurationService.ResetFloatingWindowSettings();
+        _floatingWindowRegistry.ResetLayout();
+    }
+
+    /// <summary>
+    /// Restores the default configuration, then reloads the state that was read from the
+    /// previous configuration: preview layout, filter lists and the global keybind catalog. The settings
+    /// themselves are reloaded by the settings view model.
+    /// </summary>
+    private void ResetUserSettings(IWindowKeybindManager keybindManager)
+    {
+        _configurationService.ResetUserSettings();
+        _floatingWindowRegistry.ResetLayout();
+        Filters.Whitelist.Reload(_configurationService.GetWhitelistPrefixes());
+        Filters.Blacklist.Reload(_configurationService.GetBlacklistPrefixes());
+        keybindManager.NotifyConfigurationReplaced();
+    }
+
     private static void ApplyPreviewHighlightColor(string colorValue)
     {
         if (Color.TryParse(colorValue, out Color color))
-            AccentColorApplier.Apply(color);
+            HighlightColorApplier.Apply(color);
+    }
+
+    private void OnWindowListContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        // Containers are recycled: the menu reads the window from the container when an
+        // item is clicked, so one menu per container is enough.
+        if (e.Container.ContextMenu is null)
+            e.Container.ContextMenu = CreateWindowListContextMenu(e.Container);
+    }
+
+    private ContextMenu CreateWindowListContextMenu(Control container)
+    {
+        var menu = new ContextMenu();
+        MenuItem bringPreviewHere = CreateWindowListMenuItem(
+            "Bring preview here",
+            container,
+            window => _mainWindowViewModel.BringPreviewHereCommand.Execute(window.WindowId)
+        );
+        var separator = new Separator();
+        menu.Items.Add(bringPreviewHere);
+        menu.Items.Add(separator);
+        // Without floating previews there is no preview to bring back.
+        menu.Opening += (_, _) =>
+        {
+            bool previewsShown = ConfigFileAccessor
+                .GetInstance()
+                .ReadConfig(config => config.ShowFloatingWindows);
+            bringPreviewHere.IsVisible = previewsShown;
+            separator.IsVisible = previewsShown;
+        };
+        menu.Items.Add(
+            CreateWindowListMenuItem(
+                "Add to blacklist",
+                container,
+                window => _mainWindowViewModel.AddToBlacklistCommand.Execute(window.WindowTitle)
+            )
+        );
+        menu.Items.Add(
+            CreateWindowListMenuItem(
+                "Add to temp blacklist",
+                container,
+                window =>
+                    _mainWindowViewModel.AddToTemporaryBlacklistCommand.Execute(window.WindowId)
+            )
+        );
+        menu.Items.Add(
+            CreateWindowListMenuItem(
+                "Rename window",
+                container,
+                window => _mainWindowViewModel.RenameWindowCommand.Execute(window.WindowId)
+            )
+        );
+        return menu;
+    }
+
+    /// <summary>
+    /// Activates the window from the main list, the same way as a click on its preview.
+    /// </summary>
+    private Task ActivateWindowAsync(string windowId)
+    {
+        return _floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow)
+            ? floatingWindow.ActivateFromHostAsync()
+            : Task.CompletedTask;
+    }
+
+    private void BringPreviewHere(string windowId)
+    {
+        if (!_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
+            return;
+
+        _previewCoordinator.RevealPreview(floatingWindow);
+        Size frameSize = FrameSize ?? ClientSize;
+        floatingWindow.MoveNextTo(
+            new PixelRect(Position, PixelSize.FromSize(frameSize, DesktopScaling))
+        );
+    }
+
+    private static MenuItem CreateWindowListMenuItem(
+        string header,
+        Control container,
+        Action<WindowConfig> execute
+    )
+    {
+        return new MenuItem
+        {
+            Header = header,
+            Command = new ContextMenuCommand(() =>
+            {
+                if (container.DataContext is WindowConfig window)
+                    execute(window);
+            }),
+        };
     }
 
     private static void OpenFolder(string folder)
@@ -316,6 +437,11 @@ public partial class MainWindow : Window, IFloatingWindowHost
         SetActivePreview(floatingWindow);
     }
 
+    private void OnActivePreviewChanged(object? sender, IFloatingPreviewWindow? preview)
+    {
+        ViewModel.ActiveWindowId = (preview as FloatingWindow)?.WindowConfig.WindowId;
+    }
+
     public void ClearActivePreview(IFloatingPreviewWindow floatingWindow)
     {
         _previewCoordinator.ClearActivePreview(floatingWindow);
@@ -337,7 +463,20 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (windowConfig is null)
             return;
 
-        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(windowConfig.WindowTitle);
+        // The preview holds the saved settings of the window, original title included.
+        FloatingWindow? floatingWindow = _floatingWindowRegistry.TryGet(
+            windowId,
+            out FloatingWindow preview
+        )
+            ? preview
+            : null;
+        string? storedOriginal = floatingWindow?.WindowConfig.OriginalWindowTitle;
+        string titleBeforeRename = windowConfig.WindowTitle;
+
+        bool isUpdated = await RenameWindow.ShowAndWaitForResultAsync(
+            titleBeforeRename,
+            storedOriginal
+        );
         if (!isUpdated)
             return;
 
@@ -346,10 +485,14 @@ public partial class MainWindow : Window, IFloatingWindowHost
         if (!renamed)
             return;
 
+        string originalTitle = OriginalTitleTracker.Resolve(
+            titleBeforeRename,
+            storedOriginal,
+            renamedTitle
+        );
         windowConfig.WindowTitle = renamedTitle;
-
-        if (_floatingWindowRegistry.TryGet(windowId, out FloatingWindow floatingWindow))
-            floatingWindow.UpdateWindowTitle(renamedTitle);
+        windowConfig.OriginalWindowTitle = originalTitle;
+        floatingWindow?.UpdateWindowTitle(renamedTitle, originalTitle);
     }
 
     private void ShowPreviouslyReportedDependencies()

@@ -45,4 +45,10 @@ public interface IWindowKeybindManager
     /// Resolves target id for an active combination.
     /// </summary>
     bool TryResolveTarget(KeyCombination combination, out string targetId);
+
+    /// <summary>
+    /// Signals that the configuration was replaced as a whole (reset to defaults), so
+    /// listeners of <see cref="BindingsChanged"/> reload the bindings.
+    /// </summary>
+    void NotifyConfigurationReplaced();
 }

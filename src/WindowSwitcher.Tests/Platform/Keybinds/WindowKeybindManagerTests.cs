@@ -301,6 +301,37 @@ public sealed class WindowKeybindManagerTests
         });
     }
 
+    [Fact]
+    public void NotifyConfigurationReplaced_RaisesBindingsChangedWithTheResetTargets()
+    {
+        string dataFolder = CreateTempDataFolder();
+        try
+        {
+            ConfigFileAccessor accessor = CreateAccessor(dataFolder);
+            var sut = new WindowKeybindManager(accessor);
+            _ = sut.AddShortcut(
+                "proc|editor",
+                "Editor",
+                new KeyCombination { Key = KeybindPrimaryKey.F1 }
+            );
+            IReadOnlyCollection<WindowKeybindTargetConfig>? targetsSeenByListener = null;
+            sut.BindingsChanged += (_, _) => targetsSeenByListener = sut.GetTargets();
+
+            accessor.ResetUserSettings();
+            sut.NotifyConfigurationReplaced();
+
+            Assert.NotNull(targetsSeenByListener);
+            Assert.DoesNotContain(
+                targetsSeenByListener,
+                target => target.TargetId == "proc|editor"
+            );
+        }
+        finally
+        {
+            DeleteDirectory(dataFolder);
+        }
+    }
+
     private static void WithManager(Action<WindowKeybindManager> test)
     {
         string dataFolder = CreateTempDataFolder();

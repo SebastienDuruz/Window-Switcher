@@ -26,4 +26,10 @@ public interface IPrefixListService
     /// Removes an existing prefix when present.
     /// </summary>
     bool TryRemovePrefix(string? value, out string normalizedPrefix);
+
+    /// <summary>
+    /// Replaces the in-memory prefixes with <paramref name="prefixes"/>, after the
+    /// configuration was replaced as a whole. Nothing is persisted.
+    /// </summary>
+    void ReplaceAll(IReadOnlyCollection<string> prefixes);
 }

@@ -92,6 +92,38 @@ public sealed class WindowListViewModelTests
         Assert.Equal("1", window.WindowId);
     }
 
+    [Fact]
+    public async Task HasWindows_FollowsTheWindowList()
+    {
+        var snapshotProvider = new FakeWindowSnapshotProvider([
+            new WindowConfig { WindowId = "1", WindowTitle = "Game client" },
+        ]);
+        using var sut = CreateViewModel(snapshotProvider);
+        await sut.FetchWindowsWithFiltersAsync();
+        Assert.True(sut.HasWindows);
+        var changed = new List<string?>();
+        sut.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        snapshotProvider.Windows = [];
+        await sut.FetchWindowsWithFiltersAsync();
+
+        Assert.False(sut.HasWindows);
+        Assert.Contains(nameof(WindowListViewModel.HasWindows), changed);
+    }
+
+    [Fact]
+    public void ActiveWindowId_NotifiesItsChanges()
+    {
+        using var sut = CreateViewModel(new FakeWindowSnapshotProvider([]));
+        var changed = new List<string?>();
+        sut.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        sut.ActiveWindowId = "42";
+
+        Assert.Equal("42", sut.ActiveWindowId);
+        Assert.Contains(nameof(WindowListViewModel.ActiveWindowId), changed);
+    }
+
     private static async Task<T> WaitForAsync<T>(Func<T?> probe)
         where T : class
     {

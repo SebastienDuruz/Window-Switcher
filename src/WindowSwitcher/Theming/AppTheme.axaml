@@ -7,6 +7,11 @@
         <SolidColorBrush x:Key="SettingsCardBrush" Color="#05FFFFFF" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="Gray" />
         <SolidColorBrush x:Key="ErrorTextBrush" Color="Tomato" />
+        <SolidColorBrush x:Key="SuccessTextBrush" Color="#6CCB5F" />
+        <!-- Default "Highlight color"; HighlightColorApplier replaces it with the configured one. -->
+        <SolidColorBrush x:Key="HighlightBrush" Color="#E3008C" />
+        <!-- Links use the fixed app accent, independent of the "Highlight color". -->
+        <SolidColorBrush x:Key="LinkBrush" Color="#60CDFF" />
         <SolidColorBrush x:Key="DangerTextBrush" Color="#FF9A8A" />
         <SolidColorBrush x:Key="FloatingWindowBackgroundBrush" Color="Black" />
         <SolidColorBrush x:Key="FloatingWindowLabelBrush" Color="Fuchsia" />
@@ -27,6 +32,46 @@
     <Style Selector="TextBlock.window-section-title">
         <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Floating previews -->
+
+    <Style Selector="Border.preview-label">
+        <Setter Property="Background" Value="#A6000000" />
+        <Setter Property="CornerRadius" Value="0,0,4,0" />
+        <Setter Property="Padding" Value="4,1,5,1" />
+    </Style>
+
+    <!-- Main window -->
+
+    <Style Selector="Button.window-row">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Height" Value="22" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.window-row:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#14FFFFFF" />
+    </Style>
+
+    <Style Selector="Button.window-row:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#1FFFFFFF" />
+    </Style>
+
+    <Style Selector="Button.link">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="Foreground" Value="{StaticResource LinkBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
     </Style>
 
     <!-- Settings window -->
@@ -109,6 +154,55 @@
     <Style Selector="Border.settings-divider">
         <Setter Property="Height" Value="1" />
         <Setter Property="Background" Value="{StaticResource SettingsSectionBorderBrush}" />
+    </Style>
+
+    <!-- Keybinds page -->
+
+    <Style Selector="TextBlock.keybind-group">
+        <Setter Property="Margin" Value="10,6,10,4" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.keybind-chip">
+        <Setter Property="Background" Value="#1AFFFFFF" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="6,0,2,0" />
+        <Setter Property="Margin" Value="0,2,6,2" />
+        <Setter Property="MinHeight" Value="24" />
+    </Style>
+
+    <Style Selector="Window.settings-window Button.keybind-chip-remove">
+        <Setter Property="Padding" Value="4,0" />
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Window.settings-window Button.keybind-add">
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="MinHeight" Value="24" />
+        <Setter Property="Margin" Value="0,2" />
+    </Style>
+
+    <Style Selector="Border.keybind-capture">
+        <Setter Property="BorderBrush" Value="{StaticResource SettingsSectionBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="MinHeight" Value="26" />
+        <Setter Property="MinWidth" Value="110" />
+    </Style>
+
+    <Style Selector="TextBlock.keybind-status.success">
+        <Setter Property="Foreground" Value="{StaticResource SuccessTextBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.keybind-status.error">
+        <Setter Property="Foreground" Value="{StaticResource ErrorTextBrush}" />
     </Style>
 
     <Style Selector="Button.danger">

@@ -186,6 +186,79 @@ public sealed class FloatingPreviewCoordinatorTests
         Assert.True(next.IsHidden);
     }
 
+    [Fact]
+    public void ActivePreviewChanged_ReportsTheHighlightedPreview()
+    {
+        using var sut = CreateCoordinator(new FakeWindowKeybindActivator(), () => false);
+        var first = new FakeFloatingPreviewWindow();
+        var second = new FakeFloatingPreviewWindow();
+        var reported = new List<IFloatingPreviewWindow?>();
+        sut.ActivePreviewChanged += (_, preview) => reported.Add(preview);
+
+        sut.SetActivePreview(first);
+        sut.SetActivePreview(first);
+        sut.SetActivePreview(second);
+        sut.ClearActivePreview(first);
+        sut.ClearActivePreview(second);
+
+        Assert.Equal([first, second, null], reported);
+    }
+
+    [Fact]
+    public void RevealPreview_ShowsTheHiddenPreview()
+    {
+        using var sut = CreateCoordinator(new FakeWindowKeybindActivator(), () => true);
+        var preview = new FakeFloatingPreviewWindow();
+        ActivateFromPreview(sut, preview, "window-1");
+        Assert.True(preview.IsHidden);
+
+        sut.RevealPreview(preview);
+
+        Assert.False(preview.IsHidden);
+    }
+
+    [Fact]
+    public void RevealPreview_LeavesAVisiblePreviewUntouched()
+    {
+        using var sut = CreateCoordinator(new FakeWindowKeybindActivator(), () => true);
+        var hidden = new FakeFloatingPreviewWindow();
+        var visible = new FakeFloatingPreviewWindow();
+        ActivateFromPreview(sut, hidden, "window-1");
+
+        sut.RevealPreview(visible);
+
+        Assert.Equal(0, visible.HiddenStateChangeCount);
+        Assert.True(hidden.IsHidden);
+    }
+
+    [Fact]
+    public void RevealPreview_ThenActivatingAnotherWindow_KeepsTheRevealedPreviewShown()
+    {
+        using var sut = CreateCoordinator(new FakeWindowKeybindActivator(), () => true);
+        var first = new FakeFloatingPreviewWindow();
+        var second = new FakeFloatingPreviewWindow();
+        ActivateFromPreview(sut, first, "window-1");
+        sut.RevealPreview(first);
+
+        ActivateFromPreview(sut, second, "window-2");
+
+        Assert.False(first.IsHidden);
+        Assert.True(second.IsHidden);
+    }
+
+    [Fact]
+    public void RevealPreview_ThenActivatingTheSameWindow_HidesItAgain()
+    {
+        using var sut = CreateCoordinator(new FakeWindowKeybindActivator(), () => true);
+        var preview = new FakeFloatingPreviewWindow();
+        ActivateFromPreview(sut, preview, "window-1");
+        sut.RevealPreview(preview);
+
+        sut.NotifyPreviewWindowActivated("window-1");
+
+        Assert.True(preview.IsHidden);
+    }
+
     private static FloatingPreviewCoordinator CreateCoordinator(
         FakeWindowKeybindActivator activator,
         Func<bool> isHideActivePreviewEnabled

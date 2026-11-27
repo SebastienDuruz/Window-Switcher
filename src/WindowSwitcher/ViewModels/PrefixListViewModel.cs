@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -49,6 +50,21 @@ public partial class PrefixListViewModel : ObservableObject
     public bool ContainsPrefixStartingWith(string candidate)
     {
         return _prefixListService.ContainsPrefixStartingWith(candidate);
+    }
+
+    /// <summary>
+    /// Shows <paramref name="prefixes"/> after the configuration was replaced as a whole
+    /// (reset to defaults). Nothing is persisted.
+    /// </summary>
+    public void Reload(IReadOnlyCollection<string> prefixes)
+    {
+        ArgumentNullException.ThrowIfNull(prefixes);
+
+        _prefixListService.ReplaceAll(prefixes);
+        Prefixes.Clear();
+        foreach (string prefix in _prefixListService.GetPrefixes())
+            Prefixes.Add(prefix);
+        NewPrefix = string.Empty;
     }
 
     private void AddPrefix()

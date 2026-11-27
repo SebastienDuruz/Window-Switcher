@@ -18,6 +18,7 @@ internal interface IFloatingWindowSettingsService
 internal sealed record FloatingWindowBehaviorSettings(bool MoveWindows, bool FocusOnHover);
 
 internal sealed record FloatingWindowAppearanceSettings(
+    bool ShowFloatingWindows,
     bool ResizeWindows,
     bool UseFixedWindowSize,
     int WindowWidth,
@@ -49,6 +50,7 @@ internal sealed class ConfigFileFloatingWindowSettingsService : IFloatingWindowS
         return ConfigFileAccessor
             .GetInstance()
             .ReadConfig(config => new FloatingWindowAppearanceSettings(
+                config.ShowFloatingWindows,
                 config.ResizeWindows,
                 config.UseFixedWindowSize,
                 config.WindowWidth,

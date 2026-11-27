@@ -65,6 +65,20 @@ public sealed class PrefixListViewModelTests
     }
 
     [Fact]
+    public void Reload_ReplacesTheShownPrefixesAndClearsInput()
+    {
+        var service = new FakePrefixListService();
+        service.Prefixes.Add("old");
+        var sut = new PrefixListViewModel(service) { NewPrefix = "draft" };
+
+        sut.Reload(["first", "second"]);
+
+        Assert.Equal(["first", "second"], sut.Prefixes);
+        Assert.Equal(["first", "second"], service.Prefixes);
+        Assert.Equal(string.Empty, sut.NewPrefix);
+    }
+
+    [Fact]
     public void TryAddPrefix_AddsNormalizedPrefix()
     {
         var service = new FakePrefixListService();
@@ -123,5 +137,11 @@ internal sealed class FakePrefixListService : IPrefixListService
             return false;
 
         return Prefixes.Remove(normalizedPrefix);
+    }
+
+    public void ReplaceAll(IReadOnlyCollection<string> prefixes)
+    {
+        Prefixes.Clear();
+        Prefixes.AddRange(prefixes);
     }
 }
