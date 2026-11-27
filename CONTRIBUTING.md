@@ -97,7 +97,8 @@ See [Privacy and error reporting](README.md#privacy-and-error-reporting) for wha
 
 ## Documentation and plans
 
-- Screenshots go in `docs/<version>/`, for example `docs/0.8.0/`.
+- Interface changes start in the HTML/CSS mock-up, `docs/mock-up/index.html`, which must stay in sync with the application.
+- README images are generated from the mock-up with `make mockup-svg` (output in `docs/readme/`); do not add screenshots.
 
 ## License
 

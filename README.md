@@ -18,7 +18,9 @@ Window Switcher is a cross-platform desktop application for multibox, multi-clie
 
 Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window Switcher extends the floating-preview approach to broader use cases and to both Windows and Linux.
 
-![Floating previews for several application windows](docs/0.4.0/thumbnails.png)
+![Floating previews of several windows, with the active one outlined](docs/readme/floating-previews.svg)
+
+The images in this README are generated from the HTML/CSS interface mock-up in [`docs/mock-up`](docs/mock-up/index.html); see [Interface mock-up](#interface-mock-up).
 
 ## Contents
 
@@ -34,18 +36,23 @@ Inspired by [EVE-O Preview](https://github.com/EveOPlus/eve-o-preview), Window S
 - [Build from source](#build-from-source)
 - [Contributing](#contributing)
 - [Packaging](#packaging)
+- [Interface mock-up](#interface-mock-up)
 - [Demo videos](#demo-videos)
 
 ## Features
 
-- Live, always-on-top previews for selected windows
-- Click-to-focus and optional focus-on-hover behavior
+- Live, always-on-top previews for selected windows, with a legible title label
+- Click-to-focus from a preview or from the main list, and optional focus-on-hover behavior
+- Main window list with the process name of each window and the active window highlighted
 - Global shortcuts for a specific client, the next or previous client, or the active client
 - Case-insensitive title filters for choosing which windows appear
 - Persistent and temporary blacklists
-- Window renaming from the main list or a preview
+- Window renaming from the main list or a preview, with the original title kept for restoring it
+- **Bring preview here** to recover a preview lost off screen or behind other windows
 - Per-window preview position and size persistence
-- Fixed or individually resizable previews
+- Fixed or individually resizable previews; previews without a saved position open side by side
+- Option to hide every preview and switch only from the main list or with keybinds
+- One settings window (General, Previews, Filters, Keybinds, About) with confirmed resets
 - Configurable movement, startup behavior, and active-window highlight color
 - Native Wayland window listing and activation on KDE Plasma
 - Wayland capture selections remembered across restarts
@@ -98,6 +105,8 @@ After installing or building the application:
 6. Optionally open `Settings > Keybinds` and assign shortcuts to built-in actions or individual clients.
 7. Use the **General** and **Previews** pages of `Settings` to adjust preview dragging, sizing, hover focus, startup behavior, and highlight color.
 
+![Main window: window list, empty state, right-click menu and File menu](docs/readme/main-window.svg)
+
 The main window refreshes its matching-window list automatically. Each row shows the window title and its process name; a translucent background in the highlight color marks the window whose preview is highlighted as active. Click a row to activate its window, as with a click on its preview. When no window matches the filters, the main window says so and offers a link to `Settings > Filters`. Preview windows are created and removed as matching applications open and close.
 
 ## User guide
@@ -111,6 +120,8 @@ Window Switcher uses window titles to decide what appears:
 - **Temporary blacklist:** a window is hidden by its current window ID until Window Switcher is restarted.
 
 Open `Settings > Filters` to manage the persistent lists. Use the ✕ button next to an entry to remove it.
+
+![Filters page of the settings window](docs/readme/settings-filters.svg)
 
 Right-click a window in the main list and choose **Bring preview here** to move its preview next to the main window and above other windows, showing it even when **Hide active preview** had hidden it; this is how to find a preview that went off screen or behind other windows.
 
@@ -156,9 +167,13 @@ You can also bind shortcuts directly to an individual client. Running windows ar
 
 The keybind editor rejects duplicate shortcuts on one target and conflicts between different targets. On Linux, it also displays setup guidance when input-device permissions are missing.
 
-![Global keybind editor](docs/0.8.0/keybindswindow.png)
+![Keybinds page: one row per target, with an inline shortcut capture](docs/readme/settings-keybinds.svg)
 
 ### Settings reference
+
+![General page of the settings window](docs/readme/settings-general.svg)
+
+![Previews page of the settings window](docs/readme/settings-previews.svg)
 
 | Page | Setting | Purpose |
 | --- | --- | --- |
@@ -427,7 +442,10 @@ Window-Switcher/
 ├── src/WindowSwitcher.Lib/      Platform and application services
 ├── src/WindowSwitcher.Tests/    Unit and integration tests
 ├── build/                       C# packaging build project
-├── docs/                        Screenshots, work plans, and design notes
+├── docs/mock-up/                HTML/CSS mock-up of every screen
+├── docs/readme/                 README images generated from the mock-up
+├── docs/reviews/                Code reviews
+├── scripts/                     Documentation tooling
 ├── Directory.Build.props        Shared version and build properties
 ├── Makefile                     Common development commands
 └── Window-Switcher.slnx         .NET solution
@@ -449,6 +467,7 @@ Run commands from the repository root:
 | `make clean` | `dotnet clean Window-Switcher.slnx` | Clean build outputs. |
 | `make format` | `dotnet csharpier format .` | Format the repository. |
 | `make format-check` | `dotnet csharpier check .` | Check formatting without changing files. |
+| `make mockup-svg` | `python3 scripts/export-mockup-svg.py` | Regenerate the README images from the mock-up. |
 | `make appimage` | `./build/build.sh --target AppImage` | Build the AppImage on Linux. |
 | `make installer` | `./build/build.sh --target Installer` | Build the Windows installer (requires `makensis`). |
 | `make artifacts` | `./build/build.sh --target Artifacts` | Build every artifact the current host supports. |
@@ -511,24 +530,23 @@ Publish both the versioned `.AppImage` and its matching `.AppImage.zsync` as Git
 
 Build-labelled `windows_store` packages use store-managed updates instead of the GitHub release updater. Packaging resources live under `build/assets/installer/` and `build/assets/packaging/linux/`; generated artifacts remain under `build/artifacts/`.
 
+## Interface mock-up
+
+[`docs/mock-up/index.html`](docs/mock-up/index.html) is an HTML/CSS mock-up of every screen. It is kept in sync with the application and is the starting point for any interface change: update the mock-up first, then the code.
+
+GitHub does not render CSS in a README, so the images above are SVG files that embed parts of the mock-up. Regenerate them after changing the mock-up:
+
+```bash
+make mockup-svg
+```
+
+The script measures each image in a headless Chromium-based browser (Chromium, Chrome, Brave or Edge; set `MOCKUP_BROWSER` to pick one). Without one, run it with `--measure-page`, open the page it writes in any browser, save the JSON shown at the bottom, and pass that file with `--heights`.
+
 ## Demo videos
 
 - [Five World of Warcraft clients on Arch Linux KDE Wayland (v0.8.0)](https://youtu.be/YDAKNa9B7fg)
 - [Three World of Warcraft clients on Arch Linux KDE Wayland (v0.7.0)](https://youtu.be/QQTOkl0HD9s)
 - [EVE Online, World of Warcraft, and Project Gorgon clients (v0.4.0)](https://youtu.be/hXvS_n32jaQ)
-
-<details>
-<summary>Older interface screenshots</summary>
-
-| Main window | Filters |
-| --- | --- |
-| ![Main window in v0.4.0](docs/0.4.0/mainwindow.png) | ![Prefix filter window in v0.4.0](docs/0.4.0/prefixwindow.png) |
-
-| Settings | Rename window |
-| --- | --- |
-| ![Settings windows in v0.4.0](docs/0.4.0/settingswindows.png) | ![Rename window dialog in v0.4.0](docs/0.4.0/renamewindow.png) |
-
-</details>
 
 ## License and support
 
