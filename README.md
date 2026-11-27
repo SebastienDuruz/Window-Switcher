@@ -92,11 +92,11 @@ After installing or building the application:
 
 1. Start the applications or game clients that you want to manage.
 2. Launch Window Switcher.
-3. Open `Config > Filters` and add part of a window title under **Prefixes**. For example, `World of Warcraft` displays every window whose title contains that text.
-4. Add unwanted full window titles under **Blacklist**, if needed.
+3. Open `Settings > Filters` and add part of a window title under **Shown windows**. For example, `World of Warcraft` displays every window whose title contains that text.
+4. Add unwanted full window titles under **Hidden windows**, if needed.
 5. Click a floating preview to bring its original window to the foreground.
-6. Optionally open `Config > Keybinds` and assign shortcuts to built-in actions or individual clients.
-7. Use `Config > Settings` to adjust preview movement, sizing, hover focus, startup behavior, and highlight color.
+6. Optionally open `Settings > Keybinds` and assign shortcuts to built-in actions or individual clients.
+7. Use the **General** and **Previews** pages of `Settings` to adjust preview dragging, sizing, hover focus, startup behavior, and highlight color.
 
 The main window refreshes its matching-window list automatically. Preview windows are created and removed as matching applications open and close.
 
@@ -106,11 +106,11 @@ The main window refreshes its matching-window list automatically. Preview window
 
 Window Switcher uses window titles to decide what appears:
 
-- **Prefixes (whitelist):** a window appears when its title contains at least one configured value. Matching is case-insensitive.
-- **Blacklist:** a window is excluded when its complete title matches a configured value. Matching is case-insensitive.
+- **Shown windows (whitelist):** a window appears when its title contains at least one configured value. Matching is case-insensitive.
+- **Hidden windows (blacklist):** a window is excluded when its complete title matches a configured value. Matching is case-insensitive.
 - **Temporary blacklist:** a window is hidden by its current window ID until Window Switcher is restarted.
 
-Open `Config > Filters` to manage the persistent lists. Selecting an existing entry removes it.
+Open `Settings > Filters` to manage the persistent lists. Use the ✕ button next to an entry to remove it.
 
 You can also right-click a window in the main list or its preview to:
 
@@ -122,23 +122,22 @@ Renaming is especially useful when several clients initially share the same titl
 
 ### Arrange floating previews
 
-- Enable **Move windows** to drag previews.
-- Enable **Resize windows** to resize previews individually.
-- Enable **Fixed size** to use the configured width and height for every preview.
-- Enable **Focus on hover** to activate a client by moving the pointer over its preview.
-- Enable **Enable previews** to show live content inside floating windows.
-- Enable **Hide active preview** to hide the preview of the window you just activated through Window Switcher; it comes back when another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back.
-- Choose **Highlight color** to change the active-preview outline.
+- Turn on **Drag previews** (`General`) to move previews with the mouse.
+- Turn on **Focus on hover** (`General`) to activate a client by moving the pointer over its preview.
+- Under **Size** (`Previews`), choose **Per preview** to keep an individual size for each preview, optionally resizable by dragging its edges, or **Fixed** to use one width and height for every preview.
+- Turn on **Show previews** (`Previews`) to show live content inside floating windows.
+- Turn on **Hide active preview** (`Previews`) to hide the preview of the window you just activated through Window Switcher; it comes back when another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back.
+- Choose **Highlight color** (`Previews`) to change the preview labels, the active-preview outline, and the app accents.
 
-Position and size are saved per window key and restored on a later launch. Use `File > Clean config` to clear saved preview layouts without resetting every preference.
+Position and size are saved per window key and restored on a later launch. Use **Reset layout…** under `Settings > General > Reset` to clear saved preview layouts without resetting every preference.
 
 The highlight follows the client activated through a preview or global keybind, making the currently active target easy to identify.
 
-On Wayland, use `Config > Reset all previews` if you need to discard existing portal capture selections and choose them again. This command is shown only when the active preview provider supports selection reset. Selections saved in the configuration file are removed as well.
+On Wayland, use **Reset all previews** under `Settings > Previews > Screen capture` if you need to discard existing portal capture selections and choose them again. This section is shown only when the active preview provider supports selection reset. Selections saved in the configuration file are removed as well.
 
 ### Configure global keybinds
 
-Open `Config > Keybinds`, select a target, and choose **Add shortcut**.
+Open `Settings > Keybinds`, select a target, and choose **Add shortcut**.
 
 Built-in targets are:
 
@@ -156,17 +155,19 @@ The keybind editor rejects duplicate shortcuts on one target and conflicts betwe
 
 ### Settings reference
 
-| Setting | Purpose |
-| --- | --- |
-| `Move windows` | Allows floating previews to be dragged. |
-| `Focus on hover` | Focuses a client when the pointer enters its preview. |
-| `Enable previews` | Enables live content in floating preview windows. |
-| `Hide active preview` | Hides the preview of the window activated through Window Switcher until another window is activated. |
-| `Start minimized` | Starts the main window hidden in the system tray. |
-| `Resize windows` | Allows previews to be resized individually. |
-| `Fixed size` | Applies one width and height to all previews. |
-| `Width` / `Height` | Sets the fixed preview dimensions, from 10 to 2000 pixels. |
-| `Highlight color` | Sets the outline color for the active preview. |
+| Page | Setting | Purpose |
+| --- | --- | --- |
+| General | `Start minimized` | Starts the main window hidden in the system tray. |
+| General | `Drag previews` | Allows floating previews to be dragged. |
+| General | `Focus on hover` | Focuses a client when the pointer enters its preview. |
+| General | `Reset layout…` | Removes saved preview positions and sizes, after confirmation. |
+| General | `Reset settings…` | Restores the default configuration, including filters, keybinds, and the preview layout, after confirmation. |
+| Previews | `Show previews` | Enables live content in floating preview windows. |
+| Previews | `Hide active preview` | Hides the preview of the window activated through Window Switcher until another window is activated. |
+| Previews | `Per preview` | Keeps an individual size for each preview; **Resize previews by dragging their edges** allows changing it. |
+| Previews | `Fixed` | Applies one width and height, from 10 to 2000 pixels, to all previews. |
+| Previews | `Highlight color` | Sets the color of the preview labels, the active-preview outline, and the app accents. |
+| Previews | `Reset all previews` | Resets supported capture selections, primarily on Wayland. |
 
 Settings are persisted as they change.
 
@@ -174,15 +175,10 @@ Settings are persisted as they change.
 
 | Menu | Command | Purpose |
 | --- | --- | --- |
-| `Config` | `Filters` | Manage whitelist and blacklist entries. |
-| `Config` | `Keybinds` | Configure global shortcuts. |
-| `Config` | `Settings` | Configure preview behavior and appearance. |
-| `Config` | `Reset all previews` | Reset supported capture selections, primarily on Wayland. |
-| `File` | `Open logs` | Open the directory containing the application log files. |
-| `File` | `Open config` | Open the directory containing `config.json`. |
-| `File` | `Clean config` | Remove saved preview positions and sizes. |
-| `File` | `Generate new config` | Restore all settings to their defaults. |
-| `Help` | `About` | Show diagnostics, version information, and updates. |
+| `Settings` | | Open the settings window (General, Previews, Filters, Keybinds, About) on the last page used. |
+| `File` | `Open logs folder` | Open the directory containing the application log files. |
+| `File` | `Open config folder` | Open the directory containing `config.json`. |
+| `Help` | `About` | Open the About page of the settings window: diagnostics, version information, and updates. |
 
 ### Diagnostics and updates
 
@@ -272,7 +268,7 @@ Preferences are stored in `config.json` inside the application data directory:
 | Windows | `%APPDATA%\WindowSwitcher\config.json` |
 | Linux | `~/.config/WindowSwitcher/config.json` in a typical desktop session |
 
-Use `File > Open config` to open the exact directory for the current system.
+Use `File > Open config folder` to open the exact directory for the current system.
 
 The file contains:
 
@@ -320,7 +316,7 @@ The `SentryDsn` value in `config.json` can redirect events for a custom build, b
 
 ### Local logs
 
-Window Switcher writes a rolling log file on the local machine. It is never uploaded; attach it to an issue yourself when reporting a problem. Use **File > Open logs** to open the log folder (**File > Open config** opens the folder that contains `config.json`).
+Window Switcher writes a rolling log file on the local machine. It is never uploaded; attach it to an issue yourself when reporting a problem. Use **File > Open logs folder** to open the log folder (**File > Open config** opens the folder that contains `config.json`).
 
 | Platform | Folder |
 | --- | --- |
@@ -356,7 +352,7 @@ On Windows, the equivalent packaging option is:
 
 ### No windows appear
 
-1. Confirm that at least one non-empty entry exists under `Config > Filters > Prefixes`.
+1. Confirm that at least one non-empty entry exists under `Settings > Filters > Shown windows`.
 2. Check that the window title contains that entry and is not an exact blacklist match.
 3. On Linux, confirm that the desktop window manager exposes the EWMH `_NET_CLIENT_LIST` property and that the target is an X11 or XWayland window.
 4. On Wayland outside KDE Plasma, confirm that the target application is using XWayland. Native Wayland windows are only discoverable on KDE Plasma.
@@ -364,27 +360,27 @@ On Windows, the equivalent packaging option is:
 
 ### A preview is blank or unavailable
 
-- Confirm that **Enable previews** is enabled.
+- Confirm that **Show previews** is turned on.
 - Fullscreen applications are not supported; try windowed or borderless-windowed mode.
 - On X11, confirm that compositing and the XComposite/XDamage extensions are available.
 - On Wayland, install PipeWire and the appropriate XDG Desktop Portal backend, then accept the portal selection prompt.
 - Open `Help > About` and review **Preview mode** and **Dependency status**.
-- On Wayland, try `Config > Reset all previews` and select the capture source again.
+- On Wayland, try **Reset all previews** under `Settings > Previews` and select the capture source again.
 
 ### Global shortcuts do not work on Linux
 
-- Open `Config > Keybinds` and follow the permission banner.
+- Open `Settings > Keybinds` and follow the permission banner.
 - Confirm read access to `/dev/input/event*` and write access to `/dev/uinput`.
 - Confirm that the `uinput` kernel module is loaded.
 - Sign out and back in after adding the user to the `input` group.
 
 ### A preview opens in the wrong place or size
 
-Use `File > Clean config` to remove saved preview positions and sizes, then arrange the previews again.
+Use **Reset layout…** under `Settings > General` to remove saved preview positions and sizes, then arrange the previews again.
 
 ### Reset all preferences
 
-Use `File > Generate new config`. This restores default settings, filters, saved layouts, and keybind definitions.
+Use **Reset settings…** under `Settings > General`. This restores default settings, filters, saved layouts, and keybind definitions.
 
 When reporting a reproducible problem, include the application version and the non-sensitive diagnostic information shown under `Help > About`. Do not post `config.json` publicly without reviewing it first.
 

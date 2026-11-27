@@ -17,20 +17,10 @@
         x:DataType="viewModels:MainWindowViewModel">
     <DockPanel>
         <Menu DockPanel.Dock="Top" FontSize="12" Padding="0" Margin="0">
-            <MenuItem Header="_Config" Padding="4">
-                <MenuItem Header="_Filters" Command="{Binding OpenFiltersCommand}" />
-                <MenuItem Header="_Keybinds" Command="{Binding OpenKeybindsCommand}" />
-                <MenuItem Header="_Settings" Command="{Binding OpenSettingsCommand}" />
-                <Separator />
-                <MenuItem Header="_Reset all previews"
-                          Command="{Binding ResetAllPreviewsCommand}"
-                          IsVisible="{Binding CanResetAllPreviews}" />
-            </MenuItem>
+            <MenuItem Header="_Settings" Padding="4" Command="{Binding OpenSettingsCommand}" />
             <MenuItem Header="_File" Padding="4">
-                <MenuItem Header="Open _logs" Command="{Binding OpenLogsFolderCommand}" />
-                <MenuItem Header="_Open config" Command="{Binding OpenConfigFolderCommand}" />
-                <MenuItem Header="_Clean config" Command="{Binding ClearConfigCommand}" />
-                <MenuItem Header="_Generate new config" Command="{Binding ResetConfigCommand}" />
+                <MenuItem Header="Open _logs folder" Command="{Binding OpenLogsFolderCommand}" />
+                <MenuItem Header="_Open config folder" Command="{Binding OpenConfigFolderCommand}" />
             </MenuItem>
             <MenuItem Header="_Help" Padding="4">
                 <MenuItem Header="_About" Command="{Binding OpenAboutCommand}" />

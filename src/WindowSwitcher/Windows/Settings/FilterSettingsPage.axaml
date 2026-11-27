@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="clr-namespace:WindowSwitcher.Windows.Settings"
+             xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+             x:Class="WindowSwitcher.Windows.Settings.FilterSettingsPage"
+             x:DataType="viewModels:FiltersViewModel">
+    <StackPanel>
+        <TextBlock Classes="settings-page-title" Text="Filters" />
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Shown windows" />
+            <TextBlock Classes="settings-group-intro"
+                       Text="A window is tracked when its title contains one of these entries. Matching ignores case." />
+            <settings:PrefixListEditor DataContext="{Binding Whitelist}"
+                                       Placeholder="Add part of a window title" />
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Hidden windows" />
+            <TextBlock Classes="settings-group-intro"
+                       Text="A window is hidden when its full title matches one of these entries, even if it contains a shown entry. Matching ignores case." />
+            <settings:PrefixListEditor DataContext="{Binding Blacklist}"
+                                       Placeholder="Add a full window title" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

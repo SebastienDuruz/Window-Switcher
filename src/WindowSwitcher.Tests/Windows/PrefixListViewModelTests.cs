@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using WindowSwitcher.ViewModels;
 using WindowSwitcher.ViewModels.Abstractions;
 using Xunit;
@@ -14,7 +13,7 @@ public sealed class PrefixListViewModelTests
     public void AddCommand_AddsNormalizedPrefixAndClearsInput()
     {
         var service = new FakePrefixListService();
-        var sut = new PrefixListViewModel(service, new ImmediateViewModelDispatcher());
+        var sut = new PrefixListViewModel(service);
 
         sut.NewPrefix = "  Visual Studio  ";
         Assert.True(sut.AddCommand.CanExecute(null));
@@ -28,10 +27,7 @@ public sealed class PrefixListViewModelTests
     [Fact]
     public void AddCommand_DisabledWhenInputIsWhitespace()
     {
-        var sut = new PrefixListViewModel(
-            new FakePrefixListService(),
-            new ImmediateViewModelDispatcher()
-        );
+        var sut = new PrefixListViewModel(new FakePrefixListService());
 
         sut.NewPrefix = "   ";
 
@@ -39,27 +35,40 @@ public sealed class PrefixListViewModelTests
     }
 
     [Fact]
-    public void SelectingPrefix_RemovesItAndClearsSelection()
+    public void RemoveCommand_RemovesThePrefix()
     {
         var service = new FakePrefixListService();
         service.Prefixes.Add("code");
-        var dispatcher = new QueuedViewModelDispatcher();
-        var sut = new PrefixListViewModel(service, dispatcher);
+        service.Prefixes.Add("firefox");
+        var sut = new PrefixListViewModel(service);
 
-        sut.SelectedPrefix = "code";
-
-        Assert.Contains("code", sut.Prefixes);
-        dispatcher.RunPostedActions();
+        sut.RemoveCommand.Execute("code");
 
         Assert.DoesNotContain("code", sut.Prefixes);
-        Assert.Null(sut.SelectedPrefix);
+        Assert.DoesNotContain("code", service.Prefixes);
+        Assert.Contains("firefox", sut.Prefixes);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("unknown")]
+    public void RemoveCommand_IgnoresMissingPrefix(string? value)
+    {
+        var service = new FakePrefixListService();
+        service.Prefixes.Add("code");
+        var sut = new PrefixListViewModel(service);
+
+        sut.RemoveCommand.Execute(value);
+
+        Assert.Equal(["code"], sut.Prefixes);
+        Assert.Equal(["code"], service.Prefixes);
     }
 
     [Fact]
     public void TryAddPrefix_AddsNormalizedPrefix()
     {
         var service = new FakePrefixListService();
-        var sut = new PrefixListViewModel(service, new ImmediateViewModelDispatcher());
+        var sut = new PrefixListViewModel(service);
 
         bool added = sut.TryAddPrefix("Firefox");
 
@@ -73,33 +82,13 @@ public sealed class FiltersViewModelTests
     [Fact]
     public void ViewModel_WiresWhitelistAndBlacklist()
     {
-        var sut = new FiltersViewModel(
-            new PrefixListViewModel(
-                new FakePrefixListService(),
-                new ImmediateViewModelDispatcher()
-            ),
-            new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher())
-        );
+        var whitelist = new PrefixListViewModel(new FakePrefixListService());
+        var blacklist = new PrefixListViewModel(new FakePrefixListService());
 
-        Assert.NotNull(sut.Whitelist);
-        Assert.NotNull(sut.Blacklist);
-        Assert.Equal(0, sut.SelectedTabIndex);
-    }
+        var sut = new FiltersViewModel(whitelist, blacklist);
 
-    [Fact]
-    public void SelectedTabIndex_CanBeSwitched()
-    {
-        var sut = new FiltersViewModel(
-            new PrefixListViewModel(
-                new FakePrefixListService(),
-                new ImmediateViewModelDispatcher()
-            ),
-            new PrefixListViewModel(new FakePrefixListService(), new ImmediateViewModelDispatcher())
-        );
-
-        sut.SelectedTabIndex = 1;
-
-        Assert.Equal(1, sut.SelectedTabIndex);
+        Assert.Same(whitelist, sut.Whitelist);
+        Assert.Same(blacklist, sut.Blacklist);
     }
 }
 
@@ -134,32 +123,5 @@ internal sealed class FakePrefixListService : IPrefixListService
             return false;
 
         return Prefixes.Remove(normalizedPrefix);
-    }
-}
-
-internal sealed class QueuedViewModelDispatcher : IViewModelDispatcher
-{
-    private readonly Queue<Action> _postedActions = [];
-
-    public bool CheckAccess()
-    {
-        return true;
-    }
-
-    public void Post(Action action)
-    {
-        _postedActions.Enqueue(action);
-    }
-
-    public Task InvokeAsync(Action action)
-    {
-        action();
-        return Task.CompletedTask;
-    }
-
-    public void RunPostedActions()
-    {
-        while (_postedActions.TryDequeue(out Action? action))
-            action();
     }
 }

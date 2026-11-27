@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:settings="clr-namespace:WindowSwitcher.Windows.Settings"
+             xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+             x:Class="WindowSwitcher.Windows.Settings.PrefixListEditor"
+             x:DataType="viewModels:PrefixListViewModel">
+    <Border Classes="settings-card">
+        <StackPanel>
+            <Grid Margin="10,6" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox Text="{Binding NewPrefix, Mode=TwoWay}"
+                         PlaceholderText="{Binding $parent[settings:PrefixListEditor].Placeholder}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Command="{Binding AddCommand}" Gesture="Enter" />
+                    </TextBox.KeyBindings>
+                </TextBox>
+                <Button Grid.Column="1"
+                        Content="Add"
+                        Command="{Binding AddCommand}" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Prefixes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                        <StackPanel>
+                            <Border Classes="settings-divider" />
+                            <Grid Height="28" Margin="10,0,6,0" ColumnDefinitions="*,Auto">
+                                <TextBlock VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Text="{Binding}" />
+                                <Button Grid.Column="1"
+                                        Padding="6,0"
+                                        MinHeight="22"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Content="✕"
+                                        ToolTip.Tip="Remove"
+                                        Command="{Binding $parent[ItemsControl].((viewModels:PrefixListViewModel)DataContext).RemoveCommand}"
+                                        CommandParameter="{Binding}" />
+                            </Grid>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

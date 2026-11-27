@@ -3,8 +3,11 @@
     <Styles.Resources>
         <SolidColorBrush x:Key="BackgroundBrush" Color="#1F2326" />
         <SolidColorBrush x:Key="SettingsSectionBorderBrush" Color="#3A3A3A" />
+        <SolidColorBrush x:Key="SettingsSidebarBrush" Color="#1B1E21" />
+        <SolidColorBrush x:Key="SettingsCardBrush" Color="#05FFFFFF" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="Gray" />
         <SolidColorBrush x:Key="ErrorTextBrush" Color="Tomato" />
+        <SolidColorBrush x:Key="DangerTextBrush" Color="#FF9A8A" />
         <SolidColorBrush x:Key="FloatingWindowBackgroundBrush" Color="Black" />
         <SolidColorBrush x:Key="FloatingWindowLabelBrush" Color="Fuchsia" />
         <SolidColorBrush x:Key="PendingSelectionBorderBrush" Color="#FFB900" />
@@ -24,5 +27,91 @@
     <Style Selector="TextBlock.window-section-title">
         <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Settings window -->
+
+    <Style Selector="Window.settings-window">
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style Selector="Window.settings-window Button">
+        <Setter Property="Padding" Value="10,3" />
+        <Setter Property="MinHeight" Value="26" />
+    </Style>
+
+    <Style Selector="Window.settings-window ToggleSwitch">
+        <Setter Property="OnContent" Value="{x:Null}" />
+        <Setter Property="OffContent" Value="{x:Null}" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Window.settings-window NumericUpDown">
+        <Setter Property="MinHeight" Value="26" />
+    </Style>
+
+    <Style Selector="ListBox.settings-nav">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ListBox.settings-nav ListBoxItem">
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Margin" Value="0,1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.settings-page-title">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style Selector="TextBlock.settings-group-title">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style Selector="TextBlock.settings-group-intro">
+        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+
+    <Style Selector="TextBlock.settings-description">
+        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="StackPanel.settings-group">
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+
+    <Style Selector="Border.settings-card">
+        <Setter Property="BorderBrush" Value="{StaticResource SettingsSectionBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Background" Value="{StaticResource SettingsCardBrush}" />
+    </Style>
+
+    <Style Selector="Border.settings-row">
+        <Setter Property="Padding" Value="10,5" />
+        <Setter Property="MinHeight" Value="36" />
+    </Style>
+
+    <Style Selector="Border.settings-divider">
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Background" Value="{StaticResource SettingsSectionBorderBrush}" />
+    </Style>
+
+    <Style Selector="Button.danger">
+        <Setter Property="Foreground" Value="{StaticResource DangerTextBrush}" />
     </Style>
 </Styles>

@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+        Icon="/Assets/WS_logo.ico"
+        mc:Ignorable="d"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Topmost="True"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterOwner"
+        x:Class="WindowSwitcher.Windows.ConfirmationWindow"
+        Title="{Binding Request.Title}"
+        x:DataType="viewModels:ConfirmationViewModel">
+    <StackPanel Margin="16" Spacing="12" MaxWidth="380">
+        <TextBlock Classes="window-section-title" Text="{Binding Request.Title}" />
+        <TextBlock Text="{Binding Request.Message}" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" />
+            <Button Classes="danger"
+                    Content="{Binding Request.ConfirmLabel}"
+                    Command="{Binding ConfirmCommand}" />
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -14,52 +14,32 @@ public sealed class MainWindowViewModelTests
     [Fact]
     public void MenuCommands_InvokeProvidedDelegates()
     {
-        int openFilters = 0;
-        int openKeybinds = 0;
         int openSettings = 0;
         int openAbout = 0;
         int openConfigFolder = 0;
         int openLogsFolder = 0;
-        int clearConfig = 0;
-        int resetConfig = 0;
-        int resetAllPreviews = 0;
         string? blacklisted = null;
         string? tempBlacklisted = null;
 
         var sut = CreateSut(
-            () => openFilters++,
-            () => openKeybinds++,
             () => openSettings++,
             () => openAbout++,
             () => openConfigFolder++,
             () => openLogsFolder++,
-            () => clearConfig++,
-            () => resetConfig++,
-            () => resetAllPreviews++,
             value => blacklisted = value,
             value => tempBlacklisted = value,
             _ => Task.CompletedTask
         );
 
-        sut.OpenFiltersCommand.Execute(null);
-        sut.OpenKeybindsCommand.Execute(null);
         sut.OpenSettingsCommand.Execute(null);
         sut.OpenAboutCommand.Execute(null);
         sut.OpenConfigFolderCommand.Execute(null);
         sut.OpenLogsFolderCommand.Execute(null);
-        sut.ClearConfigCommand.Execute(null);
-        sut.ResetConfigCommand.Execute(null);
-        sut.ResetAllPreviewsCommand.Execute(null);
 
-        Assert.Equal(1, openFilters);
-        Assert.Equal(1, openKeybinds);
         Assert.Equal(1, openSettings);
         Assert.Equal(1, openAbout);
         Assert.Equal(1, openConfigFolder);
         Assert.Equal(1, openLogsFolder);
-        Assert.Equal(1, clearConfig);
-        Assert.Equal(1, resetConfig);
-        Assert.Equal(1, resetAllPreviews);
 
         sut.AddToBlacklistCommand.Execute("Some Window");
         sut.AddToTemporaryBlacklistCommand.Execute("window-42");
@@ -68,22 +48,6 @@ public sealed class MainWindowViewModelTests
 
         Assert.Equal("Some Window", blacklisted);
         Assert.Equal("window-42", tempBlacklisted);
-    }
-
-    [Fact]
-    public void ResetAllPreviewsCommand_CanExecuteReflectsAvailability()
-    {
-        bool available = false;
-        var sut = CreateSut(canResetAllPreviews: () => available);
-
-        sut.SetPreviewResetAvailability(false);
-        Assert.False(sut.ResetAllPreviewsCommand.CanExecute(null));
-
-        available = true;
-        sut.SetPreviewResetAvailability(true);
-        Assert.True(sut.ResetAllPreviewsCommand.CanExecute(null));
-
-        sut.WindowList.Dispose();
     }
 
     [Fact]
@@ -115,19 +79,13 @@ public sealed class MainWindowViewModelTests
     }
 
     private static MainWindowViewModel CreateSut(
-        Action? openFilters = null,
-        Action? openKeybinds = null,
         Action? openSettings = null,
         Action? openAbout = null,
         Action? openConfigFolder = null,
         Action? openLogsFolder = null,
-        Action? clearConfig = null,
-        Action? resetConfig = null,
-        Action? resetAllPreviews = null,
         Action<string?>? addToBlacklist = null,
         Action<string?>? addToTemporaryBlacklist = null,
-        Func<string?, Task>? renameWindow = null,
-        Func<bool>? canResetAllPreviews = null
+        Func<string?, Task>? renameWindow = null
     )
     {
         var windowList = new WindowListViewModel(
@@ -140,16 +98,10 @@ public sealed class MainWindowViewModelTests
 
         return new MainWindowViewModel(
             windowList,
-            openFilters ?? (() => { }),
-            openKeybinds ?? (() => { }),
             openSettings ?? (() => { }),
             openAbout ?? (() => { }),
             openConfigFolder ?? (() => { }),
             openLogsFolder ?? (() => { }),
-            clearConfig ?? (() => { }),
-            resetConfig ?? (() => { }),
-            canResetAllPreviews ?? (() => true),
-            resetAllPreviews ?? (() => { }),
             addToBlacklist ?? (_ => { }),
             addToTemporaryBlacklist ?? (_ => { }),
             renameWindow ?? (_ => Task.CompletedTask)
