@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+             x:Class="WindowSwitcher.Windows.Settings.AboutSettingsPage"
+             x:DataType="viewModels:AppInfoViewModel">
+    <StackPanel>
+        <TextBlock Classes="settings-page-title" Text="About" />
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Version" />
+            <Border Classes="settings-card">
+                <Border Classes="settings-row">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <StackPanel VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock>
+                                <Run Text="Window Switcher" />
+                                <Run Text="{Binding AppVersion}" />
+                            </TextBlock>
+                            <TextBlock Classes="settings-description" Text="{Binding UpdateStatus}" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Content="Check updates"
+                                Command="{Binding CheckForUpdatesCommand}" />
+                        <Button Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Content="Update"
+                                Command="{Binding UpdateNowCommand}"
+                                IsVisible="{Binding CanUpdateNow}" />
+                    </Grid>
+                </Border>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="System" />
+            <Border Classes="settings-card" Padding="10,6">
+                <Grid ColumnDefinitions="Auto,*"
+                      RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                      ColumnSpacing="12"
+                      RowSpacing="4">
+                    <TextBlock Grid.Row="0" Foreground="{StaticResource MutedTextBrush}" Text="UI backend" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding UiBackend}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="1" Foreground="{StaticResource MutedTextBrush}" Text="Preview mode" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PreviewMode}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="2" Foreground="{StaticResource MutedTextBrush}" Text="OS" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding OsDescription}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="3" Foreground="{StaticResource MutedTextBrush}" Text=".NET" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding FrameworkDescription}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="4" Foreground="{StaticResource MutedTextBrush}" Text="Architecture" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ProcessArchitecture}" />
+
+                    <TextBlock Grid.Row="5" Foreground="{StaticResource MutedTextBrush}" Text="Config" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding ConfigPath}" TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="6" Foreground="{StaticResource MutedTextBrush}" Text="Dependencies" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding LinuxDependenciesStatus}" TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

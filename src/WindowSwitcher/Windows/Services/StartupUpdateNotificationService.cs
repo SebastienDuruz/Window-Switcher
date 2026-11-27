@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Serilog;
 using WindowSwitcher.Lib.Data;
+using WindowSwitcher.ViewModels;
 
 namespace WindowSwitcher.Windows.Services;
 
@@ -11,15 +12,15 @@ internal sealed class StartupUpdateNotificationService
 {
     private static readonly ILogger Logger = Log.ForContext<StartupUpdateNotificationService>();
     private readonly Window _ownerWindow;
-    private readonly AppInfoWindow _appInfoWindow;
+    private readonly SettingsWindow _settingsWindow;
 
-    public StartupUpdateNotificationService(Window ownerWindow, AppInfoWindow appInfoWindow)
+    public StartupUpdateNotificationService(Window ownerWindow, SettingsWindow settingsWindow)
     {
         ArgumentNullException.ThrowIfNull(ownerWindow);
-        ArgumentNullException.ThrowIfNull(appInfoWindow);
+        ArgumentNullException.ThrowIfNull(settingsWindow);
 
         _ownerWindow = ownerWindow;
-        _appInfoWindow = appInfoWindow;
+        _settingsWindow = settingsWindow;
     }
 
     public async Task NotifyUpdateAvailabilityOnStartupAsync(CancellationToken cancellationToken)
@@ -27,7 +28,7 @@ internal sealed class StartupUpdateNotificationService
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
-            bool isUpdateAvailable = await _appInfoWindow.CheckForUpdatesAsync(
+            bool isUpdateAvailable = await _settingsWindow.CheckForUpdatesAsync(
                 force: true,
                 showUpToDateMessage: false,
                 cancellationToken
@@ -35,7 +36,7 @@ internal sealed class StartupUpdateNotificationService
             if (!isUpdateAvailable || StaticData.AppClosing)
                 return;
 
-            ShowAppInfoWindow();
+            _settingsWindow.ShowPage(SettingsPage.About, _ownerWindow);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -45,22 +46,5 @@ internal sealed class StartupUpdateNotificationService
         {
             Logger.Error(exception, "Startup update check failed");
         }
-    }
-
-    private void ShowAppInfoWindow()
-    {
-        if (_appInfoWindow.IsVisible)
-        {
-            _appInfoWindow.Activate();
-            return;
-        }
-
-        if (_ownerWindow.IsVisible)
-        {
-            _appInfoWindow.Show(_ownerWindow);
-            return;
-        }
-
-        _appInfoWindow.Show();
     }
 }

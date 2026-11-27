@@ -117,8 +117,32 @@ public class SettingsViewModel : ObservableObject
                 applyToWindows: true
             );
             if (updated)
+            {
+                OnPropertyChanged(nameof(UsePerPreviewSize));
                 OnPropertyChanged(nameof(CanEditResizeWindows));
+            }
         }
+    }
+
+    /// <summary>
+    /// Inverse of <see cref="UseFixedWindowSize"/>, so each option of the "Size" choice
+    /// can bind to its own radio button.
+    /// </summary>
+    public bool UsePerPreviewSize
+    {
+        get => !UseFixedWindowSize;
+        set => UseFixedWindowSize = !value;
+    }
+
+    /// <summary>
+    /// Notifies every setting after the configuration was replaced outside this view
+    /// model (reset to defaults), and applies it to the preview windows.
+    /// </summary>
+    public void Reload()
+    {
+        OnPropertyChanged(string.Empty);
+        _applyPreviewHighlightColorAction(PreviewHighlightColor);
+        _applyAction();
     }
 
     public int WindowWidth

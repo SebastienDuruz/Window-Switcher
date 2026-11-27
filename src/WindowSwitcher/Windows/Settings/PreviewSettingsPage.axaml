@@ -1,0 +1,152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:colorPicker="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.ColorPicker"
+             xmlns:converters="clr-namespace:WindowSwitcher.Windows.Converters"
+             xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+             x:Class="WindowSwitcher.Windows.Settings.PreviewSettingsPage"
+             x:DataType="viewModels:SettingsWindowViewModel">
+    <UserControl.Resources>
+        <converters:ColorStringValueConverter x:Key="ColorStringValueConverter" />
+        <converters:ColorStringToBrushConverter x:Key="ColorStringToBrushConverter" />
+    </UserControl.Resources>
+    <StackPanel>
+        <TextBlock Classes="settings-page-title" Text="Previews" />
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Display" />
+            <Border Classes="settings-card">
+                <StackPanel>
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Show previews" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Show a live, always-on-top preview for each tracked window." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Settings.EnablePreviews, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settings-divider" />
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Hide active preview" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Hide the preview of the window activated through Window Switcher until another window is activated. Switching outside Window Switcher (Alt+Tab, taskbar) does not bring it back." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Settings.HideActivePreview, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Size" />
+            <Border Classes="settings-card">
+                <StackPanel Margin="10,2,10,8" Spacing="2">
+                    <RadioButton GroupName="PreviewSize"
+                                 IsChecked="{Binding Settings.UsePerPreviewSize, Mode=TwoWay}">
+                        <StackPanel>
+                            <TextBlock Text="Per preview" />
+                            <TextBlock Classes="settings-description"
+                                       Text="Each preview keeps its own size, saved with its window." />
+                        </StackPanel>
+                    </RadioButton>
+                    <Grid Margin="28,0,0,2"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="12"
+                          IsEnabled="{Binding Settings.CanEditResizeWindows}">
+                        <TextBlock VerticalAlignment="Center"
+                                   Text="Resize previews by dragging their edges" />
+                        <ToggleSwitch Grid.Column="1"
+                                      IsChecked="{Binding Settings.ResizeWindows, Mode=TwoWay}" />
+                    </Grid>
+                    <RadioButton GroupName="PreviewSize"
+                                 IsChecked="{Binding Settings.UseFixedWindowSize, Mode=TwoWay}">
+                        <StackPanel>
+                            <TextBlock Text="Fixed" />
+                            <TextBlock Classes="settings-description"
+                                       Text="Every preview uses the same size." />
+                        </StackPanel>
+                    </RadioButton>
+                    <StackPanel Margin="28,0,0,0"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                IsEnabled="{Binding Settings.UseFixedWindowSize}">
+                        <NumericUpDown Width="110"
+                                       Value="{Binding Settings.WindowWidth, Mode=TwoWay}"
+                                       Minimum="10"
+                                       Maximum="2000"
+                                       Increment="1"
+                                       ToolTip.Tip="Width" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Text="×" />
+                        <NumericUpDown Width="110"
+                                       Value="{Binding Settings.WindowHeight, Mode=TwoWay}"
+                                       Minimum="10"
+                                       Maximum="2000"
+                                       Increment="1"
+                                       ToolTip.Tip="Height" />
+                        <TextBlock VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Text="px" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Appearance" />
+            <Border Classes="settings-card">
+                <Border Classes="settings-row">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                        <Border Width="64"
+                                Height="36"
+                                Background="{StaticResource FloatingWindowBackgroundBrush}"
+                                BorderThickness="2"
+                                BorderBrush="{Binding Settings.PreviewHighlightColor, Converter={StaticResource ColorStringToBrushConverter}}">
+                            <TextBlock Margin="2,0"
+                                       FontSize="9"
+                                       FontWeight="Bold"
+                                       Text="window name"
+                                       Foreground="{Binding Settings.PreviewHighlightColor, Converter={StaticResource ColorStringToBrushConverter}}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Highlight color" />
+                            <TextBlock Classes="settings-description"
+                                       Text="Color of the preview labels, of the border around the active preview, and of the app accents." />
+                        </StackPanel>
+                        <colorPicker:ColorPicker Grid.Column="2"
+                                                 Width="60"
+                                                 VerticalAlignment="Center"
+                                                 Color="{Binding Settings.PreviewHighlightColor, Mode=TwoWay, Converter={StaticResource ColorStringValueConverter}}"
+                                                 IsAlphaVisible="False" />
+                    </Grid>
+                </Border>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group" IsVisible="{Binding CanResetAllPreviews}">
+            <TextBlock Classes="settings-group-title" Text="Screen capture" />
+            <Border Classes="settings-card">
+                <Border Classes="settings-row">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Capture selections" />
+                            <TextBlock Classes="settings-description"
+                                       Text="Ask again which window each preview captures." />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Content="Reset all previews"
+                                Command="{Binding ResetAllPreviewsCommand}" />
+                    </Grid>
+                </Border>
+            </Border>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

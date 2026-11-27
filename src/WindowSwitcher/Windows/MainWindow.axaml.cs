@@ -7,15 +7,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Serilog;
 using WindowSwitcher.Hosting;
 using WindowSwitcher.Lib.Data;
 using WindowSwitcher.Lib.Data.Platform.Commands.Dependencies;
 using WindowSwitcher.Lib.Data.Platform.Keybinds.Abstractions;
+using WindowSwitcher.Lib.Data.Platform.SystemInfo.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.Accessors.Abstractions;
 using WindowSwitcher.Lib.Data.Platform.WindowAccess.PreviewFrames.Abstractions;
+using WindowSwitcher.Lib.Data.Updates.Abstractions;
+using WindowSwitcher.Theming;
 using WindowSwitcher.ViewModels;
+using WindowSwitcher.ViewModels.Abstractions;
 using WindowSwitcher.Windows.Abstractions;
 using WindowSwitcher.Windows.Services;
 using WindowConfig = WindowSwitcher.Lib.Models.WindowConfig;
@@ -30,10 +35,8 @@ public partial class MainWindow : Window, IFloatingWindowHost
     private IPreviewFrameProvider PreviewFrameProvider { get; }
     private readonly IPreviewSelectionReset? _previewSelectionReset;
     private readonly FloatingWindowRegistry _floatingWindowRegistry;
-    private FiltersWindow FiltersWindow { get; }
     private SettingsWindow SettingsWindow { get; }
-    private KeybindsWindow KeybindsWindow { get; }
-    private AppInfoWindow AppInfoWindow { get; }
+    private FiltersViewModel Filters { get; }
     private RenameWindow RenameWindow { get; }
     private WindowListViewModel ViewModel { get; }
     private readonly MainWindowViewModel _mainWindowViewModel;
@@ -75,38 +78,32 @@ public partial class MainWindow : Window, IFloatingWindowHost
             new ConfigFileWindowFilterSettingsProvider(),
             dispatcher
         );
-        FiltersWindow = new FiltersWindow(
-            _configurationService.GetWhitelistPrefixes().ToList(),
-            _configurationService.GetBlacklistPrefixes().ToList()
+        Filters = new FiltersViewModel(
+            new PrefixListViewModel(
+                new PrefixListService(
+                    _configurationService.GetWhitelistPrefixes().ToList(),
+                    StaticData.PrefixWindowType.whitelist
+                )
+            ),
+            new PrefixListViewModel(
+                new PrefixListService(
+                    _configurationService.GetBlacklistPrefixes().ToList(),
+                    StaticData.PrefixWindowType.blacklist
+                )
+            )
         );
-        SettingsWindow = new SettingsWindow(ApplySettings);
-        KeybindsWindow = new KeybindsWindow(() => ViewModel.WindowsConfigs.ToArray());
-        AppInfoWindow = new AppInfoWindow(RequestApplicationShutdown)
-        {
-            Title = $"About {StaticData.AppName}",
-        };
+        SettingsWindow = CreateSettingsWindow(dispatcher);
         RenameWindow = new RenameWindow();
         _mainWindowViewModel = new MainWindowViewModel(
             ViewModel,
-            openFilters: () => FiltersWindow.ShowPrefixesTab(),
-            openKeybinds: () =>
-            {
-                KeybindsWindow.RefreshData();
-                KeybindsWindow.Show();
-            },
-            openSettings: () => SettingsWindow.Show(),
-            openAbout: OpenAppInfoWindow,
+            openSettings: () => SettingsWindow.ShowLastPage(this),
+            openAbout: () => SettingsWindow.ShowPage(SettingsPage.About, this),
             openConfigFolder: () => OpenFolder(StaticData.DataFolder),
             openLogsFolder: () => OpenFolder(StaticData.LogFolder),
-            clearConfig: () => _configurationService.ResetFloatingWindowSettings(),
-            resetConfig: () => _configurationService.ResetUserSettings(),
-            canResetAllPreviews: () => _previewSelectionReset is not null,
-            resetAllPreviews: () => _previewSelectionReset?.ResetAllSelections(),
             addToBlacklist: value => AddToBlacklist(value ?? string.Empty),
             addToTemporaryBlacklist: value => AddToTempBlacklist(value ?? string.Empty),
             renameWindow: windowId => RenameWindowTitleAsync(windowId ?? string.Empty)
         );
-        _mainWindowViewModel.SetPreviewResetAvailability(_previewSelectionReset is not null);
         DataContext = _mainWindowViewModel;
         Title = StaticData.AppName;
 
@@ -118,13 +115,13 @@ public partial class MainWindow : Window, IFloatingWindowHost
             () => ConfigFileAccessor.GetInstance().ReadConfig(config => config.HideActivePreview)
         );
         _blacklistCoordinator = new WindowBlacklistCoordinator(
-            FiltersWindow,
+            Filters.Blacklist,
             ViewModel.TempWindowIdsBlacklist
         );
         _missingDependencyNotificationService = new MissingDependencyNotificationService(this);
         _startupUpdateNotificationService = new StartupUpdateNotificationService(
             this,
-            AppInfoWindow
+            SettingsWindow
         );
 
         ViewModel.WindowsConfigs.CollectionChanged += WindowsConfigsChanged;
@@ -154,10 +151,7 @@ public partial class MainWindow : Window, IFloatingWindowHost
         PropertyChanged -= OnWindowPropertyChanged;
         _previewCoordinator.Dispose();
         ViewModel.WindowsConfigs.CollectionChanged -= WindowsConfigsChanged;
-        FiltersWindow.Close();
         SettingsWindow.Close();
-        KeybindsWindow.Close();
-        AppInfoWindow.Close();
         RenameWindow.Close();
         _missingDependencyNotificationService.Dispose();
         _floatingWindowRegistry.CloseAll();
@@ -216,23 +210,46 @@ public partial class MainWindow : Window, IFloatingWindowHost
         }
     }
 
-    private void OpenAppInfoWindow()
+    private SettingsWindow CreateSettingsWindow(IViewModelDispatcher dispatcher)
     {
-        AppInfoWindow.Refresh();
-        _ = AppInfoWindow.CheckForUpdatesAsync(force: false, showUpToDateMessage: false);
-        if (AppInfoWindow.IsVisible)
-        {
-            AppInfoWindow.Activate();
-            return;
-        }
+        var settings = new SettingsViewModel(
+            new ConfigFileSettingsRepository(),
+            ApplySettings,
+            ApplyPreviewHighlightColor
+        );
+        var keybinds = new KeybindSettingsViewModel(
+            AppServiceProvider.GetRequiredService<IWindowKeybindManager>(),
+            AppServiceProvider.GetRequiredService<IWindowKeybindTargetCatalogService>(),
+            AppServiceProvider.GetRequiredService<IGlobalKeyboardStartupStatusService>(),
+            dispatcher,
+            () => ViewModel.WindowsConfigs.ToArray()
+        );
+        var about = new AppInfoViewModel(
+            AppServiceProvider.GetRequiredService<IPlatformAppInfoProvider>(),
+            AppServiceProvider.GetRequiredService<IAppUpdateService>(),
+            RequestApplicationShutdown
+        );
+        Action? resetAllPreviews = _previewSelectionReset is null
+            ? null
+            : _previewSelectionReset.ResetAllSelections;
 
-        if (IsVisible)
-        {
-            AppInfoWindow.Show(this);
-            return;
-        }
+        return new SettingsWindow(
+            settings,
+            Filters,
+            keybinds,
+            about,
+            new SettingsResetActions(
+                _configurationService.ResetFloatingWindowSettings,
+                _configurationService.ResetUserSettings,
+                resetAllPreviews
+            )
+        );
+    }
 
-        AppInfoWindow.Show();
+    private static void ApplyPreviewHighlightColor(string colorValue)
+    {
+        if (Color.TryParse(colorValue, out Color color))
+            AccentColorApplier.Apply(color);
     }
 
     private static void OpenFolder(string folder)

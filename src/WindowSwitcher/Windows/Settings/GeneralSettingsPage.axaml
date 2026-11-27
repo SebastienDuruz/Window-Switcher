@@ -1,0 +1,93 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
+             x:Class="WindowSwitcher.Windows.Settings.GeneralSettingsPage"
+             x:DataType="viewModels:SettingsWindowViewModel">
+    <StackPanel>
+        <TextBlock Classes="settings-page-title" Text="General" />
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Startup" />
+            <Border Classes="settings-card">
+                <Border Classes="settings-row">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Start minimized" />
+                            <TextBlock Classes="settings-description"
+                                       Text="Start in the tray without showing the main window." />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1"
+                                      IsChecked="{Binding Settings.StartMinimized, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Interaction" />
+            <Border Classes="settings-card">
+                <StackPanel>
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Drag previews" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Move a preview by dragging it with the left mouse button." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Settings.MoveWindows, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settings-divider" />
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Focus on hover" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Activate a window as soon as the pointer enters its preview, without clicking." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1"
+                                          IsChecked="{Binding Settings.FocusOnHover, Mode=TwoWay}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Classes="settings-group">
+            <TextBlock Classes="settings-group-title" Text="Reset" />
+            <Border Classes="settings-card">
+                <StackPanel>
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Preview layout" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Forget the saved position and size of every preview." />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Content="Reset layout…"
+                                    Command="{Binding ResetLayoutCommand}" />
+                        </Grid>
+                    </Border>
+                    <Border Classes="settings-divider" />
+                    <Border Classes="settings-row">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="All settings" />
+                                <TextBlock Classes="settings-description"
+                                           Text="Restore the default configuration, including filters, keybinds and the preview layout." />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Classes="danger"
+                                    VerticalAlignment="Center"
+                                    Content="Reset settings…"
+                                    Command="{Binding ResetSettingsCommand}" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

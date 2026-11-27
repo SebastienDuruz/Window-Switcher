@@ -109,6 +109,49 @@ public sealed class SettingsViewModelTests
         Assert.Contains(nameof(SettingsViewModel.CanEditResizeWindows), changed);
     }
 
+    [Fact]
+    public void UsePerPreviewSize_IsTheInverseOfUseFixedWindowSize()
+    {
+        var repository = new FakeSettingsRepository();
+        var sut = new SettingsViewModel(repository, () => { }, _ => { });
+        var changed = new List<string?>();
+        sut.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+        Assert.True(sut.UsePerPreviewSize);
+
+        sut.UsePerPreviewSize = false;
+
+        Assert.True(repository.Config.UseFixedWindowSize);
+        Assert.True(sut.UseFixedWindowSize);
+        Assert.False(sut.UsePerPreviewSize);
+        Assert.Contains(nameof(SettingsViewModel.UsePerPreviewSize), changed);
+
+        sut.UsePerPreviewSize = true;
+
+        Assert.False(repository.Config.UseFixedWindowSize);
+    }
+
+    [Fact]
+    public void Reload_NotifiesEverySettingAndAppliesTheConfiguration()
+    {
+        var repository = new FakeSettingsRepository();
+        repository.Config.PreviewHighlightColor = "#112233";
+        int applyCount = 0;
+        string appliedColor = string.Empty;
+        var sut = new SettingsViewModel(
+            repository,
+            () => applyCount++,
+            color => appliedColor = color
+        );
+        var changed = new List<string?>();
+        sut.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        sut.Reload();
+
+        Assert.Contains(string.Empty, changed);
+        Assert.Equal(1, applyCount);
+        Assert.Equal("#112233", appliedColor);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("   ")]
@@ -138,7 +181,7 @@ public sealed class SettingsViewModelTests
         Assert.Equal(0, applyCount);
     }
 
-    private sealed class FakeSettingsRepository : ISettingsRepository
+    internal sealed class FakeSettingsRepository : ISettingsRepository
     {
         public ConfigFile Config { get; } = new();
 

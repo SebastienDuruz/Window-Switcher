@@ -2,90 +2,56 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:colorPicker="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.ColorPicker"
-        xmlns:converters="clr-namespace:WindowSwitcher.Windows.Converters"
+        xmlns:settings="clr-namespace:WindowSwitcher.Windows.Settings"
         xmlns:viewModels="clr-namespace:WindowSwitcher.ViewModels"
         Icon="/Assets/WS_logo.ico"
         mc:Ignorable="d"
-        SizeToContent="WidthAndHeight"
+        Width="640"
+        Height="460"
         CanResize="False"
         Topmost="True"
+        WindowStartupLocation="CenterScreen"
         x:Class="WindowSwitcher.Windows.SettingsWindow"
-        WindowDecorations="Full"
+        Classes="settings-window"
         Title="Settings"
-        x:DataType="viewModels:SettingsViewModel">
-        <Window.Resources>
-                <converters:ColorStringValueConverter x:Key="ColorStringValueConverter" />
-        </Window.Resources>
-        <StackPanel Margin="10"
-                    MinWidth="200"
-                    Spacing="8"
-                    Orientation="Vertical">
-                <StackPanel Spacing="6">
-                        <CheckBox Content="Move windows"
-                                  IsChecked="{Binding MoveWindows, Mode=TwoWay}" />
-                        <CheckBox Content="Focus on hover"
-                                  IsChecked="{Binding FocusOnHover, Mode=TwoWay}" />
-                        <CheckBox Content="Enable previews"
-                                  IsChecked="{Binding EnablePreviews, Mode=TwoWay}" />
-                        <CheckBox Content="Hide active preview"
-                                  IsChecked="{Binding HideActivePreview, Mode=TwoWay}"
-                                  ToolTip.Tip="Hides the preview of the window activated through Window Switcher until another window is activated. Switching windows outside Window Switcher (Alt+Tab, taskbar) does not bring it back." />
-                        <CheckBox Content="Start minimized"
-                                  IsChecked="{Binding StartMinimized, Mode=TwoWay}" />
-                </StackPanel>
+        KeyDown="WindowKeyDown"
+        x:DataType="viewModels:SettingsWindowViewModel">
+    <Grid ColumnDefinitions="140,*">
+        <Border Background="{StaticResource SettingsSidebarBrush}"
+                BorderBrush="{StaticResource SettingsSectionBorderBrush}"
+                BorderThickness="0,0,1,0">
+            <DockPanel Margin="4,6">
+                <TextBlock DockPanel.Dock="Bottom"
+                           Margin="8,6"
+                           Classes="settings-description"
+                           Text="Changes are saved automatically." />
+                <ListBox Classes="settings-nav"
+                         SelectedIndex="{Binding SelectedPageIndex, Mode=TwoWay}">
+                    <ListBoxItem Content="General" />
+                    <ListBoxItem Content="Previews" />
+                    <ListBoxItem Content="Filters" />
+                    <ListBoxItem Content="Keybinds" />
+                    <ListBoxItem Content="About" />
+                </ListBox>
+            </DockPanel>
+        </Border>
 
-                <StackPanel Spacing="6">
-                        <CheckBox Content="Resize windows"
-                                  IsChecked="{Binding ResizeWindows, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditResizeWindows}" />
-                        <CheckBox Content="Fixed size"
-                                  IsChecked="{Binding UseFixedWindowSize, Mode=TwoWay}" />
-                        <Grid IsEnabled="{Binding UseFixedWindowSize}"
-                              Margin="18 0 0 0"
-                              HorizontalAlignment="Stretch"
-                              ColumnDefinitions="*,Auto"
-                              RowDefinitions="Auto,Auto"
-                              ColumnSpacing="8"
-                              RowSpacing="6">
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="0"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Left"
-                                           Text="Width" />
-                                <NumericUpDown Grid.Row="0"
-                                               Grid.Column="1"
-                                               HorizontalAlignment="Right"
-                                               Value="{Binding WindowWidth, Mode=TwoWay}"
-                                               Minimum="10"
-                                               Maximum="2000"
-                                               Increment="1" />
-                                <TextBlock Grid.Row="1"
-                                           Grid.Column="0"
-                                           VerticalAlignment="Center"
-                                           HorizontalAlignment="Left"
-                                           Text="Height" />
-                                <NumericUpDown Grid.Row="1"
-                                               Grid.Column="1"
-                                               HorizontalAlignment="Right"
-                                               Value="{Binding WindowHeight, Mode=TwoWay}"
-                                               Minimum="10"
-                                               Maximum="2000"
-                                               Increment="1" />
-                        </Grid>
-                </StackPanel>
-
-                <StackPanel Spacing="6">
-                        <Grid ColumnDefinitions="120,Auto"
-                              ColumnSpacing="8">
-                                <TextBlock Grid.Column="0"
-                                           VerticalAlignment="Center"
-                                           Text="Highlight color" />
-                                 <colorPicker:ColorPicker Grid.Column="1"
-                                                          Width="60"
-                                                          Color="{Binding PreviewHighlightColor, Mode=TwoWay, Converter={StaticResource ColorStringValueConverter}}"
-                                                          IsAlphaVisible="False" />
-                        </Grid>
-                </StackPanel>
-        </StackPanel>
+        <Carousel Grid.Column="1" SelectedIndex="{Binding SelectedPageIndex}">
+            <ScrollViewer>
+                <settings:GeneralSettingsPage Margin="14,10,14,14" />
+            </ScrollViewer>
+            <ScrollViewer>
+                <settings:PreviewSettingsPage Margin="14,10,14,14" />
+            </ScrollViewer>
+            <ScrollViewer>
+                <settings:FilterSettingsPage x:Name="FiltersPage" Margin="14,10,14,14" />
+            </ScrollViewer>
+            <ScrollViewer>
+                <settings:KeybindSettingsPage x:Name="KeybindsPage" Margin="14,10,14,14" />
+            </ScrollViewer>
+            <ScrollViewer>
+                <settings:AboutSettingsPage x:Name="AboutPage" Margin="14,10,14,14" />
+            </ScrollViewer>
+        </Carousel>
+    </Grid>
 </Window>

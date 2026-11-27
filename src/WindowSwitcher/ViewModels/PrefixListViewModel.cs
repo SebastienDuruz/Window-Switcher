@@ -13,7 +13,6 @@ namespace WindowSwitcher.ViewModels;
 public partial class PrefixListViewModel : ObservableObject
 {
     private readonly IPrefixListService _prefixListService;
-    private readonly IViewModelDispatcher _dispatcher;
 
     public ObservableCollection<string> Prefixes { get; }
 
@@ -21,23 +20,21 @@ public partial class PrefixListViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(AddCommand))]
     private string _newPrefix = string.Empty;
 
-    [ObservableProperty]
-    private string? _selectedPrefix;
-
     public IRelayCommand AddCommand { get; }
 
-    public PrefixListViewModel(
-        IPrefixListService prefixListService,
-        IViewModelDispatcher dispatcher
-    )
+    /// <summary>
+    /// Removes the prefix passed as the command parameter.
+    /// </summary>
+    public IRelayCommand<string> RemoveCommand { get; }
+
+    public PrefixListViewModel(IPrefixListService prefixListService)
     {
         ArgumentNullException.ThrowIfNull(prefixListService);
-        ArgumentNullException.ThrowIfNull(dispatcher);
 
         _prefixListService = prefixListService;
-        _dispatcher = dispatcher;
         Prefixes = new ObservableCollection<string>(prefixListService.GetPrefixes());
         AddCommand = new RelayCommand(AddPrefix, () => !string.IsNullOrWhiteSpace(NewPrefix));
+        RemoveCommand = new RelayCommand<string>(RemovePrefix);
     }
 
     public bool TryAddPrefix(string value)
@@ -54,27 +51,17 @@ public partial class PrefixListViewModel : ObservableObject
         return _prefixListService.ContainsPrefixStartingWith(candidate);
     }
 
-    partial void OnSelectedPrefixChanged(string? value)
-    {
-        if (value is null)
-            return;
-
-        _dispatcher.Post(() => RemoveSelectedPrefix(value));
-    }
-
     private void AddPrefix()
     {
         _ = TryAddPrefix(NewPrefix);
         NewPrefix = string.Empty;
     }
 
-    private void RemoveSelectedPrefix(string value)
+    private void RemovePrefix(string? value)
     {
-        if (!_prefixListService.TryRemovePrefix(value, out _))
+        if (value is null || !_prefixListService.TryRemovePrefix(value, out _))
             return;
 
         Prefixes.Remove(value);
-        if (SelectedPrefix == value)
-            SelectedPrefix = null;
     }
 }

@@ -9,8 +9,8 @@
     --muted: #808080;             /* MutedTextBrush (Gray) */
     --error: #ff6347;             /* ErrorTextBrush (Tomato) */
     --floating-bg: #000000;       /* FloatingWindowBackgroundBrush */
-    --floating-label: #ff00ff;    /* FloatingWindowLabelBrush (Fuchsia) */
     --pending: #ffb900;           /* PendingSelectionBorderBrush */
+    --highlight: #e3008c;         /* default PreviewHighlightColor, also applied as the app accent color */
 
     --text: #ffffff;
     --text-secondary: #c5c5c5;
@@ -209,7 +209,7 @@ ul.notes {
     font: inherit;
 }
 
-.textbox.focused { border-bottom-color: var(--accent-light); }
+.textbox.focused { border-bottom-color: var(--highlight); }
 .textbox.mono { font-family: "Cascadia Mono", "JetBrains Mono", monospace; font-size: 12px; }
 
 .caret {
@@ -252,7 +252,7 @@ ul.notes {
     bottom: 5px;
     width: 3px;
     border-radius: 2px;
-    background: var(--accent-light);
+    background: var(--highlight);
 }
 
 .listbox.bordered {
@@ -281,8 +281,8 @@ ul.notes {
 }
 
 .checkbox.checked .box {
-    background: var(--accent-light);
-    border-color: var(--accent-light);
+    background: var(--highlight);
+    border-color: var(--highlight);
     color: #000;
 }
 
@@ -320,7 +320,7 @@ ul.notes {
     padding: 4px;
 }
 
-.color-picker .swatch { flex: 1; height: 100%; border-radius: 2px; background: #ffb900; }
+.color-picker .swatch { flex: 1; height: 100%; border-radius: 2px; background: var(--highlight); }
 .color-picker .chevron { font-size: 9px; color: var(--text-secondary); }
 
 .muted { color: var(--muted); }
@@ -446,12 +446,12 @@ ul.notes {
     left: 2px;
     font-size: 10px;
     font-weight: 700;
-    color: var(--floating-label);
+    color: var(--highlight);
     z-index: 2;
 }
 
-.preview.active { outline: 2px solid var(--pending); outline-offset: -2px; }
-.preview.pending { outline: 2px dashed var(--pending); outline-offset: -2px; }
+.preview.active { outline: 2px solid var(--highlight); outline-offset: -2px; }
+.preview.pending { outline: 4px solid var(--pending); outline-offset: -4px; }
 
 /* Fake content of the captured windows */
 .shot.editor {
@@ -561,63 +561,276 @@ ul.notes {
     white-space: nowrap;
 }
 
-/* ---------- Filters (CSS-only tabs) ---------- */
+/* ---------- Settings window (sidebar navigation) ---------- */
 
-.filters-window { width: 300px; }
+.settings-shell { width: 640px; font-size: 13px; }
 
-.tabs input { display: none; }
+.settings-shell > input { display: none; }
 
-.tab-strip {
-    display: flex;
-    gap: 2px;
-    font-size: 13px;
+.settings-layout {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    height: 428px;
 }
 
-.tab-strip label {
-    min-height: 30px;
+.settings-shell .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 4px;
+    background: #1b1e21;
+    border-right: 1px solid var(--section-border);
+    border-bottom-left-radius: 8px;
+}
+
+.settings-shell .sidebar label {
+    position: relative;
     display: flex;
     align-items: center;
+    height: 28px;
     padding: 0 10px;
+    border-radius: 4px;
     color: var(--text-secondary);
-    position: relative;
     cursor: pointer;
+    user-select: none;
 }
 
-.tab-panel { display: none; padding: 0 8px 8px; font-size: 13px; }
+.settings-shell .sidebar label:hover { background: rgba(255, 255, 255, 0.05); }
 
-#tab-prefixes:checked ~ .tab-strip label[for="tab-prefixes"],
-#tab-blacklist:checked ~ .tab-strip label[for="tab-blacklist"] {
-    color: var(--text);
+.settings-shell .sidebar .sidebar-footer {
+    margin-top: auto;
+    padding: 6px 8px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.settings-shell .content {
+    overflow-y: auto;
+    padding: 10px 14px 14px;
+}
+
+.settings-shell .page { display: none; }
+
+.settings-shell .page > h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
     font-weight: 600;
 }
 
-#tab-prefixes:checked ~ .tab-strip label[for="tab-prefixes"]::after,
-#tab-blacklist:checked ~ .tab-strip label[for="tab-blacklist"]::after {
+/*
+ * The interactive window uses one radio input per page; a static window
+ * (one fixed page) uses the "active" class on its label and page instead.
+ */
+.settings-shell .sidebar label.active,
+#nav-general:checked ~ .settings-layout label[for="nav-general"],
+#nav-previews:checked ~ .settings-layout label[for="nav-previews"],
+#nav-filters:checked ~ .settings-layout label[for="nav-filters"],
+#nav-keybinds:checked ~ .settings-layout label[for="nav-keybinds"],
+#nav-about:checked ~ .settings-layout label[for="nav-about"] {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+}
+
+.settings-shell .sidebar label.active::before,
+#nav-general:checked ~ .settings-layout label[for="nav-general"]::before,
+#nav-previews:checked ~ .settings-layout label[for="nav-previews"]::before,
+#nav-filters:checked ~ .settings-layout label[for="nav-filters"]::before,
+#nav-keybinds:checked ~ .settings-layout label[for="nav-keybinds"]::before,
+#nav-about:checked ~ .settings-layout label[for="nav-about"]::before {
     content: "";
     position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 2px;
-    height: 3px;
+    left: 0;
+    top: 7px;
+    bottom: 7px;
+    width: 3px;
     border-radius: 2px;
-    background: var(--accent-light);
+    background: var(--highlight);
 }
 
-#tab-prefixes:checked ~ .panel-prefixes,
-#tab-blacklist:checked ~ .panel-blacklist { display: block; }
+.settings-shell .page.active,
+#nav-general:checked ~ .settings-layout .page-general,
+#nav-previews:checked ~ .settings-layout .page-previews,
+#nav-filters:checked ~ .settings-layout .page-filters,
+#nav-keybinds:checked ~ .settings-layout .page-keybinds,
+#nav-about:checked ~ .settings-layout .page-about {
+    display: block;
+}
 
-/* ---------- Keybinds ---------- */
+/* ---------- Setting groups and rows ---------- */
 
-.keybinds-window { width: 640px; }
+.group { margin-bottom: 10px; }
 
-.keybinds-grid {
+.group-title {
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.group-intro {
+    margin: -2px 0 6px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.card {
+    border: 1px solid var(--section-border);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.card > .setting + .setting { border-top: 1px solid var(--section-border); }
+
+.setting {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 36px;
+    padding: 5px 10px;
+}
+
+.setting .text { flex: 1; min-width: 0; }
+.setting .label { display: block; }
+.setting .description { display: block; color: var(--muted); font-size: 11px; line-height: 1.35; }
+
+/* Compact controls inside the settings window */
+.settings-shell .btn { min-height: 26px; padding: 3px 10px; font-size: 13px; }
+.settings-shell .textbox { min-height: 26px; padding: 2px 8px; }
+.settings-shell .icon-btn { width: 22px; height: 22px; }
+
+/* ---------- Toggle switch ---------- */
+
+.toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.toggle .track {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    border: 1px solid #9a9a9a;
+    border-radius: 10px;
+}
+
+.toggle .track::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #cfcfcf;
+}
+
+.toggle.on .track { background: var(--highlight); border-color: var(--highlight); }
+.toggle.on .track::after { left: 23px; background: #000; }
+
+/* ---------- Radio buttons ---------- */
+
+.radio {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.radio .dot {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    border: 1px solid #9a9a9a;
+    border-radius: 50%;
+    position: relative;
+}
+
+.radio.checked .dot { border: 5px solid var(--highlight); }
+
+.radio.checked .dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: #000;
+}
+
+.size-fields {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0 2px 28px;
+}
+
+.size-fields .numeric { width: 110px; height: 26px; }
+.size-fields .numeric .value { padding: 2px 8px; }
+
+/* ---------- Extra buttons ---------- */
+
+.btn.danger { color: #ff9a8a; border-color: #6b3a33; }
+.btn.danger:hover { background: rgba(255, 99, 71, 0.12); }
+
+.icon-btn {
+    width: 26px;
+    height: 26px;
     display: grid;
-    grid-template-columns: 2fr 3fr;
-    column-gap: 12px;
-    row-gap: 10px;
+    place-items: center;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    flex: none;
 }
 
-.keybinds-grid > .span { grid-column: 1 / -1; }
+.icon-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+/* ---------- Filter lists ---------- */
+
+.filter-add { display: flex; gap: 6px; padding: 6px 10px; }
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    padding: 0 6px 0 10px;
+    border-top: 1px solid var(--section-border);
+}
+
+.filter-row .value { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Highlight color sample ---------- */
+
+.highlight-sample {
+    position: relative;
+    width: 64px;
+    height: 36px;
+    flex: none;
+    background: linear-gradient(180deg, #0b2447 0 60%, #19376d 60% 75%, #576cbc 75%);
+    outline: 2px solid var(--highlight);
+    outline-offset: -2px;
+}
+
+.highlight-sample span {
+    position: absolute;
+    top: 0;
+    left: 3px;
+    color: var(--highlight);
+    font-size: 9px;
+    font-weight: 700;
+}
+
+/* ---------- Keybinds page ---------- */
+
+.keybinds-page {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.keybinds-page > .span { grid-column: 1 / -1; }
 
 .banner {
     border: 1px solid var(--error);
@@ -630,25 +843,17 @@ kbd {
     font-weight: 500;
 }
 
-/* ---------- Settings ---------- */
-
-.settings-window { width: 300px; }
-
-.indent { margin-left: 18px; }
-
-/* ---------- About ---------- */
+/* ---------- About page ---------- */
 
 .about-grid {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr;
     column-gap: 10px;
     row-gap: 4px;
     align-items: center;
-    max-width: 460px;
 }
 
-.about-grid .wide { grid-column: 2 / 4; overflow-wrap: anywhere; }
-.about-grid .actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 8px; }
+.about-grid .wide { overflow-wrap: anywhere; }
 
 @media (max-width: 720px) {
     .page-header, nav.toc, main { padding-left: 16px; padding-right: 16px; }
